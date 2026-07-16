@@ -13,13 +13,15 @@ export default function Submit() {
   const search = useSearch();
   const params = new URLSearchParams(search);
   const initialBarcode = params.get('barcode') || '';
+  const initialName = params.get('name') || '';
+  const initialBrand = params.get('brand') || '';
   const [, setLocation] = useLocation();
   const sessionId = getSessionId();
 
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
-    productName: '',
-    brandName: '',
+    productName: initialName,
+    brandName: initialBrand,
     barcode: initialBarcode,
     frontImageBase64: '',
     ingredientsImageBase64: '',

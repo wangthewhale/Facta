@@ -653,11 +653,30 @@ export interface SearchResultItem {
 
 export type SearchResultsParsedFilters = { [key: string]: unknown };
 
+export interface CatalogSeedItem {
+  factaSeedId: string;
+  productName: string;
+  /** @nullable */
+  brandRaw?: string | null;
+  retailer: string;
+  /** @nullable */
+  categoryNormalized?: string | null;
+  /** @nullable */
+  specRaw?: string | null;
+  /** @nullable */
+  priceTwd?: number | null;
+  /** @nullable */
+  imageUrl?: string | null;
+  /** @nullable */
+  sourceUrl?: string | null;
+}
+
 export interface SearchResults {
   query: string;
   parsedFilters?: SearchResultsParsedFilters;
   products: SearchResultItem[];
   guides?: GuideSummary[];
+  catalogItems?: CatalogSeedItem[];
   total?: number;
   hasMore?: boolean;
 }

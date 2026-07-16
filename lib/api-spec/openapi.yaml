@@ -1856,8 +1856,26 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/GuideSummary"
+        catalogItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/CatalogSeedItem"
         total:        { type: integer }
         hasMore:      { type: boolean }
+
+    CatalogSeedItem:
+      type: object
+      required: [factaSeedId, productName, retailer]
+      properties:
+        factaSeedId:   { type: string }
+        productName:   { type: string }
+        brandRaw:      { type: ["string", "null"] }
+        retailer:      { type: string }
+        categoryNormalized: { type: ["string", "null"] }
+        specRaw:       { type: ["string", "null"] }
+        priceTwd:      { type: ["number", "null"] }
+        imageUrl:      { type: ["string", "null"] }
+        sourceUrl:     { type: ["string", "null"] }
 
     # ── Guides ────────────────────────────────────────────────────────────
 

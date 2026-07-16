@@ -18,6 +18,7 @@ export * from './adminPublishGoalRuleset201';
 export * from './adminUpdateMealContext200';
 export * from './allergenAlert';
 export * from './alternativeProduct';
+export * from './catalogSeedItem';
 export * from './category';
 export * from './collectionDetail';
 export * from './collectionDetailProductsItem';

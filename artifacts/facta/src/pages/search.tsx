@@ -203,7 +203,48 @@ export default function Search() {
             </div>
           )}
 
-          {!isLoading && data && data.products && data.products.length === 0 && (
+          {!isLoading && data && data.catalogItems && data.catalogItems.length > 0 && (
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                {lang === 'zh' ? '通路型錄商品' : 'Retail Catalog Items'}
+              </div>
+              {data.catalogItems.map((c) => (
+                <div key={c.factaSeedId} className="bg-card border border-border p-4 flex gap-4">
+                  <div className="w-16 h-16 bg-muted shrink-0 flex items-center justify-center p-1">
+                    {c.imageUrl ? (
+                      <img src={c.imageUrl} alt="" className="w-full h-full object-contain mix-blend-multiply" />
+                    ) : (
+                      <SearchIcon className="w-6 h-6 text-muted-foreground/30" />
+                    )}
+                  </div>
+                  <div className="flex-1 flex flex-col min-w-0">
+                    <p className="font-bold text-sm line-clamp-2 leading-snug">{c.productName}</p>
+                    <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mt-1 truncate">
+                      {[c.brandRaw, c.retailer, c.priceTwd != null ? `NT${c.priceTwd}` : null].filter(Boolean).join(' · ')}
+                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <span className="px-2 py-0.5 text-[10px] font-bold tracking-wide bg-amber-100 text-amber-800 border border-amber-300">
+                        {lang === 'zh' ? '型錄資料・待標籤驗證' : 'Catalog data · label verification needed'}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setLocation(`/submit?name=${encodeURIComponent(c.productName)}&brand=${encodeURIComponent(c.brandRaw ?? '')}`)}
+                      className="mt-3 self-start text-[11px] font-bold underline text-primary-strong"
+                    >
+                      {lang === 'zh' ? '拍照補標籤資料，解鎖 FACTA 評分 →' : 'Photograph the label to unlock a FACTA score →'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+              <p className="text-[10px] text-muted-foreground">
+                {lang === 'zh'
+                  ? '型錄商品來自通路公開網頁，尚未經標籤驗證，因此不顯示評分。'
+                  : 'Catalog items come from public retailer listings and are unscored until label-verified.'}
+              </p>
+            </div>
+          )}
+
+          {!isLoading && data && data.products && data.products.length === 0 && (!data.catalogItems || data.catalogItems.length === 0) && (
             <div className="flex flex-col items-center justify-center text-center p-10 bg-card border border-border border-dashed mt-4">
               <AlertCircle className="w-8 h-8 text-muted-foreground mb-4" />
               <p className="text-sm font-semibold mb-2">

@@ -5,6 +5,7 @@
  * FACTA — Independent product intelligence API
  * OpenAPI spec version: 0.1.0
  */
+import type { CatalogSeedItem } from './catalogSeedItem';
 import type { GuideSummary } from './guideSummary';
 import type { SearchResultItem } from './searchResultItem';
 import type { SearchResultsParsedFilters } from './searchResultsParsedFilters';
@@ -14,6 +15,7 @@ export interface SearchResults {
   parsedFilters?: SearchResultsParsedFilters;
   products: SearchResultItem[];
   guides?: GuideSummary[];
+  catalogItems?: CatalogSeedItem[];
   total?: number;
   hasMore?: boolean;
 }

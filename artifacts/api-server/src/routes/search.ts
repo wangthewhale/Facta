@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { ilike, or, eq, and, desc } from "drizzle-orm";
+import { ilike, or, eq, and, desc, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
 import {
   productsTable, brandsTable, barcodesTable, categoriesTable,
@@ -178,6 +178,43 @@ router.get("/search", async (req, res): Promise<void> => {
     (fitOrder[a!.fitLevel ?? ""] ?? 5) - (fitOrder[b!.fitLevel ?? ""] ?? 5)
   );
 
+  // Catalog seed matches (unverified retailer catalog rows — never scored)
+  const catalogItems: any[] = [];
+  if (searchTerms.length > 0) {
+    try {
+      // Parameterized: user terms are bound values, never interpolated into SQL text
+      const termConds = searchTerms
+        .map(t => t.slice(0, 100))
+        .map(t => {
+          const pat = `%${t}%`;
+          return sql`(product_name ILIKE ${pat} OR brand_raw ILIKE ${pat} OR category_normalized ILIKE ${pat})`;
+        });
+      const catalogLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
+      const rows = await db.execute(sql`
+        SELECT facta_seed_id, product_name, brand_raw, retailer, category_normalized,
+               spec_raw, price_twd, image_url, source_url
+        FROM facta_catalog_seed
+        WHERE ${sql.join(termConds, sql` OR `)}
+        ORDER BY catalog_completeness_score DESC NULLS LAST, product_name
+        LIMIT ${catalogLimit}`);
+      for (const r of (rows as any).rows ?? rows) {
+        catalogItems.push({
+          factaSeedId: r.facta_seed_id,
+          productName: r.product_name,
+          brandRaw: r.brand_raw ?? null,
+          retailer: r.retailer,
+          categoryNormalized: r.category_normalized ?? null,
+          specRaw: r.spec_raw ?? null,
+          priceTwd: r.price_twd != null ? parseFloat(r.price_twd) : null,
+          imageUrl: r.image_url ?? null,
+          sourceUrl: r.source_url ?? null,
+        });
+      }
+    } catch (err) {
+      req.log.warn({ err }, "catalog seed search failed");
+    }
+  }
+
   // Related guides
   const guides = effectiveGoalSlug
     ? await db.select().from(guidesTable).where(and(
@@ -199,6 +236,7 @@ router.get("/search", async (req, res): Promise<void> => {
       coverImageUrl: g.coverImageUrl, status: g.status,
       publishedAt: g.publishedAt?.toISOString() ?? null,
     })),
+    catalogItems,
     total: filtered.length,
     hasMore: filtered.length > limit,
   });

@@ -333,6 +333,17 @@ export const SearchProductsResponse = zod.object({
   "status": zod.string(),
   "publishedAt": zod.string().nullish()
 })).optional(),
+  "catalogItems": zod.array(zod.object({
+  "factaSeedId": zod.string(),
+  "productName": zod.string(),
+  "brandRaw": zod.string().nullish(),
+  "retailer": zod.string(),
+  "categoryNormalized": zod.string().nullish(),
+  "specRaw": zod.string().nullish(),
+  "priceTwd": zod.number().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "sourceUrl": zod.string().nullish()
+})).optional(),
   "total": zod.number().optional(),
   "hasMore": zod.boolean().optional()
 })
