@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { useLocation, useParams } from 'wouter';
+import { Link, useLocation, useParams } from 'wouter';
 import { Layout } from '@/components/layout';
 import { useGetProduct, useGetProductEvaluation, useGetAlternatives, useRecordScan, useGetUserGoals, useGetGoalFit, useGetProductNews, useGetProductSafetyCheck } from '@workspace/api-client-react';
 import { useTranslation } from '@/lib/i18n';
-import { AlertTriangle, ArrowRight, CheckCircle2, ChevronRight, Info, Link, Share, TriangleAlert, XOctagon } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle2, ChevronRight, Info, Link as LinkIcon, Share, TriangleAlert, XOctagon } from 'lucide-react';
+import { track } from '@/lib/analytics';
+import { startFamilyCheckCheckout } from '@/pages/familyCheck';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getSessionId } from '@/lib/session';
@@ -187,7 +189,7 @@ function NewsSection({ productId }: { productId: number }) {
                 rel="noopener noreferrer"
                 className={cn('flex items-start gap-2 p-2 bg-background border border-border text-xs', a.url && 'hover:border-foreground')}
               >
-                <Link className="w-3 h-3 mt-0.5 shrink-0 text-muted-foreground" />
+                <LinkIcon className="w-3 h-3 mt-0.5 shrink-0 text-muted-foreground" />
                 <span className="flex-1">{a.title}</span>
                 <span className={cn('shrink-0 px-1.5 py-0.5 text-[9px] font-bold tracking-wider uppercase', rtStyle)}>
                   {rtLabel}
@@ -424,7 +426,7 @@ export default function Report() {
           {/* Top Reasons */}
           {evaluation.topReasons && evaluation.topReasons.length > 0 && (
             <div className="p-6 border-b border-border bg-card/50">
-              <h3 className="text-xs font-mono tracking-widest text-muted-foreground uppercase mb-4">Key Evidence</h3>
+              <h3 className="text-xs font-mono tracking-widest text-muted-foreground uppercase mb-4">關鍵證據</h3>
               <div className="flex flex-col gap-3">
                 {evaluation.topReasons.map((reason, i) => (
                   <div key={i} className="flex items-start gap-3 p-3 bg-background border border-border">
@@ -439,7 +441,7 @@ export default function Report() {
                       </p>
                       {reason.evidenceStrength && (
                         <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-1 border-t border-border pt-1">
-                          Evidence: {reason.evidenceStrength}
+                          證據強度：{reason.evidenceStrength}
                         </p>
                       )}
                     </div>
@@ -501,7 +503,7 @@ export default function Report() {
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xs font-mono tracking-widest text-muted-foreground uppercase">{t('better_alternatives')}</h3>
               <Link href={`/alternatives/${productId}`} className="text-[10px] uppercase font-bold tracking-widest hover:underline flex items-center">
-                View All <ChevronRight className="w-3 h-3 ml-1" />
+                查看全部 <ChevronRight className="w-3 h-3 ml-1" />
               </Link>
             </div>
             
@@ -531,6 +533,50 @@ export default function Report() {
             )}
           </div>
         </div>
+
+        {/* Post-analysis conversion block */}
+        {(() => {
+          const attentionCount =
+            (evaluation.topReasons?.filter(r => r.impact === 'negative').length || 0) +
+            (evaluation.personalAlerts?.length || 0);
+          return (
+            <div className="mx-6 mt-6 bg-foreground text-background p-6 flex flex-col gap-3">
+              <p className="font-black text-base leading-snug">
+                {attentionCount > 0
+                  ? `這次分析發現 ${attentionCount} 項需要注意的地方。`
+                  : '這款商品沒有明顯需要注意的地方。'}
+                {' '}家裡其他常吃的食品呢？
+              </p>
+              <p className="text-xs text-background/75 leading-relaxed">
+                FACTA 家庭食品健檢：一次檢查 10 項常吃食品，找出需要注意的成分與更適合的替代品，24 小時內完成。
+              </p>
+              <div className="flex items-end gap-2">
+                <span className="text-2xl font-black">NT$299</span>
+                <span className="text-xs text-background/50 line-through mb-1">正式價 NT$499</span>
+              </div>
+              <button
+                onClick={() => {
+                  // Go straight to checkout when configured; otherwise show service details
+                  if (!startFamilyCheckCheckout('report_bottom')) {
+                    setLocation('/family-check');
+                  }
+                }}
+                className="w-full py-3.5 bg-primary text-black font-black tracking-widest text-sm text-center hover:bg-primary/90 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-background"
+              >
+                開始檢查家裡的食品
+              </button>
+              <Link href="/family-check" onClick={() => track('family_check_offer_viewed', { source: 'report_bottom' })} className="text-[10px] underline text-background/70 text-center">
+                查看服務詳情
+              </Link>
+              <p className="text-[10px] text-background/60">若 24 小時內未完成報告，可申請退款。</p>
+            </div>
+          );
+        })()}
+
+        {/* Health disclaimer */}
+        <p className="mx-6 mt-4 text-[10px] text-muted-foreground leading-relaxed">
+          FACTA 提供的是食品資訊整理與比較，不是醫療診斷或治療建議。若有特殊健康狀況，請諮詢醫師或營養師。
+        </p>
 
         {/* Footer info */}
         <div className="p-6 flex flex-col items-center justify-center gap-2 mt-4 text-center">

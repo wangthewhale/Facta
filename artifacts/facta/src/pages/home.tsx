@@ -2,54 +2,133 @@ import React, { useState } from 'react';
 import { Layout } from '@/components/layout';
 import { useTranslation } from '@/lib/i18n';
 import { Link, useLocation } from 'wouter';
-import { ScanLine, Camera, ArrowRight, ShieldCheck, Database, Search, Target, Clock, X, Trash2, ChevronRight, CheckCircle2 } from 'lucide-react';
-import { useGetDashboardStats, useGetScanHistory, useGetUserGoals, useGetGoal, useListCollections, useListMealLogs, useDeleteMealLog, useListSafetyAlerts } from '@workspace/api-client-react';
+import { ArrowRight, ShieldCheck, Database, Search, Target, Clock, Trash2, CheckCircle2, ChevronDown, ChevronUp, Camera, ScanLine, BookOpen } from 'lucide-react';
+import { useGetScanHistory, useGetUserGoals, useGetGoal, useListCollections, useListMealLogs, useDeleteMealLog, useListSafetyAlerts, useGetProduct, useGetProductEvaluation } from '@workspace/api-client-react';
 import { getSessionId } from '@/lib/session';
 import { Skeleton } from '@/components/ui/skeleton';
-import { cn } from '@/lib/utils';
-import { GradeBadge } from '@/pages/report';
+import { track } from '@/lib/analytics';
 
-function SafetyAlertBanner() {
-  const { lang } = useTranslation();
-  const [dismissed, setDismissed] = useState(false);
+/** Verified product with complete data used as the public sample report. */
+const SAMPLE_PRODUCT_ID = 6;
+
+function SafetyAlertNotice() {
+  const [expanded, setExpanded] = useState(false);
   const { data } = useListSafetyAlerts({ query: { staleTime: 10 * 60 * 1000 } as any });
 
   const alerts = data?.alerts ?? [];
-  if (dismissed || alerts.length === 0) return null;
+  if (alerts.length === 0) return null;
   const alert = alerts[0];
 
   return (
-    <div className="relative bg-red-50 border-l-4 border-red-600 p-4 flex flex-col gap-1.5">
+    <div className="bg-red-50 border-l-4 border-red-600">
       <button
-        onClick={() => setDismissed(true)}
-        className="absolute top-2 right-2 p-1 text-red-400 hover:text-red-700"
-        aria-label="dismiss"
+        onClick={() => setExpanded(v => !v)}
+        aria-expanded={expanded}
+        className="w-full flex items-center gap-2 p-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-600"
       >
-        <X className="w-4 h-4" />
+        <span className="bg-red-600 text-white px-1.5 py-0.5 text-[9px] font-black tracking-widest shrink-0">食安警報</span>
+        <span className="text-xs font-bold text-red-800 leading-snug flex-1 line-clamp-2">{alert.titleZh || alert.title}</span>
+        <span className="text-[10px] font-bold text-red-700 shrink-0 flex items-center gap-0.5">
+          {expanded ? '收合' : '查看詳情'}
+          {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+        </span>
       </button>
-      <span className="self-start bg-red-600 text-white px-2 py-0.5 text-[10px] font-black tracking-widest uppercase">
-        {lang === 'zh' ? '政府食安警報' : 'GOV FOOD SAFETY ALERT'}
-      </span>
-      <p className="text-sm font-black text-red-700 leading-snug pr-6">
-        {lang === 'zh' ? alert.titleZh : alert.title}
-      </p>
-      <p className="text-xs text-red-900/90 leading-relaxed line-clamp-4">
-        {lang === 'zh' ? alert.summaryZh : alert.summary}
-      </p>
-      {alert.officialUrl && (
-        <a
-          href={alert.officialUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-xs underline font-bold text-red-700"
-        >
-          {lang === 'zh' ? '查看食藥署官方完整下架名單 →' : 'View full official TFDA recall list →'}
-        </a>
+      {expanded && (
+        <div className="px-3 pb-3 flex flex-col gap-2">
+          <p className="text-xs text-red-900/90 leading-relaxed">{alert.summaryZh || alert.summary}</p>
+          {alert.officialUrl && (
+            <a href={alert.officialUrl} target="_blank" rel="noopener noreferrer" className="text-xs underline font-bold text-red-700">
+              查看食藥署官方完整下架名單 →
+            </a>
+          )}
+          <p className="text-[10px] text-red-900/60">掃描商品時，FACTA 會自動比對受影響品牌並警示。</p>
+        </div>
       )}
-      <p className="text-[10px] text-red-900/60">
-        {lang === 'zh' ? '掃描商品時，FACTA 會自動比對受影響品牌並警示。' : 'FACTA automatically checks scanned products against affected brands.'}
-      </p>
     </div>
+  );
+}
+
+/** Compact preview of a real, verified FACTA report. */
+function SampleReport() {
+  const [, setLocation] = useLocation();
+  const [whyOpen, setWhyOpen] = useState(false);
+  const { data: product } = useGetProduct(SAMPLE_PRODUCT_ID, { query: { staleTime: 10 * 60 * 1000 } as any });
+  const { data: evaluation } = useGetProductEvaluation(SAMPLE_PRODUCT_ID, { query: { staleTime: 10 * 60 * 1000 } as any });
+
+  if (!product || !evaluation || product.verificationStatus !== 'verified') return null;
+
+  const findings = (evaluation.topReasons ?? []).slice(0, 3);
+
+  return (
+    <section id="sample-report" className="flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">真實分析報告範例</h2>
+        <span className="text-[10px] font-bold bg-primary/15 text-primary-strong px-2 py-0.5">已驗證商品</span>
+      </div>
+
+      <div className="bg-card border-2 border-foreground p-5 flex flex-col gap-4">
+        <div className="flex items-start gap-4">
+          <div className="w-16 h-16 bg-muted shrink-0 flex items-center justify-center p-1">
+            {product.imageUrl ? (
+              <img src={product.imageUrl} alt={product.nameZh || product.name} className="w-full h-full object-contain mix-blend-multiply" />
+            ) : (
+              <Database className="w-6 h-6 text-muted-foreground/30" />
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-black text-base leading-snug">{product.nameZh || product.name}</p>
+            <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mt-0.5">{product.brandName}</p>
+          </div>
+          <div className="shrink-0 flex flex-col items-center">
+            <span className="text-3xl font-black font-mono text-primary-strong">{evaluation.overallScore}</span>
+            <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">FACTA 評分</span>
+          </div>
+        </div>
+
+        {evaluation.verdictZh && (
+          <p className="text-sm font-bold border-l-4 border-primary pl-3 py-0.5">{evaluation.verdictZh}</p>
+        )}
+
+        {findings.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">主要發現</p>
+            {findings.map((r, i) => (
+              <div key={i} className="flex items-start gap-2 text-xs">
+                <CheckCircle2 className="w-3.5 h-3.5 shrink-0 mt-0.5 text-primary-strong" />
+                <span className="leading-relaxed">{r.labelZh || r.label}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="bg-muted/60 p-3 flex flex-col gap-1">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">個人化提醒</p>
+          <p className="text-xs leading-relaxed">設定你的過敏原與健康目標後，FACTA 會針對你的需求標示需要注意的成分。</p>
+        </div>
+
+        <button
+          onClick={() => setWhyOpen(v => !v)}
+          aria-expanded={whyOpen}
+          className="flex items-center justify-between text-xs font-bold py-2 border-t border-border focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+        >
+          為什麼這樣評分？
+          {whyOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </button>
+        {whyOpen && (
+          <div className="text-xs text-muted-foreground leading-relaxed flex flex-col gap-2 -mt-2">
+            <p>FACTA 評分（0–100）由公開的評分規則計算：營養成分依台灣衛福部與國際營養基準評估，食品添加物依法規許可狀態與現有證據分級。每項結論都附資料來源，演算法版本 {evaluation.rulesetVersion}。</p>
+            <Link href="/methodology" className="underline font-bold text-foreground">查看完整評分方法 →</Link>
+          </div>
+        )}
+
+        <button
+          onClick={() => { track('sample_report_viewed', { productId: SAMPLE_PRODUCT_ID }); setLocation(`/report/${SAMPLE_PRODUCT_ID}`); }}
+          className="w-full py-3.5 border-2 border-foreground font-bold tracking-widest text-sm hover:bg-foreground hover:text-background transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+        >
+          看完整報告（含替代品建議）
+        </button>
+      </div>
+    </section>
   );
 }
 
@@ -66,14 +145,6 @@ const mealLabels: Record<string, string> = {
   breakfast: '早餐', lunch: '午餐', snack: '點心', dinner: '晚餐'
 };
 
-const fitColors: Record<string, string> = {
-  great_fit: '#B9F24A',
-  good_fit: '#B9F24A',
-  mixed_fit: '#F2B84B',
-  poor_fit: '#E45145',
-  insufficient_data: '#9CA3AF',
-};
-
 export default function Home() {
   const { t, lang, setLang } = useTranslation();
   const [, setLocation] = useLocation();
@@ -83,17 +154,16 @@ export default function Home() {
   const currentMeal = getCurrentMealType();
   const todayStr = new Date().toLocaleDateString('sv-SE');
 
-  const { data: stats, isLoading: statsLoading } = useGetDashboardStats();
   const { data: history, isLoading: historyLoading } = useGetScanHistory({ user_session: sessionId, limit: 3 });
-  
-  const { data: userGoalsData, isLoading: goalsLoading } = useGetUserGoals(sessionId);
+
+  const { data: userGoalsData } = useGetUserGoals(sessionId);
   const activeGoals = userGoalsData?.activeGoals || [];
   const activeGoalSlug = activeGoals.length > 0 ? activeGoals[0].goalSlug : undefined;
 
   const { data: activeGoalDetail } = useGetGoal(activeGoalSlug!, {
     query: { enabled: !!activeGoalSlug } as any
   });
-  
+
   const { data: collections, isLoading: collLoading } = useListCollections({ goal_slug: activeGoalSlug, meal_type: currentMeal }, {
     query: { enabled: !!activeGoalSlug } as any
   });
@@ -110,10 +180,7 @@ export default function Home() {
 
   const handleDeleteLog = (id: number) => {
     deleteMealLog.mutate({ id }, {
-      onSuccess: () => {
-        // Optimistic cache update would be better, but refetching is fine for simple app
-        window.location.reload();
-      }
+      onSuccess: () => { window.location.reload(); }
     });
   };
 
@@ -123,29 +190,36 @@ export default function Home() {
     return (
       <Layout>
         <div className="flex flex-col min-h-full bg-background pb-10">
-          
+
           {/* Header */}
           <header className="px-6 pt-10 pb-4 flex justify-between items-center bg-card border-b border-border sticky top-0 z-10">
             <h1 className="text-2xl font-bold tracking-tighter text-foreground">FACTA</h1>
-            <button 
+            <button
               onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}
+              aria-label="切換語言"
               className="text-[10px] font-bold px-2 py-1 bg-muted hover:bg-muted/80 transition-colors uppercase tracking-widest"
             >
               {lang === 'zh' ? 'EN' : '中文'}
             </button>
           </header>
 
+          <div className="px-6 pt-4">
+            <SafetyAlertNotice />
+          </div>
+
           {/* Search */}
           <div className="px-6 py-6 bg-card border-b border-border">
             <form onSubmit={handleSearch} className="relative">
+              <label htmlFor="home-search" className="sr-only">搜尋商品</label>
               <input
+                id="home-search"
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={t('search_placeholder')}
                 className="w-full h-14 bg-background border border-border px-4 pr-12 text-sm font-medium focus:ring-2 focus:ring-primary outline-none transition-all placeholder:text-muted-foreground placeholder:font-normal shadow-sm"
               />
-              <button type="submit" className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
+              <button type="submit" aria-label="搜尋" className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
                 <Search className="w-5 h-5" />
               </button>
             </form>
@@ -156,7 +230,7 @@ export default function Home() {
               <Target className="w-4 h-4 text-muted-foreground" />
               <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t('today_goal')}</h2>
             </div>
-            
+
             {activeGoals.length > 0 ? (
               <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
                 {activeGoals.map(goal => (
@@ -183,10 +257,10 @@ export default function Home() {
                   <div className="bg-foreground text-background p-6 shadow-sm border border-foreground">
                     <div className="flex items-center gap-2 mb-4 text-primary-strong">
                       <Clock className="w-5 h-5" />
-                      <span className="text-sm font-bold uppercase tracking-widest">{mealLabels[currentMeal]} Context</span>
+                      <span className="text-sm font-bold uppercase tracking-widest">{mealLabels[currentMeal]}建議</span>
                     </div>
                     <h3 className="text-xl font-bold mb-6 leading-tight">{lang === 'zh' && mealCtx.headlineZh ? mealCtx.headlineZh : mealCtx.headline}</h3>
-                    
+
                     <div className="flex flex-col gap-4 mb-6">
                       <div>
                         <p className="text-[10px] font-bold uppercase tracking-widest text-primary/80 mb-2">{t('choose_more')}</p>
@@ -212,9 +286,9 @@ export default function Home() {
             <div className="px-6 py-4 flex flex-col gap-4">
               <div className="flex items-center justify-between">
                 <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4" /> Recommendations
+                  <CheckCircle2 className="w-4 h-4" /> 推薦商品
                 </h2>
-                <Link href={`/search?goal_slug=${activeGoalSlug}`} className="text-[10px] font-bold uppercase tracking-widest hover:text-primary-strong transition-colors">View All</Link>
+                <Link href={`/search?goal_slug=${activeGoalSlug}`} className="text-[10px] font-bold uppercase tracking-widest hover:text-primary-strong transition-colors">查看全部</Link>
               </div>
 
               {collLoading ? (
@@ -223,15 +297,13 @@ export default function Home() {
                 </div>
               ) : collections && collections.length > 0 ? (
                 <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2 -mx-6 px-6">
-                  {/* For brevity on home, we just link to the first collection's search equivalent or render its products if we had them. We render dummy collection cards representing product fits. */}
-                  {collections.slice(0,3).map((col, i) => (
+                  {collections.slice(0,3).map((col) => (
                     <Link key={col.slug} href={`/search?goal_slug=${activeGoalSlug}&meal_type=${col.mealType}`} className="shrink-0 w-64 bg-card border border-border p-4 flex flex-col gap-3 hover:border-primary transition-colors group">
                       <div className="w-full h-32 bg-muted flex items-center justify-center p-2 mb-2">
-                        {/* Placeholder for collection image */}
                         <Database className="w-8 h-8 text-muted-foreground/30" />
                       </div>
                       <h3 className="font-bold text-sm leading-snug group-hover:text-primary-strong transition-colors line-clamp-2">{lang === 'zh' && col.nameZh ? col.nameZh : col.name}</h3>
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mt-auto">{col.productCount} Products <ArrowRight className="w-3 h-3 inline-block ml-1" /></p>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mt-auto">{col.productCount} 項商品 <ArrowRight className="w-3 h-3 inline-block ml-1" /></p>
                     </Link>
                   ))}
                 </div>
@@ -246,7 +318,7 @@ export default function Home() {
           {/* My Day */}
           <div className="px-6 py-4 flex flex-col gap-4">
             <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t('my_day')} - {new Date().toLocaleDateString(lang === 'zh' ? 'zh-TW' : 'en-US', { month: 'short', day: 'numeric' })}</h2>
-            
+
             <div className="bg-card border border-border flex flex-col">
               {dayLoading ? (
                 <div className="p-4"><Skeleton className="h-12 w-full" /></div>
@@ -258,10 +330,10 @@ export default function Home() {
                         <span className="text-[10px] font-bold uppercase tracking-widest bg-muted px-1.5 py-0.5">{mealLabels[log.mealType] || log.mealType}</span>
                       </div>
                       <Link href={`/report/${log.productId}`} className="font-bold text-sm truncate hover:text-primary-strong transition-colors">
-                        Product #{log.productId}
+                        商品 #{log.productId}
                       </Link>
                     </div>
-                    <button onClick={() => handleDeleteLog(log.id)} className="text-muted-foreground hover:text-destructive transition-colors p-2 -mr-2">
+                    <button onClick={() => handleDeleteLog(log.id)} aria-label="刪除這筆紀錄" className="text-muted-foreground hover:text-destructive transition-colors p-2 -mr-2">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
@@ -279,9 +351,9 @@ export default function Home() {
           <div className="px-6 py-4 flex flex-col gap-4">
             <div className="flex items-center justify-between">
               <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t('recent_scans')}</h2>
-              <Link href="/history" className="text-[10px] font-bold uppercase tracking-widest hover:text-primary-strong transition-colors">View All</Link>
+              <Link href="/history" className="text-[10px] font-bold uppercase tracking-widest hover:text-primary-strong transition-colors">查看全部</Link>
             </div>
-            
+
             <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2 -mx-6 px-6">
               {historyLoading ? (
                 Array(3).fill(0).map((_, i) => <Skeleton key={i} className="w-32 h-32 shrink-0" />)
@@ -302,6 +374,19 @@ export default function Home() {
             </div>
           </div>
 
+          {/* Family Check offer */}
+          <div className="px-6 py-4">
+            <Link
+              href="/family-check"
+              onClick={() => track('family_check_offer_viewed', { source: 'home_returning' })}
+              className="block bg-foreground text-background p-5 hover:bg-foreground/90 transition-colors"
+            >
+              <p className="font-black text-base">FACTA 家庭食品健檢</p>
+              <p className="text-xs text-background/70 mt-1 leading-relaxed">一次檢查家裡最常吃的 10 項食品。首發價 NT$299。</p>
+              <span className="inline-flex items-center gap-1 mt-3 text-xs font-bold text-primary">了解服務內容 <ArrowRight className="w-3.5 h-3.5" /></span>
+            </Link>
+          </div>
+
           {/* Trust Statement */}
           <div className="mx-6 mt-4 p-5 bg-card border border-border flex flex-col gap-3 text-center items-center">
             <ShieldCheck className="w-6 h-6 text-primary-strong" />
@@ -319,55 +404,117 @@ export default function Home() {
   // --- NEW USER VIEW ---
   return (
     <Layout>
-      <div className="px-6 pt-12 pb-6 flex flex-col gap-10 bg-background h-full">
-        
-        {/* Header / Brand */}
+      <div className="px-6 pt-12 pb-6 flex flex-col gap-10 bg-background min-h-full">
+
+        {/* 1. Hero */}
         <header className="flex flex-col gap-2">
           <div className="flex justify-between items-start">
             <h1 className="text-5xl font-black tracking-tighter text-foreground">FACTA</h1>
-            <button 
+            <button
               onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}
+              aria-label="切換語言"
               className="text-[10px] font-bold px-2 py-1 bg-muted hover:bg-muted/80 transition-colors uppercase tracking-widest"
             >
               {lang === 'zh' ? 'EN' : '中文'}
             </button>
           </div>
-          <div className="flex flex-col gap-1 mt-2 border-l-4 border-primary pl-4 py-1">
-            <p className="text-sm font-bold text-foreground tracking-wide">{t('tagline_zh')}</p>
-            <p className="text-xs text-muted-foreground font-mono">{t('tagline_en')}</p>
+
+          <h2 className="text-2xl font-black leading-snug mt-4">
+            拍一張成分表，<br />30 秒知道這款商品適不適合你。
+          </h2>
+          <p className="text-sm text-muted-foreground leading-relaxed mt-1">
+            FACTA 依據台灣法規、營養證據與你的個人需求，找出需要注意的成分，並推薦更適合的選擇。
+          </p>
+
+          <div className="flex flex-col gap-3 mt-5">
+            <button
+              onClick={() => { track('hero_free_analysis_clicked'); setLocation('/submit'); }}
+              className="w-full py-4 bg-foreground text-background font-black tracking-widest text-base flex items-center justify-center gap-3 hover:bg-foreground/90 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+            >
+              <Camera className="w-5 h-5" /> 免費分析第一款
+            </button>
+            <button
+              onClick={() => {
+                track('sample_report_viewed', { source: 'hero_secondary_cta' });
+                document.getElementById('sample-report')?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="w-full py-3.5 border-2 border-foreground font-bold tracking-widest text-sm hover:bg-muted transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+            >
+              先看一份真實報告
+            </button>
           </div>
+
+          <ul className="flex flex-col gap-1.5 mt-4">
+            {['每項結論附資料來源', '不接受品牌付費改分', '不出售你的健康與掃描資料'].map(p => (
+              <li key={p} className="flex items-center gap-2 text-xs font-bold text-muted-foreground">
+                <ShieldCheck className="w-3.5 h-3.5 text-primary-strong shrink-0" /> {p}
+              </li>
+            ))}
+          </ul>
         </header>
 
-        <SafetyAlertBanner />
+        {/* 2. Sample report */}
+        <SampleReport />
 
-        {/* Primary Actions */}
-        <div className="flex flex-col gap-3">
-          <Link href="/scan" className="group relative flex items-center justify-between p-6 bg-foreground text-background hover:bg-foreground/90 transition-colors shadow-sm">
-            <div className="flex items-center gap-4">
-              <div className="bg-background text-foreground p-3 rounded-none">
-                <ScanLine className="w-6 h-6" />
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <span className="font-bold text-lg tracking-wide">{t('scan_product')}</span>
-                <span className="text-[10px] font-bold text-background/70 font-mono tracking-widest">BARCODE LOOKUP</span>
-              </div>
-            </div>
-            <ArrowRight className="w-5 h-5 opacity-50 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
-          </Link>
+        <p className="text-center text-sm font-bold border-y border-border py-4">
+          「包裝負責說故事。FACTA 負責看證據。」
+        </p>
 
-          <Link href="/submit" className="group relative flex items-center justify-between p-6 bg-card border border-border hover:border-primary transition-colors shadow-sm">
-            <div className="flex items-center gap-4">
-              <div className="bg-muted text-foreground p-3 rounded-none group-hover:bg-primary/10 group-hover:text-primary-strong transition-colors">
-                <Camera className="w-6 h-6" />
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <span className="font-bold text-lg tracking-wide">{t('photo_ingredients')}</span>
-                <span className="text-[10px] font-bold text-muted-foreground font-mono tracking-widest">AI OCR ANALYSIS</span>
-              </div>
-            </div>
-            <ArrowRight className="w-5 h-5 opacity-50 group-hover:opacity-100 group-hover:translate-x-1 transition-all group-hover:text-primary-strong" />
+        {/* 3. How it works */}
+        <section className="flex flex-col gap-4">
+          <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">三步驟</h2>
+          <ol className="flex flex-col gap-3">
+            {[
+              { icon: Camera, title: '拍攝成分表', desc: '拍一張商品背面的成分表，或掃描條碼。' },
+              { icon: ScanLine, title: 'AI 自動辨識', desc: 'FACTA 自動辨識商品名稱、成分與營養標示，約 20–30 秒。' },
+              { icon: CheckCircle2, title: '看懂該注意什麼', desc: '取得 0–100 評分、需要注意的成分，以及更適合的替代品。' },
+            ].map((s, i) => (
+              <li key={i} className="flex items-start gap-4 bg-card border border-border p-4">
+                <span className="w-8 h-8 shrink-0 bg-foreground text-background font-black flex items-center justify-center">{i + 1}</span>
+                <div>
+                  <p className="font-bold text-sm">{s.title}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{s.desc}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        {/* 4. How FACTA scores */}
+        <section className="bg-card border border-border p-5 flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <BookOpen className="w-4 h-4 text-primary-strong" />
+            <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">FACTA 如何評分</h2>
+          </div>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            評分依據台灣衛福部法規、食品添加物許可狀態與公開營養科學證據，由固定的公開規則計算，不受品牌影響。每項結論附資料來源。
+          </p>
+          <Link href="/methodology" className="text-xs font-bold underline">查看完整評分方法 →</Link>
+        </section>
+
+        {/* 5. Paid service */}
+        <section className="bg-foreground text-background p-6 flex flex-col gap-3">
+          <span className="self-start bg-primary text-black px-2 py-0.5 text-[10px] font-black tracking-widest">一次性服務</span>
+          <h2 className="text-xl font-black leading-snug">FACTA 家庭食品健檢</h2>
+          <p className="text-xs text-background/80 leading-relaxed">
+            一次檢查家裡最常吃的 10 項食品，找出需要注意的成分、行銷話術與更適合的替代品。24 小時內完成報告。
+          </p>
+          <div className="flex items-end gap-2 mt-1">
+            <span className="text-2xl font-black">NT$299</span>
+            <span className="text-xs text-background/50 line-through mb-1">正式價 NT$499</span>
+          </div>
+          <Link
+            href="/family-check"
+            onClick={() => track('family_check_offer_viewed', { source: 'home_new_user' })}
+            className="mt-2 w-full py-3.5 bg-primary text-black font-black tracking-widest text-sm text-center hover:bg-primary/90 transition-colors"
+          >
+            開始檢查家裡的食品
           </Link>
-        </div>
+          <p className="text-[10px] text-background/60">若 24 小時內未完成報告，可申請退款。</p>
+        </section>
+
+        {/* 6. Safety alert — compact collapsed notice */}
+        <SafetyAlertNotice />
 
         {/* Onboarding CTA */}
         <Link href="/onboarding" className="p-5 bg-primary/10 border border-primary flex items-center justify-between hover:bg-primary/20 transition-colors group">
@@ -375,36 +522,15 @@ export default function Home() {
             <Target className="w-6 h-6 shrink-0" />
             <span className="font-bold text-sm">{t('set_goal_cta')}</span>
           </div>
-          <ChevronRight className="w-5 h-5 text-primary-strong group-hover:translate-x-1 transition-transform shrink-0" />
+          <ArrowRight className="w-5 h-5 text-primary-strong group-hover:translate-x-1 transition-transform shrink-0" />
         </Link>
 
-        {/* Trust Statement */}
-        <div className="bg-card border border-border p-5 flex flex-col gap-3">
-          <ShieldCheck className="w-6 h-6 text-foreground" />
-          <div>
-            <p className="font-bold text-sm text-foreground leading-snug">{t('trust_statement')}</p>
-            <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">{t('campaign')}</p>
-          </div>
-        </div>
-
-        {/* Dashboard Stats */}
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-2">
-            <Database className="w-4 h-4 text-muted-foreground" />
-            <h2 className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground">{t('dashboard_stats')}</h2>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-px bg-border">
-            <div className="bg-card p-4 flex flex-col gap-1">
-              <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">{t('products_verified')}</span>
-              {statsLoading ? <Skeleton className="h-8 w-16 mt-1" /> : <span className="text-2xl font-black font-mono mt-1">{stats?.verifiedProducts || 0}</span>}
-            </div>
-            <div className="bg-card p-4 flex flex-col gap-1">
-              <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">{t('total_scans')}</span>
-              {statsLoading ? <Skeleton className="h-8 w-16 mt-1" /> : <span className="text-2xl font-black font-mono mt-1">{stats?.totalScans || 0}</span>}
-            </div>
-          </div>
-        </div>
+        {/* 7. Privacy / independence / disclaimer */}
+        <footer className="flex flex-col gap-2 text-[11px] text-muted-foreground leading-relaxed border-t border-border pt-5 pb-2">
+          <p className="font-bold text-xs text-foreground">隱私與獨立性</p>
+          <p>FACTA 不出售你的健康與掃描資料，照片只用於辨識商品資訊，分析完成後可刪除。評分由公開規則計算，不接受品牌付費改分。</p>
+          <p>FACTA 提供的是食品資訊整理與比較，不是醫療診斷或治療建議。若有特殊健康狀況，請諮詢醫師或營養師。</p>
+        </footer>
 
       </div>
     </Layout>

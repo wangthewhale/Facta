@@ -18,6 +18,7 @@ import Methodology from '@/pages/methodology';
 import Onboarding from '@/pages/onboarding';
 import GoalDetail from '@/pages/goalDetail';
 import Search from '@/pages/search';
+import FamilyCheck from '@/pages/familyCheck';
 
 const queryClient = new QueryClient();
 
@@ -34,6 +35,7 @@ function Router() {
       <Route path="/admin" component={Admin} />
       <Route path="/share/:id" component={ShareCard} />
       <Route path="/methodology" component={Methodology} />
+      <Route path="/family-check" component={FamilyCheck} />
       <Route path="/onboarding" component={Onboarding} />
       <Route path="/goals/:slug" component={GoalDetail} />
       <Route path="/search" component={Search} />
