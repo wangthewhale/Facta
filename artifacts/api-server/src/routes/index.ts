@@ -14,6 +14,7 @@ import searchRouter from "./search.js";
 import guidesRouter from "./guides.js";
 import collectionsRouter from "./collections.js";
 import newsRouter from "./news.js";
+import safetyAlertsRouter from "./safetyAlerts.js";
 
 const router = Router();
 
@@ -32,5 +33,6 @@ router.use(searchRouter);
 router.use(guidesRouter);
 router.use(collectionsRouter);
 router.use(newsRouter);
+router.use(safetyAlertsRouter);
 
 export default router;

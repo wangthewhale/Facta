@@ -63,6 +63,8 @@ import type {
   ProductUpdate,
   Retailer,
   ReviewDecision,
+  SafetyAlertsResponse,
+  SafetyCheckResponse,
   ScanEvent,
   ScanEventInput,
   SearchProductsParams,
@@ -2764,6 +2766,160 @@ export const useFinalizeSubmission = <TError = ErrorType<ErrorResponse>,
       > => {
       return useMutation(getFinalizeSubmissionMutationOptions(options));
     }
+
+export const getListSafetyAlertsUrl = () => {
+
+
+
+
+  return `/api/safety-alerts`
+}
+
+/**
+ * @summary List active government food-safety alerts
+ */
+export const listSafetyAlerts = async ( options?: RequestInit): Promise<SafetyAlertsResponse> => {
+
+  return customFetch<SafetyAlertsResponse>(getListSafetyAlertsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListSafetyAlertsQueryKey = () => {
+    return [
+    `/api/safety-alerts`
+    ] as const;
+    }
+
+
+export const getListSafetyAlertsQueryOptions = <TData = Awaited<ReturnType<typeof listSafetyAlerts>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSafetyAlerts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListSafetyAlertsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listSafetyAlerts>>> = ({ signal }) => listSafetyAlerts({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listSafetyAlerts>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListSafetyAlertsQueryResult = NonNullable<Awaited<ReturnType<typeof listSafetyAlerts>>>
+export type ListSafetyAlertsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List active government food-safety alerts
+ */
+
+export function useListSafetyAlerts<TData = Awaited<ReturnType<typeof listSafetyAlerts>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSafetyAlerts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListSafetyAlertsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetProductSafetyCheckUrl = (id: number,) => {
+
+
+
+
+  return `/api/products/${id}/safety-check`
+}
+
+/**
+ * @summary Check whether a product is affected by an active safety alert
+ */
+export const getProductSafetyCheck = async (id: number, options?: RequestInit): Promise<SafetyCheckResponse> => {
+
+  return customFetch<SafetyCheckResponse>(getGetProductSafetyCheckUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetProductSafetyCheckQueryKey = (id: number,) => {
+    return [
+    `/api/products/${id}/safety-check`
+    ] as const;
+    }
+
+
+export const getGetProductSafetyCheckQueryOptions = <TData = Awaited<ReturnType<typeof getProductSafetyCheck>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProductSafetyCheck>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetProductSafetyCheckQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getProductSafetyCheck>>> = ({ signal }) => getProductSafetyCheck(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getProductSafetyCheck>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetProductSafetyCheckQueryResult = NonNullable<Awaited<ReturnType<typeof getProductSafetyCheck>>>
+export type GetProductSafetyCheckQueryError = ErrorType<void>
+
+
+/**
+ * @summary Check whether a product is affected by an active safety alert
+ */
+
+export function useGetProductSafetyCheck<TData = Awaited<ReturnType<typeof getProductSafetyCheck>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProductSafetyCheck>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetProductSafetyCheckQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetProductNewsUrl = (id: number,) => {
 

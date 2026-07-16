@@ -3,11 +3,55 @@ import { Layout } from '@/components/layout';
 import { useTranslation } from '@/lib/i18n';
 import { Link, useLocation } from 'wouter';
 import { ScanLine, Camera, ArrowRight, ShieldCheck, Database, Search, Target, Clock, X, Trash2, ChevronRight, CheckCircle2 } from 'lucide-react';
-import { useGetDashboardStats, useGetScanHistory, useGetUserGoals, useGetGoal, useListCollections, useListMealLogs, useDeleteMealLog } from '@workspace/api-client-react';
+import { useGetDashboardStats, useGetScanHistory, useGetUserGoals, useGetGoal, useListCollections, useListMealLogs, useDeleteMealLog, useListSafetyAlerts } from '@workspace/api-client-react';
 import { getSessionId } from '@/lib/session';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { GradeBadge } from '@/pages/report';
+
+function SafetyAlertBanner() {
+  const { lang } = useTranslation();
+  const [dismissed, setDismissed] = useState(false);
+  const { data } = useListSafetyAlerts({ query: { staleTime: 10 * 60 * 1000 } as any });
+
+  const alerts = data?.alerts ?? [];
+  if (dismissed || alerts.length === 0) return null;
+  const alert = alerts[0];
+
+  return (
+    <div className="relative bg-red-50 border-l-4 border-red-600 p-4 flex flex-col gap-1.5">
+      <button
+        onClick={() => setDismissed(true)}
+        className="absolute top-2 right-2 p-1 text-red-400 hover:text-red-700"
+        aria-label="dismiss"
+      >
+        <X className="w-4 h-4" />
+      </button>
+      <span className="self-start bg-red-600 text-white px-2 py-0.5 text-[10px] font-black tracking-widest uppercase">
+        {lang === 'zh' ? '政府食安警報' : 'GOV FOOD SAFETY ALERT'}
+      </span>
+      <p className="text-sm font-black text-red-700 leading-snug pr-6">
+        {lang === 'zh' ? alert.titleZh : alert.title}
+      </p>
+      <p className="text-xs text-red-900/90 leading-relaxed line-clamp-4">
+        {lang === 'zh' ? alert.summaryZh : alert.summary}
+      </p>
+      {alert.officialUrl && (
+        <a
+          href={alert.officialUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs underline font-bold text-red-700"
+        >
+          {lang === 'zh' ? '查看食藥署官方完整下架名單 →' : 'View full official TFDA recall list →'}
+        </a>
+      )}
+      <p className="text-[10px] text-red-900/60">
+        {lang === 'zh' ? '掃描商品時，FACTA 會自動比對受影響品牌並警示。' : 'FACTA automatically checks scanned products against affected brands.'}
+      </p>
+    </div>
+  );
+}
 
 function getCurrentMealType(): 'breakfast' | 'lunch' | 'dinner' | 'snack' {
   const h = new Date().getHours();
@@ -293,6 +337,8 @@ export default function Home() {
             <p className="text-xs text-muted-foreground font-mono">{t('tagline_en')}</p>
           </div>
         </header>
+
+        <SafetyAlertBanner />
 
         {/* Primary Actions */}
         <div className="flex flex-col gap-3">

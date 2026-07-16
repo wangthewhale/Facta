@@ -844,6 +844,37 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /safety-alerts:
+    get:
+      operationId: listSafetyAlerts
+      summary: List active government food-safety alerts
+      tags: [safety]
+      responses:
+        "200":
+          description: Active alerts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SafetyAlertsResponse"
+  /products/{id}/safety-check:
+    get:
+      operationId: getProductSafetyCheck
+      summary: Check whether a product is affected by an active safety alert
+      tags: [safety]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Safety check result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SafetyCheckResponse"
+        "404":
+          description: Product not found
   /products/{id}/news:
     get:
       operationId: getProductNews
@@ -1177,6 +1208,52 @@ components:
         overallScore: { type: integer }
         scoreGrade: { type: string }
 
+    SafetyAlert:
+      type: object
+      required: [id, slug, title, titleZh, summary, summaryZh, severity, sourceUrls, publishedAt]
+      properties:
+        id: { type: integer }
+        slug: { type: string }
+        title: { type: string }
+        titleZh: { type: string }
+        summary: { type: string }
+        summaryZh: { type: string }
+        contaminant: { type: ["string", "null"] }
+        contaminantZh: { type: ["string", "null"] }
+        severity: { type: string, enum: [high, medium, low] }
+        officialUrl: { type: ["string", "null"] }
+        sourceUrls:
+          type: array
+          items: { type: string }
+        publishedAt: { type: string }
+    SafetyAlertsResponse:
+      type: object
+      required: [alerts]
+      properties:
+        alerts:
+          type: array
+          items:
+            $ref: "#/components/schemas/SafetyAlert"
+    SafetyAlertMatch:
+      type: object
+      required: [alert, matchedBusiness, matchedKeyword, productExamples]
+      properties:
+        alert:
+          $ref: "#/components/schemas/SafetyAlert"
+        matchedBusiness: { type: string }
+        matchedKeyword: { type: string }
+        productExamples:
+          type: array
+          items: { type: string }
+    SafetyCheckResponse:
+      type: object
+      required: [affected, matches]
+      properties:
+        affected: { type: boolean }
+        matches:
+          type: array
+          items:
+            $ref: "#/components/schemas/SafetyAlertMatch"
     NewsArticle:
       type: object
       required: [title]

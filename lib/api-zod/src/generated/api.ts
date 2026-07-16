@@ -1087,6 +1087,58 @@ export const FinalizeSubmissionResponse = zod.object({
 
 
 /**
+ * @summary List active government food-safety alerts
+ */
+export const ListSafetyAlertsResponse = zod.object({
+  "alerts": zod.array(zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
+  "title": zod.string(),
+  "titleZh": zod.string(),
+  "summary": zod.string(),
+  "summaryZh": zod.string(),
+  "contaminant": zod.string().nullish(),
+  "contaminantZh": zod.string().nullish(),
+  "severity": zod.enum(['high', 'medium', 'low']),
+  "officialUrl": zod.string().nullish(),
+  "sourceUrls": zod.array(zod.string()),
+  "publishedAt": zod.string()
+}))
+})
+
+
+/**
+ * @summary Check whether a product is affected by an active safety alert
+ */
+export const GetProductSafetyCheckParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetProductSafetyCheckResponse = zod.object({
+  "affected": zod.boolean(),
+  "matches": zod.array(zod.object({
+  "alert": zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
+  "title": zod.string(),
+  "titleZh": zod.string(),
+  "summary": zod.string(),
+  "summaryZh": zod.string(),
+  "contaminant": zod.string().nullish(),
+  "contaminantZh": zod.string().nullish(),
+  "severity": zod.enum(['high', 'medium', 'low']),
+  "officialUrl": zod.string().nullish(),
+  "sourceUrls": zod.array(zod.string()),
+  "publishedAt": zod.string()
+}),
+  "matchedBusiness": zod.string(),
+  "matchedKeyword": zod.string(),
+  "productExamples": zod.array(zod.string())
+}))
+})
+
+
+/**
  * @summary AI web search for brand/product news with sentiment
  */
 export const GetProductNewsParams = zod.object({

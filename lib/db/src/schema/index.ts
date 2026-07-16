@@ -15,6 +15,7 @@ export * from "./userPreferences";
 export * from "./scanEvents";
 export * from "./productSubmissions";
 export * from "./productNews";
+export * from "./safetyAlerts";
 export * from "./dataCorrections";
 export * from "./auditLogs";
 export * from "./goals";

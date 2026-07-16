@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useParams } from 'wouter';
 import { Layout } from '@/components/layout';
-import { useGetProduct, useGetProductEvaluation, useGetAlternatives, useRecordScan, useGetUserGoals, useGetGoalFit, useGetProductNews } from '@workspace/api-client-react';
+import { useGetProduct, useGetProductEvaluation, useGetAlternatives, useRecordScan, useGetUserGoals, useGetGoalFit, useGetProductNews, useGetProductSafetyCheck } from '@workspace/api-client-react';
 import { useTranslation } from '@/lib/i18n';
 import { AlertTriangle, ArrowRight, CheckCircle2, ChevronRight, Info, Link, Share, TriangleAlert, XOctagon } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -67,6 +67,60 @@ function AnimatedScore({ score, grade }: { score: number, grade: string }) {
         {displayScore}
       </div>
     </div>
+  );
+}
+
+function SafetyAlertSection({ productId }: { productId: number }) {
+  const { lang } = useTranslation();
+  const { data } = useGetProductSafetyCheck(productId, { query: { staleTime: 10 * 60 * 1000 } as any });
+
+  if (!data?.affected || !data.matches?.length) return null;
+
+  return (
+    <section className="px-6 py-5 bg-red-50 border-y-4 border-red-600">
+      {data.matches.map((m, i) => (
+        <div key={i} className="flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <span className="bg-red-600 text-white px-2 py-0.5 text-[10px] font-black tracking-widest uppercase">
+              {lang === 'zh' ? '政府食安警報' : 'GOV FOOD SAFETY ALERT'}
+            </span>
+          </div>
+          <h3 className="font-black text-red-700 text-sm leading-snug">
+            {lang === 'zh' ? m.alert.titleZh : m.alert.title}
+          </h3>
+          <p className="text-xs text-red-900/90 leading-relaxed">
+            {lang === 'zh' ? m.alert.summaryZh : m.alert.summary}
+          </p>
+          <p className="text-xs font-bold text-red-800">
+            {lang === 'zh'
+              ? `此品牌／業者「${m.matchedBusiness}」名列食藥署公布的受影響業者名單`
+              : `This brand/business "${m.matchedBusiness}" appears on the TFDA affected-business list`}
+            {m.productExamples.length > 0 && (
+              <span className="font-normal">
+                {lang === 'zh' ? '（受波及產品例：' : ' (affected examples: '}
+                {m.productExamples.join('、')}
+                {lang === 'zh' ? '）' : ')'}
+              </span>
+            )}
+          </p>
+          {m.alert.officialUrl && (
+            <a
+              href={m.alert.officialUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs underline font-bold text-red-700"
+            >
+              {lang === 'zh' ? '查看食藥署官方完整下架名單 →' : 'View full official TFDA recall list →'}
+            </a>
+          )}
+          <p className="text-[10px] text-red-900/60">
+            {lang === 'zh'
+              ? '注意：此為品牌／業者層級比對，實際受影響品項以食藥署公告為準。'
+              : 'Note: matched at brand/business level; refer to the official TFDA list for exact affected items.'}
+          </p>
+        </div>
+      ))}
+    </section>
   );
 }
 
@@ -396,6 +450,8 @@ export default function Report() {
           )}
 
           {/* Goal Fit */}
+          <SafetyAlertSection productId={productId} />
+
           <GoalFitSection productId={productId} activeGoals={activeGoals} />
 
           {/* Brand News Intelligence */}

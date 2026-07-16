@@ -19,6 +19,49 @@ export interface FinalizeResult {
   scoreGrade?: string;
 }
 
+export type SafetyAlertSeverity = typeof SafetyAlertSeverity[keyof typeof SafetyAlertSeverity];
+
+
+export const SafetyAlertSeverity = {
+  high: 'high',
+  medium: 'medium',
+  low: 'low',
+} as const;
+
+export interface SafetyAlert {
+  id: number;
+  slug: string;
+  title: string;
+  titleZh: string;
+  summary: string;
+  summaryZh: string;
+  /** @nullable */
+  contaminant?: string | null;
+  /** @nullable */
+  contaminantZh?: string | null;
+  severity: SafetyAlertSeverity;
+  /** @nullable */
+  officialUrl?: string | null;
+  sourceUrls: string[];
+  publishedAt: string;
+}
+
+export interface SafetyAlertsResponse {
+  alerts: SafetyAlert[];
+}
+
+export interface SafetyAlertMatch {
+  alert: SafetyAlert;
+  matchedBusiness: string;
+  matchedKeyword: string;
+  productExamples: string[];
+}
+
+export interface SafetyCheckResponse {
+  affected: boolean;
+  matches: SafetyAlertMatch[];
+}
+
 export type NewsArticleReportType = typeof NewsArticleReportType[keyof typeof NewsArticleReportType];
 
 
