@@ -37,18 +37,28 @@ export default function Scan() {
     }
   }, [productData, isError, setLocation, barcodeStr]);
 
+  const detectedRef = useRef(false);
+
   useEffect(() => {
+    if (manualMode || !scanning) return;
+    detectedRef.current = false;
+
     let stream: MediaStream | null = null;
     let animationFrameId: number;
     let mounted = true;
+    let zxingReader: any = null;
+
+    const videoConstraints: MediaTrackConstraints = {
+      facingMode: 'environment',
+      // High resolution dramatically improves 1D barcode detection
+      width: { ideal: 1920 },
+      height: { ideal: 1080 },
+    };
 
     async function startCamera() {
-      if (manualMode) return;
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment' }
-        });
-        
+        stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints });
+
         if (!mounted) {
           stream.getTracks().forEach(t => t.stop());
           return;
@@ -57,47 +67,61 @@ export default function Scan() {
         setHasCamera(true);
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
-          // Need user interaction for some play policies, but often works for muted inline video
           videoRef.current.play().catch(e => console.error(e));
         }
 
-        // Try modern BarcodeDetector first
+        // Try modern BarcodeDetector first (Chrome/Android)
         if ('BarcodeDetector' in window) {
           // @ts-ignore
           const detector = new window.BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e'] });
-          
+
           const scanFrame = async () => {
-            if (!videoRef.current || !scanning || !mounted) return;
+            if (!videoRef.current || !mounted || detectedRef.current) return;
             try {
               const barcodes = await detector.detect(videoRef.current);
-              if (barcodes.length > 0) {
-                const code = barcodes[0].rawValue;
-                handleDetect(code);
-                return; // Stop scanning
+              if (barcodes.length > 0 && !detectedRef.current) {
+                detectedRef.current = true;
+                handleDetect(barcodes[0].rawValue);
+                return;
               }
             } catch (e) {
-              // ignore
+              // ignore per-frame errors
             }
             animationFrameId = requestAnimationFrame(scanFrame);
           };
           scanFrame();
         } else {
-          // Fallback to ZXing
-          const { BrowserMultiFormatReader } = await import('@zxing/library');
-          const codeReader = new BrowserMultiFormatReader();
-          if (videoRef.current) {
-             codeReader.decodeFromVideoElement(videoRef.current)
-               .then((result: any) => {
-                 if (result && mounted && scanning) {
-                   handleDetect(result.getText());
-                 }
-               })
-               .catch(() => { /* ignore decode errors */ });
+          // Fallback to ZXing (iOS Safari) — continuous decoding with TRY_HARDER
+          const { BrowserMultiFormatReader, DecodeHintType, BarcodeFormat } = await import('@zxing/library');
+          const hints = new Map();
+          hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+            BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A, BarcodeFormat.UPC_E,
+          ]);
+          hints.set(DecodeHintType.TRY_HARDER, true);
+          // 150ms between decode attempts keeps the UI responsive
+          zxingReader = new BrowserMultiFormatReader(hints, 150);
+
+          if (videoRef.current && mounted) {
+            // Let ZXing manage its own stream so it can decode continuously;
+            // release ours first to free the camera.
+            stream.getTracks().forEach(t => t.stop());
+            stream = null;
+            await zxingReader.decodeFromConstraints(
+              { video: videoConstraints },
+              videoRef.current,
+              (result: any) => {
+                if (result && mounted && !detectedRef.current) {
+                  detectedRef.current = true;
+                  handleDetect(result.getText());
+                }
+                // NotFoundException per frame is expected — keep scanning
+              }
+            );
           }
         }
       } catch (err) {
         console.error("Camera access denied or unavailable", err);
-        setHasCamera(false);
+        if (mounted) setHasCamera(false);
       }
     }
 
@@ -105,6 +129,7 @@ export default function Scan() {
 
     return () => {
       mounted = false;
+      if (zxingReader) { try { zxingReader.reset(); } catch { /* noop */ } }
       if (stream) stream.getTracks().forEach(t => t.stop());
       if (animationFrameId) cancelAnimationFrame(animationFrameId);
     };
