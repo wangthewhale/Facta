@@ -23,7 +23,7 @@ export default function Scan() {
     query: {
       enabled: !!barcodeStr,
       retry: false,
-    }
+    } as any
   });
 
   useEffect(() => {
@@ -86,11 +86,13 @@ export default function Scan() {
           const { BrowserMultiFormatReader } = await import('@zxing/library');
           const codeReader = new BrowserMultiFormatReader();
           if (videoRef.current) {
-             codeReader.decodeFromVideoElement(videoRef.current, (result, err) => {
-               if (result && mounted && scanning) {
-                 handleDetect(result.getText());
-               }
-             });
+             codeReader.decodeFromVideoElement(videoRef.current)
+               .then((result: any) => {
+                 if (result && mounted && scanning) {
+                   handleDetect(result.getText());
+                 }
+               })
+               .catch(() => { /* ignore decode errors */ });
           }
         }
       } catch (err) {
@@ -149,7 +151,7 @@ export default function Scan() {
           </button>
           <span className="font-mono text-sm font-bold tracking-widest uppercase">{t('scan_product')}</span>
           <button onClick={toggleFlashlight} className="p-2" disabled={!hasCamera || manualMode}>
-            <Flashlight className={cn("w-6 h-6", flashlightOn ? "text-primary" : "text-white opacity-70")} />
+            <Flashlight className={cn("w-6 h-6", flashlightOn ? "text-primary-strong" : "text-white opacity-70")} />
           </button>
         </div>
 

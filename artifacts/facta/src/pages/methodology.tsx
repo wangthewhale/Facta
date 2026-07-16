@@ -22,7 +22,7 @@ export default function Methodology() {
           
           {/* Independence */}
           <div className="p-8 border-b border-border bg-primary/5 flex flex-col gap-4">
-            <ShieldCheck className="w-8 h-8 text-primary" />
+            <ShieldCheck className="w-8 h-8 text-primary-strong" />
             <h2 className="text-xl font-bold uppercase tracking-widest">{t('trust_statement')}</h2>
             <p className="text-sm leading-relaxed text-muted-foreground">
               FACTA operates independently. We do not accept payment from food brands to improve scores, alter rankings, or remove negative evidence. Our revenue model does not rely on brand partnerships.
@@ -38,11 +38,11 @@ export default function Methodology() {
             </p>
             <ul className="text-sm space-y-3 font-mono bg-card p-4 border border-border">
               <li className="flex items-center justify-between">
-                <span className="text-primary font-bold">80-100</span>
+                <span className="text-primary-strong font-bold">80-100</span>
                 <span>Excellent</span>
               </li>
               <li className="flex items-center justify-between border-t border-border pt-3">
-                <span className="text-primary opacity-80 font-bold">60-79</span>
+                <span className="text-primary-strong opacity-80 font-bold">60-79</span>
                 <span>Good</span>
               </li>
               <li className="flex items-center justify-between border-t border-border pt-3">

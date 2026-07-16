@@ -13,11 +13,11 @@ export default function Alternatives() {
   const [, setLocation] = useLocation();
 
   const { data: originalProduct, isLoading: originalLoading } = useGetProduct(productId, {
-    query: { enabled: !!productId }
+    query: { enabled: !!productId } as any
   });
 
   const { data: alternatives, isLoading: altLoading } = useGetAlternatives(productId, {
-    query: { enabled: !!productId }
+    query: { enabled: !!productId } as any
   });
 
   return (
@@ -57,7 +57,7 @@ export default function Alternatives() {
               <div key={i} className="border border-border bg-background p-4 flex flex-col gap-4 relative group cursor-pointer hover:border-primary transition-colors" onClick={() => setLocation(`/report/${alt.product.id}`)}>
                 <div className="flex justify-between items-start">
                   <div className="flex items-center gap-4">
-                    <div className="w-16 h-16 bg-primary/20 text-primary flex items-center justify-center text-xl font-mono font-bold">
+                    <div className="w-16 h-16 bg-primary/20 text-primary-strong flex items-center justify-center text-xl font-mono font-bold">
                       {alt.product.overallScore}
                     </div>
                     <div>
@@ -67,7 +67,7 @@ export default function Alternatives() {
                       </h3>
                     </div>
                   </div>
-                  <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors absolute top-6 right-4" />
+                  <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary-strong transition-colors absolute top-6 right-4" />
                 </div>
 
                 <div className="bg-card border border-border p-3 text-sm font-medium">
@@ -76,7 +76,7 @@ export default function Alternatives() {
 
                 <div className="flex gap-2">
                   {alt.scoreImprovement && alt.scoreImprovement > 0 && (
-                    <span className="px-2 py-1 bg-primary/10 text-primary text-[10px] uppercase tracking-widest font-bold flex items-center gap-1">
+                    <span className="px-2 py-1 bg-primary/10 text-primary-strong text-[10px] uppercase tracking-widest font-bold flex items-center gap-1">
                       <TrendingDown className="w-3 h-3 rotate-180" /> +{alt.scoreImprovement} Score
                     </span>
                   )}

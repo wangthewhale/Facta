@@ -19,7 +19,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <Home className="w-5 h-5 mb-1" />
             <span className="text-[10px] font-medium tracking-wider">首頁</span>
           </Link>
-          <Link href="/scan" className="flex flex-col items-center justify-center w-full h-full text-muted-foreground hover:text-primary">
+          <Link href="/scan" className="flex flex-col items-center justify-center w-full h-full text-muted-foreground hover:text-primary-strong">
             <div className="bg-foreground text-background p-2 -mt-4 shadow-md flex items-center justify-center">
               <ScanLine className="w-6 h-6" />
             </div>

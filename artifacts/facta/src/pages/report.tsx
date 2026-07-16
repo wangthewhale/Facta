@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useParams } from 'wouter';
 import { Layout } from '@/components/layout';
-import { useGetProduct, useGetProductEvaluation, useGetAlternatives, useRecordScan } from '@workspace/api-client-react';
+import { useGetProduct, useGetProductEvaluation, useGetAlternatives, useRecordScan, useGetUserGoals, useGetGoalFit, useGetProductNews } from '@workspace/api-client-react';
 import { useTranslation } from '@/lib/i18n';
 import { AlertTriangle, ArrowRight, CheckCircle2, ChevronRight, Info, Link, Share, TriangleAlert, XOctagon } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -57,7 +57,7 @@ function AnimatedScore({ score, grade }: { score: number, grade: string }) {
   }, [score]);
 
   let textColor = 'text-foreground';
-  if (grade === 'Excellent' || grade === 'Good') textColor = 'text-primary';
+  if (grade === 'Excellent' || grade === 'Good') textColor = 'text-primary-strong';
   if (grade === 'Consider') textColor = 'text-[#F2B84B]';
   if (grade === 'Poor') textColor = 'text-destructive';
 
@@ -66,6 +66,189 @@ function AnimatedScore({ score, grade }: { score: number, grade: string }) {
       <div className={cn("text-8xl font-black tracking-tighter leading-none font-mono", textColor)}>
         {displayScore}
       </div>
+    </div>
+  );
+}
+
+function NewsSection({ productId }: { productId: number }) {
+  const { t, lang } = useTranslation();
+  const { data: news, isLoading } = useGetProductNews(productId, { query: { staleTime: 5 * 60 * 1000 } as any });
+
+  if (isLoading) {
+    return (
+      <div className="p-6 border-b border-border bg-card/50">
+        <h3 className="text-xs font-mono tracking-widest text-muted-foreground uppercase mb-4">
+          {lang === 'zh' ? '品牌情報' : 'Brand Intelligence'}
+        </h3>
+        <div className="flex items-center gap-3 text-xs text-muted-foreground font-mono">
+          <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          {lang === 'zh' ? 'AI 正在搜尋相關新聞…' : 'AI is searching for related news…'}
+        </div>
+      </div>
+    );
+  }
+
+  if (!news || news.sentiment === 'none') return null;
+
+  const sentimentStyle =
+    news.sentiment === 'negative' ? 'bg-destructive text-destructive-foreground' :
+    news.sentiment === 'positive' ? 'bg-primary text-primary-foreground' :
+    'bg-[#F2B84B] text-black';
+  const sentimentLabel = lang === 'zh'
+    ? (news.sentiment === 'negative' ? '負面新聞' : news.sentiment === 'positive' ? '正面新聞' : news.sentiment === 'mixed' ? '正負皆有' : '中立')
+    : news.sentiment.toUpperCase();
+
+  return (
+    <div className="p-6 border-b border-border bg-card/50">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-xs font-mono tracking-widest text-muted-foreground uppercase">
+          {lang === 'zh' ? '品牌情報' : 'Brand Intelligence'}
+        </h3>
+        <span className={cn('px-2 py-0.5 text-[10px] font-bold tracking-wider uppercase', sentimentStyle)}>
+          {sentimentLabel}
+        </span>
+      </div>
+      {(news.summaryZh || news.summary) && (
+        <p className="text-sm mb-3">
+          {lang === 'zh' && news.summaryZh ? news.summaryZh : news.summary}
+        </p>
+      )}
+      {news.articles.length > 0 && (
+        <div className="flex flex-col gap-2">
+          {news.articles.map((a, i) => {
+            const rt = a.reportType ?? 'unknown';
+            const rtLabel = lang === 'zh'
+              ? (rt === 'news' ? '公正報導' : rt === 'advertorial' ? '廣編/業配' : rt === 'press_release' ? '新聞稿' : '來源不明')
+              : (rt === 'news' ? 'Journalism' : rt === 'advertorial' ? 'Sponsored' : rt === 'press_release' ? 'Press release' : 'Unverified');
+            const rtStyle = rt === 'news'
+              ? 'bg-primary-strong text-white'
+              : rt === 'advertorial'
+              ? 'bg-[#F2B84B] text-black'
+              : 'bg-muted text-muted-foreground';
+            return (
+              <a
+                key={i}
+                href={a.url ?? undefined}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={cn('flex items-start gap-2 p-2 bg-background border border-border text-xs', a.url && 'hover:border-foreground')}
+              >
+                <Link className="w-3 h-3 mt-0.5 shrink-0 text-muted-foreground" />
+                <span className="flex-1">{a.title}</span>
+                <span className={cn('shrink-0 px-1.5 py-0.5 text-[9px] font-bold tracking-wider uppercase', rtStyle)}>
+                  {rtLabel}
+                </span>
+              </a>
+            );
+          })}
+        </div>
+      )}
+      {news.articles.some(a => a.reportType === 'advertorial' || a.reportType === 'press_release') && (
+        <p className="text-[10px] text-muted-foreground mt-2">
+          {lang === 'zh'
+            ? '標示「廣編/業配」或「新聞稿」的內容非獨立報導，不計入情緒判定。'
+            : 'Items marked Sponsored or Press release are not independent journalism and do not affect the sentiment rating.'}
+        </p>
+      )}
+      {news.fetchedAt && (
+        <p className="text-[10px] text-muted-foreground font-mono mt-3 uppercase tracking-wider">
+          {lang === 'zh' ? 'AI 網路搜尋 · ' : 'AI web search · '}{new Date(news.fetchedAt).toLocaleDateString()}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function GoalFitSection({ productId, activeGoals }: { productId: number, activeGoals: any[] }) {
+  const { t, lang } = useTranslation();
+  const [, setLocation] = useLocation();
+
+  if (!activeGoals || activeGoals.length === 0) {
+    return (
+      <div className="p-6 border-b border-border bg-card">
+        <h3 className="text-xs font-mono tracking-widest text-muted-foreground uppercase mb-4">{t('goal_fit')}</h3>
+        <div className="bg-muted border border-border border-dashed p-4 flex items-center justify-between hover:bg-accent transition-colors cursor-pointer group" onClick={() => setLocation('/onboarding')}>
+          <span className="text-sm font-bold text-muted-foreground group-hover:text-foreground">{t('set_goals_prompt')}</span>
+          <ArrowRight className="w-4 h-4 text-muted-foreground" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6 border-b border-border bg-card">
+      <h3 className="text-xs font-mono tracking-widest text-muted-foreground uppercase mb-4">{t('goal_fit')}</h3>
+      <div className="flex flex-col gap-4">
+        {activeGoals.map(goal => (
+          <GoalFitCard key={goal.slug} productId={productId} goal={goal} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function GoalFitCard({ productId, goal }: { productId: number, goal: any }) {
+  const { lang, t } = useTranslation();
+  const { data: fit, isLoading } = useGetGoalFit(productId, goal.slug);
+
+  const fitColors: Record<string, string> = {
+    great_fit: '#B9F24A',
+    good_fit: '#B9F24A', 
+    mixed_fit: '#F2B84B',
+    poor_fit: '#E45145',
+    insufficient_data: '#9CA3AF',
+  };
+
+  const fitLabels: Record<string, string> = {
+    great_fit: t('fit_great'),
+    good_fit: t('fit_good'),
+    mixed_fit: t('fit_mixed'),
+    poor_fit: t('fit_poor'),
+    insufficient_data: t('fit_insufficient'),
+  };
+
+  if (isLoading) {
+    return <Skeleton className="h-24 w-full" />;
+  }
+
+  if (!fit) return null;
+
+  return (
+    <div className="border border-border bg-background p-4 flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <span className="font-bold text-sm">{lang === 'zh' && goal.nameZh ? goal.nameZh : goal.name}</span>
+        <span 
+          className="px-2 py-0.5 text-[10px] font-bold tracking-widest text-black whitespace-nowrap"
+          style={{ backgroundColor: fitColors[fit.fitLevel] || fitColors.insufficient_data, opacity: fit.fitLevel === 'good_fit' ? 0.7 : 1 }}
+        >
+          {fitLabels[fit.fitLevel]}
+        </span>
+      </div>
+
+      {fit.fitLevel !== 'insufficient_data' ? (
+        <>
+          {fit.fitReasons && fit.fitReasons.length > 0 && (
+            <ul className="flex flex-col gap-1 mt-1">
+              {fit.fitReasons.slice(0, 2).map((r, i) => (
+                <li key={i} className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-primary-strong shrink-0 mt-0.5" />
+                  <span className="leading-snug">{lang === 'zh' && r.labelZh ? r.labelZh : r.label}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {fit.warnings && fit.warnings.length > 0 && (
+            <ul className="flex flex-col gap-1 mt-2 pt-2 border-t border-border border-dashed">
+              {fit.warnings.map((w, i) => (
+                <li key={i} className="flex items-start gap-1.5 text-xs text-destructive">
+                  <XOctagon className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                  <span className="leading-snug font-medium">{lang === 'zh' && w.labelZh ? w.labelZh : w.label}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      ) : null}
     </div>
   );
 }
@@ -79,16 +262,19 @@ export default function Report() {
   const productId = parseInt(id || '0');
 
   const { data: product, isLoading: productLoading } = useGetProduct(productId, {
-    query: { enabled: !!productId }
+    query: { enabled: !!productId } as any
   });
   
   const { data: evaluation, isLoading: evalLoading } = useGetProductEvaluation(productId, {
-    query: { enabled: !!productId }
+    query: { enabled: !!productId } as any
   });
 
   const { data: alternatives, isLoading: altLoading } = useGetAlternatives(productId, {
-    query: { enabled: !!productId }
+    query: { enabled: !!productId } as any
   });
+
+  const { data: userGoalsData } = useGetUserGoals(sessionId);
+  const activeGoals = userGoalsData?.activeGoals || [];
 
   const recordScanMutation = useRecordScan();
 
@@ -155,7 +341,7 @@ export default function Report() {
             <div className="flex items-center gap-2">
               <span className={cn(
                 "px-2 py-1 text-[10px] uppercase tracking-widest font-bold border",
-                product.verificationStatus === 'verified' ? "border-primary text-primary" : "border-muted-foreground text-muted-foreground"
+                product.verificationStatus === 'verified' ? "border-primary text-primary-strong" : "border-muted-foreground text-muted-foreground"
               )}>
                 {product.verificationStatus === 'verified' ? t('verified') : t('provisional')}
               </span>
@@ -189,7 +375,7 @@ export default function Report() {
                 {evaluation.topReasons.map((reason, i) => (
                   <div key={i} className="flex items-start gap-3 p-3 bg-background border border-border">
                     <div className="mt-0.5">
-                      {reason.impact === 'positive' && <CheckCircle2 className="w-4 h-4 text-primary" />}
+                      {reason.impact === 'positive' && <CheckCircle2 className="w-4 h-4 text-primary-strong" />}
                       {reason.impact === 'negative' && <XOctagon className="w-4 h-4 text-destructive" />}
                       {reason.impact === 'neutral' && <Info className="w-4 h-4 text-muted-foreground" />}
                     </div>
@@ -208,6 +394,12 @@ export default function Report() {
               </div>
             </div>
           )}
+
+          {/* Goal Fit */}
+          <GoalFitSection productId={productId} activeGoals={activeGoals} />
+
+          {/* Brand News Intelligence */}
+          <NewsSection productId={productId} />
 
           {/* Additives & Allergens */}
           <div className="grid grid-cols-2 divide-x border-b border-border bg-background">
@@ -264,7 +456,7 @@ export default function Report() {
                 {alternatives.slice(0, 2).map((alt, i) => (
                   <Link key={i} href={`/report/${alt.product.id}`} className="flex items-center justify-between p-4 bg-background border border-border hover:border-primary transition-colors group">
                     <div className="flex items-center gap-3">
-                      <div className="flex flex-col items-center justify-center w-10 h-10 bg-primary/20 text-primary font-mono font-bold text-sm">
+                      <div className="flex flex-col items-center justify-center w-10 h-10 bg-primary/20 text-primary-strong font-mono font-bold text-sm">
                         {alt.product.overallScore}
                       </div>
                       <div className="flex flex-col">
@@ -272,7 +464,7 @@ export default function Report() {
                         <span className="text-[10px] text-muted-foreground mt-0.5">{lang === 'zh' && alt.whyBetterZh ? alt.whyBetterZh : alt.whyBetter}</span>
                       </div>
                     </div>
-                    <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                    <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary-strong transition-colors" />
                   </Link>
                 ))}
               </div>

@@ -22,10 +22,557 @@ tags:
     description: Unknown product submissions and OCR
   - name: preferences
     description: User allergen and dietary preferences
+  - name: goals
+    description: Goals, Goal Fit, and user profile
+  - name: mealLogs
+    description: My Day meal logging
+  - name: guides
+    description: FACTA Guides editorial content
+  - name: collections
+    description: Curated product collections
   - name: admin
     description: Admin review and management
 
 paths:
+  # ── Goals ─────────────────────────────────────────────────────────────────
+
+  /goals:
+    get:
+      operationId: listGoals
+      tags: [goals]
+      summary: List all goals
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Goals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GoalSummary"
+
+  /goals/{slug}:
+    get:
+      operationId: getGoal
+      tags: [goals]
+      summary: Get goal detail with meal contexts
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Goal detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GoalDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /user-goals/{sessionId}:
+    get:
+      operationId: getUserGoals
+      tags: [goals]
+      summary: Get user's active goals
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: User goals with profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserGoalsResponse"
+    put:
+      operationId: setUserGoals
+      tags: [goals]
+      summary: Set user goals (max 2 active)
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserGoalsInput"
+      responses:
+        "200":
+          description: Updated user goals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserGoalsResponse"
+
+  /profile/{sessionId}:
+    get:
+      operationId: getUserProfile
+      tags: [goals]
+      summary: Get user onboarding profile
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: saveUserProfile
+      tags: [goals]
+      summary: Save / update user onboarding profile
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserProfileInput"
+      responses:
+        "200":
+          description: Saved profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+
+  # ── Goal Fit ───────────────────────────────────────────────────────────────
+
+  /goal-fit/{productId}/{goalSlug}:
+    get:
+      operationId: getGoalFit
+      tags: [goals]
+      summary: Compute Goal Fit for a product × goal pair
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: goalSlug
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Goal fit result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GoalFitResult"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ── Meal Logs ─────────────────────────────────────────────────────────────
+
+  /meal-logs:
+    get:
+      operationId: listMealLogs
+      tags: [mealLogs]
+      summary: List meal logs for a session and date
+      parameters:
+        - name: session_id
+          in: query
+          required: true
+          schema: { type: string }
+        - name: date_str
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Meal logs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MealLog"
+    post:
+      operationId: addMealLog
+      tags: [mealLogs]
+      summary: Log a product to a meal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MealLogInput"
+      responses:
+        "201":
+          description: Created meal log
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MealLog"
+
+  /meal-logs/{id}:
+    delete:
+      operationId: deleteMealLog
+      tags: [mealLogs]
+      summary: Delete a meal log entry
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+  # ── Search ────────────────────────────────────────────────────────────────
+
+  /search:
+    get:
+      operationId: searchProducts
+      tags: [products]
+      summary: Contextual natural language + structured product search
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string }
+        - name: goal_slug
+          in: query
+          schema: { type: ["string", "null"] }
+        - name: meal_type
+          in: query
+          schema: { type: ["string", "null"] }
+        - name: retailer_slug
+          in: query
+          schema: { type: ["string", "null"] }
+        - name: session_id
+          in: query
+          schema: { type: ["string", "null"] }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResults"
+
+  # ── Guides ────────────────────────────────────────────────────────────────
+
+  /guides:
+    get:
+      operationId: listGuides
+      tags: [guides]
+      summary: List published FACTA Guides
+      parameters:
+        - name: goal_slug
+          in: query
+          schema: { type: ["string", "null"] }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10 }
+      responses:
+        "200":
+          description: Guides
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GuideSummary"
+
+  /guides/{slug}:
+    get:
+      operationId: getGuide
+      tags: [guides]
+      summary: Get a FACTA Guide by slug
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Guide
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GuideDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ── Collections ───────────────────────────────────────────────────────────
+
+  /collections:
+    get:
+      operationId: listCollections
+      tags: [collections]
+      summary: List published curated collections
+      parameters:
+        - name: goal_slug
+          in: query
+          schema: { type: ["string", "null"] }
+        - name: meal_type
+          in: query
+          schema: { type: ["string", "null"] }
+        - name: retailer_slug
+          in: query
+          schema: { type: ["string", "null"] }
+      responses:
+        "200":
+          description: Collections
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CollectionSummary"
+
+  /collections/{slug}:
+    get:
+      operationId: getCollection
+      tags: [collections]
+      summary: Get a collection with its products
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Collection detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollectionDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ── Admin — Goals ─────────────────────────────────────────────────────────
+
+  /admin/goals:
+    post:
+      operationId: adminCreateGoal
+      tags: [admin]
+      summary: Create a goal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminGoalInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GoalSummary"
+
+  /admin/goals/{id}:
+    patch:
+      operationId: adminUpdateGoal
+      tags: [admin]
+      summary: Update a goal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminGoalInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GoalSummary"
+
+  /admin/goal-rulesets:
+    post:
+      operationId: adminPublishGoalRuleset
+      tags: [admin]
+      summary: Publish a goal ruleset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminGoalRulesetInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: integer }
+                  goalId: { type: integer }
+                  version: { type: string }
+                  status: { type: string }
+
+  /admin/meal-contexts/{id}:
+    patch:
+      operationId: adminUpdateMealContext
+      tags: [admin]
+      summary: Update meal context guidance
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminMealContextInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: integer }
+                  status: { type: string }
+
+  /admin/guides:
+    post:
+      operationId: adminCreateGuide
+      tags: [admin]
+      summary: Create a guide
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminGuideInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GuideSummary"
+
+  /admin/guides/{id}:
+    patch:
+      operationId: adminUpdateGuide
+      tags: [admin]
+      summary: Update a guide
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminGuideInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GuideSummary"
+
+  /admin/collections:
+    post:
+      operationId: adminCreateCollection
+      tags: [admin]
+      summary: Create a curated collection
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminCollectionInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollectionSummary"
+
+  /admin/collections/{id}:
+    patch:
+      operationId: adminUpdateCollection
+      tags: [admin]
+      summary: Update a collection
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminCollectionInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollectionSummary"
+
   /healthz:
     get:
       operationId: healthCheck
@@ -272,6 +819,54 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Submission"
+
+  /submissions/{id}/finalize:
+    post:
+      operationId: finalizeSubmission
+      tags: [submissions]
+      summary: Instantly create a provisional product from a confirmed submission and score it
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Provisional product created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinalizeResult"
+        "404":
+          description: Submission not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /products/{id}/news:
+    get:
+      operationId: getProductNews
+      tags: [products]
+      summary: AI web search for brand/product news with sentiment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: News intelligence for this product's brand
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductNewsResponse"
+        "404":
+          description: Product not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /submissions/ocr:
     post:
@@ -573,6 +1168,39 @@ components:
       properties:
         error:
           type: string
+
+    FinalizeResult:
+      type: object
+      required: [productId]
+      properties:
+        productId: { type: integer }
+        overallScore: { type: integer }
+        scoreGrade: { type: string }
+
+    NewsArticle:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string }
+        url: { type: ["string", "null"] }
+        reportType:
+          type: string
+          enum: [news, advertorial, press_release, unknown]
+
+    ProductNewsResponse:
+      type: object
+      required: [sentiment, articles]
+      properties:
+        sentiment:
+          type: string
+          enum: [positive, negative, mixed, neutral, none]
+        summary: { type: ["string", "null"] }
+        summaryZh: { type: ["string", "null"] }
+        articles:
+          type: array
+          items:
+            $ref: "#/components/schemas/NewsArticle"
+        fetchedAt: { type: ["string", "null"] }
 
     # ── Core entities ─────────────────────────────────────────────────────
 
@@ -954,6 +1582,332 @@ components:
         totalScans:       { type: integer }
         pendingReviews:   { type: integer }
         scansToday:       { type: integer }
+
+    # ── Goals ─────────────────────────────────────────────────────────────
+
+    GoalSummary:
+      type: object
+      required: [id, slug, name, nameZh, status]
+      properties:
+        id:            { type: integer }
+        slug:          { type: string }
+        name:          { type: string }
+        nameZh:        { type: string }
+        description:   { type: ["string", "null"] }
+        descriptionZh: { type: ["string", "null"] }
+        status:        { type: string }
+        icon:          { type: ["string", "null"] }
+        sortOrder:     { type: integer }
+
+    MealContextSummary:
+      type: object
+      required: [id, meal, headlineZh, chooseMoreZh, chooseLessZh]
+      properties:
+        id:            { type: integer }
+        meal:          { type: string }
+        headline:      { type: string }
+        headlineZh:    { type: string }
+        chooseMore:    { type: array, items: { type: string } }
+        chooseMoreZh:  { type: array, items: { type: string } }
+        chooseLess:    { type: array, items: { type: string } }
+        chooseLessZh:  { type: array, items: { type: string } }
+        ctaText:       { type: ["string", "null"] }
+        ctaTextZh:     { type: ["string", "null"] }
+
+    GoalDetail:
+      allOf:
+        - $ref: "#/components/schemas/GoalSummary"
+        - type: object
+          properties:
+            mealContexts:
+              type: array
+              items:
+                $ref: "#/components/schemas/MealContextSummary"
+            guides:
+              type: array
+              items:
+                $ref: "#/components/schemas/GuideSummary"
+
+    UserGoalsResponse:
+      type: object
+      required: [sessionId, activeGoals]
+      properties:
+        sessionId:    { type: string }
+        activeGoals:
+          type: array
+          items:
+            type: object
+            properties:
+              goalId:   { type: integer }
+              goalSlug: { type: string }
+              goalName: { type: string }
+              goalNameZh: { type: string }
+              priority: { type: string }
+              status:   { type: string }
+        profile:
+          $ref: "#/components/schemas/UserProfile"
+        onboardingCompleted: { type: boolean }
+
+    UserGoalsInput:
+      type: object
+      required: [goals]
+      properties:
+        goals:
+          type: array
+          maxItems: 2
+          items:
+            type: object
+            required: [goalId, priority]
+            properties:
+              goalId:   { type: integer }
+              priority: { type: string }
+
+    UserProfile:
+      type: object
+      required: [sessionId]
+      properties:
+        sessionId:          { type: string }
+        preferredRetailers: { type: array, items: { type: string } }
+        budgetTier:         { type: ["string", "null"] }
+        wantsMealTiming:    { type: boolean }
+        onboardingCompleted: { type: boolean }
+        updatedAt:          { type: string }
+
+    UserProfileInput:
+      type: object
+      properties:
+        preferredRetailers: { type: array, items: { type: string } }
+        budgetTier:         { type: ["string", "null"] }
+        wantsMealTiming:    { type: boolean }
+        onboardingCompletedAt: { type: ["string", "null"] }
+
+    # ── Goal Fit ──────────────────────────────────────────────────────────
+
+    FitReason:
+      type: object
+      required: [label, labelZh, positive]
+      properties:
+        label:    { type: string }
+        labelZh:  { type: string }
+        positive: { type: boolean }
+
+    GoalFitResult:
+      type: object
+      required: [productId, goalSlug, fitLevel, goalRulesetVersion]
+      properties:
+        productId:           { type: integer }
+        goalSlug:            { type: string }
+        goalName:            { type: ["string", "null"] }
+        goalNameZh:          { type: ["string", "null"] }
+        fitLevel:            { type: string }
+        fitReasons:
+          type: array
+          items:
+            $ref: "#/components/schemas/FitReason"
+        warnings:
+          type: array
+          items:
+            $ref: "#/components/schemas/FitReason"
+        breakfastFit:        { type: string }
+        lunchFit:            { type: string }
+        dinnerFit:           { type: string }
+        snackFit:            { type: string }
+        inputDataCompleteness: { type: ["number", "null"] }
+        goalRulesetVersion:  { type: string }
+        evaluatedAt:         { type: string }
+
+    # ── Meal Logs ─────────────────────────────────────────────────────────
+
+    MealLogInput:
+      type: object
+      required: [sessionId, productId, mealType, dateStr]
+      properties:
+        sessionId: { type: string }
+        productId: { type: integer }
+        mealType:  { type: string }
+        dateStr:   { type: string }
+        note:      { type: ["string", "null"] }
+
+    MealLog:
+      type: object
+      required: [id, sessionId, productId, mealType, dateStr, loggedAt]
+      properties:
+        id:          { type: integer }
+        sessionId:   { type: string }
+        productId:   { type: integer }
+        mealType:    { type: string }
+        dateStr:     { type: string }
+        loggedAt:    { type: string }
+        note:        { type: ["string", "null"] }
+        productName: { type: ["string", "null"] }
+        productNameZh: { type: ["string", "null"] }
+        imageUrl:    { type: ["string", "null"] }
+        overallScore: { type: ["integer", "null"] }
+        scoreGrade:  { type: ["string", "null"] }
+
+    # ── Search ────────────────────────────────────────────────────────────
+
+    SearchResultItem:
+      type: object
+      required: [product, relevanceLabel]
+      properties:
+        product:
+          $ref: "#/components/schemas/ProductSummary"
+        relevanceLabel:   { type: string }
+        relevanceLabelZh: { type: ["string", "null"] }
+        fitLevel:         { type: ["string", "null"] }
+        matchReasons:     { type: array, items: { type: string } }
+        matchReasonsZh:   { type: array, items: { type: string } }
+
+    SearchResults:
+      type: object
+      required: [query, products]
+      properties:
+        query:        { type: string }
+        parsedFilters:
+          type: object
+          additionalProperties: true
+        products:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchResultItem"
+        guides:
+          type: array
+          items:
+            $ref: "#/components/schemas/GuideSummary"
+        total:        { type: integer }
+        hasMore:      { type: boolean }
+
+    # ── Guides ────────────────────────────────────────────────────────────
+
+    GuideSummary:
+      type: object
+      required: [id, slug, titleZh, status]
+      properties:
+        id:          { type: integer }
+        slug:        { type: string }
+        title:       { type: string }
+        titleZh:     { type: string }
+        summaryZh:   { type: ["string", "null"] }
+        summary:     { type: ["string", "null"] }
+        goalId:      { type: ["integer", "null"] }
+        coverImageUrl: { type: ["string", "null"] }
+        status:      { type: string }
+        publishedAt: { type: ["string", "null"] }
+
+    GuideDetail:
+      allOf:
+        - $ref: "#/components/schemas/GuideSummary"
+        - type: object
+          properties:
+            bodyZh:      { type: ["string", "null"] }
+            body:        { type: ["string", "null"] }
+            limitationsZh: { type: ["string", "null"] }
+            limitations: { type: ["string", "null"] }
+            sources:
+              type: array
+              items:
+                type: object
+                properties:
+                  citation:      { type: string }
+                  url:           { type: ["string", "null"] }
+                  publishedYear: { type: ["integer", "null"] }
+            evidenceLastReviewedAt: { type: ["string", "null"] }
+            reviewDueDate:          { type: ["string", "null"] }
+
+    # ── Collections ───────────────────────────────────────────────────────
+
+    CollectionSummary:
+      type: object
+      required: [id, slug, nameZh, status]
+      properties:
+        id:            { type: integer }
+        slug:          { type: string }
+        name:          { type: string }
+        nameZh:        { type: string }
+        descriptionZh: { type: ["string", "null"] }
+        goalId:        { type: ["integer", "null"] }
+        retailerId:    { type: ["integer", "null"] }
+        mealType:      { type: ["string", "null"] }
+        status:        { type: string }
+        productCount:  { type: integer }
+
+    CollectionDetail:
+      allOf:
+        - $ref: "#/components/schemas/CollectionSummary"
+        - type: object
+          properties:
+            products:
+              type: array
+              items:
+                type: object
+                properties:
+                  product:
+                    $ref: "#/components/schemas/ProductSummary"
+                  reason:    { type: ["string", "null"] }
+                  reasonZh:  { type: ["string", "null"] }
+
+    # ── Admin input schemas ────────────────────────────────────────────────
+
+    AdminGoalInput:
+      type: object
+      properties:
+        slug:          { type: string }
+        name:          { type: string }
+        nameZh:        { type: string }
+        description:   { type: ["string", "null"] }
+        descriptionZh: { type: ["string", "null"] }
+        status:        { type: string }
+        icon:          { type: ["string", "null"] }
+        sortOrder:     { type: integer }
+
+    AdminGoalRulesetInput:
+      type: object
+      required: [goalId, version, rules]
+      properties:
+        goalId:       { type: integer }
+        version:      { type: string }
+        description:  { type: ["string", "null"] }
+        rules:        { type: object, additionalProperties: true }
+        status:       { type: string }
+
+    AdminMealContextInput:
+      type: object
+      properties:
+        headline:      { type: string }
+        headlineZh:    { type: string }
+        chooseMore:    { type: array, items: { type: string } }
+        chooseMoreZh:  { type: array, items: { type: string } }
+        chooseLess:    { type: array, items: { type: string } }
+        chooseLessZh:  { type: array, items: { type: string } }
+        ctaText:       { type: ["string", "null"] }
+        ctaTextZh:     { type: ["string", "null"] }
+        status:        { type: string }
+
+    AdminGuideInput:
+      type: object
+      properties:
+        slug:          { type: string }
+        title:         { type: string }
+        titleZh:       { type: string }
+        summaryZh:     { type: ["string", "null"] }
+        body:          { type: ["string", "null"] }
+        bodyZh:        { type: ["string", "null"] }
+        goalId:        { type: ["integer", "null"] }
+        status:        { type: string }
+
+    AdminCollectionInput:
+      type: object
+      properties:
+        slug:          { type: string }
+        name:          { type: string }
+        nameZh:        { type: string }
+        descriptionZh: { type: ["string", "null"] }
+        goalId:        { type: ["integer", "null"] }
+        retailerId:    { type: ["integer", "null"] }
+        mealType:      { type: string }
+        status:        { type: string }
+        productIds:    { type: array, items: { type: integer } }
 
     # ── Admin ─────────────────────────────────────────────────────────────
 

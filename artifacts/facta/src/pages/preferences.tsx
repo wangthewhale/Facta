@@ -32,10 +32,10 @@ export default function Preferences() {
   const { toast } = useToast();
 
   const { data: prefData, isLoading } = useGetPreferences(sessionId, {
-    query: { enabled: !!sessionId }
+    query: { enabled: !!sessionId } as any
   });
 
-  const savePrefMut = useSavePreferences(sessionId);
+  const savePrefMut = useSavePreferences();
 
   const [allergens, setAllergens] = useState<string[]>([]);
   const [dietary, setDietary] = useState<string[]>([]);
@@ -63,6 +63,7 @@ export default function Preferences() {
   const handleSave = async () => {
     try {
       await savePrefMut.mutateAsync({
+        sessionId,
         data: {
           allergens,
           dietaryPreferences: dietary,

@@ -30,7 +30,7 @@ export default function Admin() {
   };
 
   const { data: pending, refetch } = useAdminListPending({ limit: 50 }, {
-    query: { enabled: authed }
+    query: { enabled: authed } as any
   });
 
   const verifyMut = useAdminVerifySubmission();

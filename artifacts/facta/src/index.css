@@ -21,6 +21,7 @@
   --color-popover-border: hsl(var(--popover-border));
 
   --color-primary: hsl(var(--primary));
+  --color-primary-strong: hsl(var(--primary-strong));
   --color-primary-foreground: hsl(var(--primary-foreground));
   --color-primary-border: var(--primary-border);
 
@@ -89,6 +90,8 @@
 
   /* FACTA Green: #B9F24A */
   --primary: 80 87% 62%;
+  /* Readable dark green for text on light backgrounds */
+  --primary-strong: 80 65% 27%;
   --primary-foreground: 80 9% 6%;
 
   /* Secondary: #11120F inverted mostly */
@@ -133,6 +136,7 @@
   --popover-foreground: 80 9% 6%;
   --popover-border: 43 15% 85%;
   --primary: 80 87% 62%;
+  --primary-strong: 80 65% 27%;
   --primary-foreground: 80 9% 6%;
   --secondary: 43 15% 85%;
   --secondary-foreground: 80 9% 6%;

@@ -12,7 +12,7 @@ export default function ShareCard() {
   const cardRef = useRef<HTMLDivElement>(null);
 
   const { data: shareData, isLoading } = useGetShareCard(productId, {
-    query: { enabled: !!productId }
+    query: { enabled: !!productId } as any
   });
 
   const handleDownload = async () => {

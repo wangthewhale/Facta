@@ -106,7 +106,7 @@ router.patch("/admin/products/:id", async (req, res): Promise<void> => {
   if (body.data.name !== undefined) updateData.name = body.data.name;
   if (body.data.nameZh !== undefined) updateData.nameZh = body.data.nameZh;
   if (body.data.ingredientsList !== undefined) updateData.ingredientsList = body.data.ingredientsList;
-  if (body.data.verificationStatus !== undefined) updateData.verificationStatus = body.data.verificationStatus;
+  if (body.data.verificationStatus !== undefined) updateData.verificationStatus = body.data.verificationStatus ?? undefined;
   if (body.data.imageUrl !== undefined) updateData.imageUrl = body.data.imageUrl;
   if (body.data.netWeight !== undefined) updateData.netWeight = body.data.netWeight;
   updateData.updatedAt = new Date();

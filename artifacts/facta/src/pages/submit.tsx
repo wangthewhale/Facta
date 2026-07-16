@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useLocation, useSearch } from 'wouter';
 import { Layout } from '@/components/layout';
 import { useTranslation } from '@/lib/i18n';
-import { useCreateSubmission, useProcessOcr, useConfirmOcr, useGetSubmission } from '@workspace/api-client-react';
+import { useCreateSubmission, useProcessOcr, useConfirmOcr, useFinalizeSubmission } from '@workspace/api-client-react';
 import { getSessionId } from '@/lib/session';
 import { Camera, ChevronRight, Upload, FileText, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -27,10 +27,12 @@ export default function Submit() {
 
   const [submissionId, setSubmissionId] = useState<number | null>(null);
   const [extractedText, setExtractedText] = useState('');
+  const [parsedNutrition, setParsedNutrition] = useState<Record<string, number | null> | null>(null);
 
   const createSubmissionMut = useCreateSubmission();
   const processOcrMut = useProcessOcr();
   const confirmOcrMut = useConfirmOcr();
+  const finalizeMut = useFinalizeSubmission();
 
   const handleNextStep1 = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,6 +78,7 @@ export default function Submit() {
           }
         });
         setExtractedText(ocrRes.extractedText);
+        setParsedNutrition((ocrRes.parsedNutrition as Record<string, number | null> | null) ?? null);
         setStep(4); // Confirm text
       } else {
         // Skip OCR if no image
@@ -90,12 +93,21 @@ export default function Submit() {
 
   const handleConfirmText = async () => {
     if (submissionId && extractedText) {
-      await confirmOcrMut.mutateAsync({
-        id: submissionId,
-        data: {
-          confirmedIngredients: extractedText
-        }
-      });
+      try {
+        await confirmOcrMut.mutateAsync({
+          id: submissionId,
+          data: {
+            confirmedIngredients: extractedText,
+            ...(parsedNutrition ? { confirmedNutrition: parsedNutrition } : {}),
+          }
+        });
+        // Instantly create a provisional product + FACTA Report
+        const result = await finalizeMut.mutateAsync({ id: submissionId });
+        setLocation(`/report/${result.productId}`);
+        return;
+      } catch (err) {
+        console.error(err);
+      }
     }
     setStep(5);
   };
@@ -108,7 +120,7 @@ export default function Submit() {
           <>
             <img src={value} alt="" className="absolute inset-0 w-full h-full object-cover mix-blend-multiply opacity-50" />
             <div className="relative z-10 bg-background text-foreground px-4 py-2 text-xs font-bold uppercase tracking-widest shadow-md flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 text-primary" /> Captured
+              <CheckCircle className="w-4 h-4 text-primary-strong" /> Captured
             </div>
           </>
         ) : (
@@ -253,7 +265,7 @@ export default function Submit() {
 
         {step === 5 && (
           <div className="flex flex-col items-center justify-center flex-1 py-20 text-center gap-6">
-            <div className="w-20 h-20 bg-primary/20 flex items-center justify-center text-primary mb-4">
+            <div className="w-20 h-20 bg-primary/20 flex items-center justify-center text-primary-strong mb-4">
               <CheckCircle className="w-10 h-10" />
             </div>
             <h1 className="text-3xl font-black uppercase tracking-tighter">Submitted</h1>

@@ -9,6 +9,683 @@ import * as zod from 'zod';
 
 
 /**
+ * @summary List all goals
+ */
+export const ListGoalsQueryParams = zod.object({
+  "status": zod.coerce.string().optional()
+})
+
+export const ListGoalsResponseItem = zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
+  "name": zod.string(),
+  "nameZh": zod.string(),
+  "description": zod.string().nullish(),
+  "descriptionZh": zod.string().nullish(),
+  "status": zod.string(),
+  "icon": zod.string().nullish(),
+  "sortOrder": zod.number().optional()
+})
+export const ListGoalsResponse = zod.array(ListGoalsResponseItem)
+
+
+/**
+ * @summary Get goal detail with meal contexts
+ */
+export const GetGoalParams = zod.object({
+  "slug": zod.coerce.string()
+})
+
+export const GetGoalResponse = zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
+  "name": zod.string(),
+  "nameZh": zod.string(),
+  "description": zod.string().nullish(),
+  "descriptionZh": zod.string().nullish(),
+  "status": zod.string(),
+  "icon": zod.string().nullish(),
+  "sortOrder": zod.number().optional()
+}).and(zod.object({
+  "mealContexts": zod.array(zod.object({
+  "id": zod.number(),
+  "meal": zod.string(),
+  "headline": zod.string().optional(),
+  "headlineZh": zod.string(),
+  "chooseMore": zod.array(zod.string()).optional(),
+  "chooseMoreZh": zod.array(zod.string()),
+  "chooseLess": zod.array(zod.string()).optional(),
+  "chooseLessZh": zod.array(zod.string()),
+  "ctaText": zod.string().nullish(),
+  "ctaTextZh": zod.string().nullish()
+})).optional(),
+  "guides": zod.array(zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
+  "title": zod.string().optional(),
+  "titleZh": zod.string(),
+  "summaryZh": zod.string().nullish(),
+  "summary": zod.string().nullish(),
+  "goalId": zod.number().nullish(),
+  "coverImageUrl": zod.string().nullish(),
+  "status": zod.string(),
+  "publishedAt": zod.string().nullish()
+})).optional()
+}))
+
+
+/**
+ * @summary Get user's active goals
+ */
+export const GetUserGoalsParams = zod.object({
+  "sessionId": zod.coerce.string()
+})
+
+export const GetUserGoalsResponse = zod.object({
+  "sessionId": zod.string(),
+  "activeGoals": zod.array(zod.object({
+  "goalId": zod.number().optional(),
+  "goalSlug": zod.string().optional(),
+  "goalName": zod.string().optional(),
+  "goalNameZh": zod.string().optional(),
+  "priority": zod.string().optional(),
+  "status": zod.string().optional()
+})),
+  "profile": zod.object({
+  "sessionId": zod.string(),
+  "preferredRetailers": zod.array(zod.string()).optional(),
+  "budgetTier": zod.string().nullish(),
+  "wantsMealTiming": zod.boolean().optional(),
+  "onboardingCompleted": zod.boolean().optional(),
+  "updatedAt": zod.string().optional()
+}).optional(),
+  "onboardingCompleted": zod.boolean().optional()
+})
+
+
+/**
+ * @summary Set user goals (max 2 active)
+ */
+export const SetUserGoalsParams = zod.object({
+  "sessionId": zod.coerce.string()
+})
+
+export const setUserGoalsBodyGoalsMax = 2;
+
+
+
+export const SetUserGoalsBody = zod.object({
+  "goals": zod.array(zod.object({
+  "goalId": zod.number(),
+  "priority": zod.string()
+})).max(setUserGoalsBodyGoalsMax)
+})
+
+export const SetUserGoalsResponse = zod.object({
+  "sessionId": zod.string(),
+  "activeGoals": zod.array(zod.object({
+  "goalId": zod.number().optional(),
+  "goalSlug": zod.string().optional(),
+  "goalName": zod.string().optional(),
+  "goalNameZh": zod.string().optional(),
+  "priority": zod.string().optional(),
+  "status": zod.string().optional()
+})),
+  "profile": zod.object({
+  "sessionId": zod.string(),
+  "preferredRetailers": zod.array(zod.string()).optional(),
+  "budgetTier": zod.string().nullish(),
+  "wantsMealTiming": zod.boolean().optional(),
+  "onboardingCompleted": zod.boolean().optional(),
+  "updatedAt": zod.string().optional()
+}).optional(),
+  "onboardingCompleted": zod.boolean().optional()
+})
+
+
+/**
+ * @summary Get user onboarding profile
+ */
+export const GetUserProfileParams = zod.object({
+  "sessionId": zod.coerce.string()
+})
+
+export const GetUserProfileResponse = zod.object({
+  "sessionId": zod.string(),
+  "preferredRetailers": zod.array(zod.string()).optional(),
+  "budgetTier": zod.string().nullish(),
+  "wantsMealTiming": zod.boolean().optional(),
+  "onboardingCompleted": zod.boolean().optional(),
+  "updatedAt": zod.string().optional()
+})
+
+
+/**
+ * @summary Save / update user onboarding profile
+ */
+export const SaveUserProfileParams = zod.object({
+  "sessionId": zod.coerce.string()
+})
+
+export const SaveUserProfileBody = zod.object({
+  "preferredRetailers": zod.array(zod.string()).optional(),
+  "budgetTier": zod.string().nullish(),
+  "wantsMealTiming": zod.boolean().optional(),
+  "onboardingCompletedAt": zod.string().nullish()
+})
+
+export const SaveUserProfileResponse = zod.object({
+  "sessionId": zod.string(),
+  "preferredRetailers": zod.array(zod.string()).optional(),
+  "budgetTier": zod.string().nullish(),
+  "wantsMealTiming": zod.boolean().optional(),
+  "onboardingCompleted": zod.boolean().optional(),
+  "updatedAt": zod.string().optional()
+})
+
+
+/**
+ * @summary Compute Goal Fit for a product × goal pair
+ */
+export const GetGoalFitParams = zod.object({
+  "productId": zod.coerce.number(),
+  "goalSlug": zod.coerce.string()
+})
+
+export const GetGoalFitResponse = zod.object({
+  "productId": zod.number(),
+  "goalSlug": zod.string(),
+  "goalName": zod.string().nullish(),
+  "goalNameZh": zod.string().nullish(),
+  "fitLevel": zod.string(),
+  "fitReasons": zod.array(zod.object({
+  "label": zod.string(),
+  "labelZh": zod.string(),
+  "positive": zod.boolean()
+})).optional(),
+  "warnings": zod.array(zod.object({
+  "label": zod.string(),
+  "labelZh": zod.string(),
+  "positive": zod.boolean()
+})).optional(),
+  "breakfastFit": zod.string().optional(),
+  "lunchFit": zod.string().optional(),
+  "dinnerFit": zod.string().optional(),
+  "snackFit": zod.string().optional(),
+  "inputDataCompleteness": zod.number().nullish(),
+  "goalRulesetVersion": zod.string(),
+  "evaluatedAt": zod.string().optional()
+})
+
+
+/**
+ * @summary List meal logs for a session and date
+ */
+export const ListMealLogsQueryParams = zod.object({
+  "session_id": zod.coerce.string(),
+  "date_str": zod.coerce.string().optional()
+})
+
+export const ListMealLogsResponseItem = zod.object({
+  "id": zod.number(),
+  "sessionId": zod.string(),
+  "productId": zod.number(),
+  "mealType": zod.string(),
+  "dateStr": zod.string(),
+  "loggedAt": zod.string(),
+  "note": zod.string().nullish(),
+  "productName": zod.string().nullish(),
+  "productNameZh": zod.string().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "overallScore": zod.number().nullish(),
+  "scoreGrade": zod.string().nullish()
+})
+export const ListMealLogsResponse = zod.array(ListMealLogsResponseItem)
+
+
+/**
+ * @summary Log a product to a meal
+ */
+export const AddMealLogBody = zod.object({
+  "sessionId": zod.string(),
+  "productId": zod.number(),
+  "mealType": zod.string(),
+  "dateStr": zod.string(),
+  "note": zod.string().nullish()
+})
+
+export const AddMealLogResponse = zod.object({
+  "id": zod.number(),
+  "sessionId": zod.string(),
+  "productId": zod.number(),
+  "mealType": zod.string(),
+  "dateStr": zod.string(),
+  "loggedAt": zod.string(),
+  "note": zod.string().nullish(),
+  "productName": zod.string().nullish(),
+  "productNameZh": zod.string().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "overallScore": zod.number().nullish(),
+  "scoreGrade": zod.string().nullish()
+})
+
+
+/**
+ * @summary Delete a meal log entry
+ */
+export const DeleteMealLogParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteMealLogResponse = zod.object({
+  "ok": zod.boolean().optional()
+})
+
+
+/**
+ * @summary Contextual natural language + structured product search
+ */
+export const searchProductsQueryLimitDefault = 20;
+
+export const SearchProductsQueryParams = zod.object({
+  "q": zod.coerce.string(),
+  "goal_slug": zod.coerce.string().nullish(),
+  "meal_type": zod.coerce.string().nullish(),
+  "retailer_slug": zod.coerce.string().nullish(),
+  "session_id": zod.coerce.string().nullish(),
+  "limit": zod.coerce.number().default(searchProductsQueryLimitDefault)
+})
+
+export const SearchProductsResponse = zod.object({
+  "query": zod.string(),
+  "parsedFilters": zod.record(zod.string(), zod.unknown()).optional(),
+  "products": zod.array(zod.object({
+  "product": zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "nameZh": zod.string().nullish(),
+  "brandName": zod.string().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "categorySlug": zod.string().nullish(),
+  "categoryName": zod.string().nullish(),
+  "verificationStatus": zod.string(),
+  "overallScore": zod.number().nullish(),
+  "scoreGrade": zod.string().nullish(),
+  "barcode": zod.string().nullish(),
+  "retailerName": zod.string().nullish(),
+  "priceNtd": zod.number().nullish()
+}),
+  "relevanceLabel": zod.string(),
+  "relevanceLabelZh": zod.string().nullish(),
+  "fitLevel": zod.string().nullish(),
+  "matchReasons": zod.array(zod.string()).optional(),
+  "matchReasonsZh": zod.array(zod.string()).optional()
+})),
+  "guides": zod.array(zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
+  "title": zod.string().optional(),
+  "titleZh": zod.string(),
+  "summaryZh": zod.string().nullish(),
+  "summary": zod.string().nullish(),
+  "goalId": zod.number().nullish(),
+  "coverImageUrl": zod.string().nullish(),
+  "status": zod.string(),
+  "publishedAt": zod.string().nullish()
+})).optional(),
+  "total": zod.number().optional(),
+  "hasMore": zod.boolean().optional()
+})
+
+
+/**
+ * @summary List published FACTA Guides
+ */
+export const listGuidesQueryLimitDefault = 10;
+
+export const ListGuidesQueryParams = zod.object({
+  "goal_slug": zod.coerce.string().nullish(),
+  "limit": zod.coerce.number().default(listGuidesQueryLimitDefault)
+})
+
+export const ListGuidesResponseItem = zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
+  "title": zod.string().optional(),
+  "titleZh": zod.string(),
+  "summaryZh": zod.string().nullish(),
+  "summary": zod.string().nullish(),
+  "goalId": zod.number().nullish(),
+  "coverImageUrl": zod.string().nullish(),
+  "status": zod.string(),
+  "publishedAt": zod.string().nullish()
+})
+export const ListGuidesResponse = zod.array(ListGuidesResponseItem)
+
+
+/**
+ * @summary Get a FACTA Guide by slug
+ */
+export const GetGuideParams = zod.object({
+  "slug": zod.coerce.string()
+})
+
+export const GetGuideResponse = zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
+  "title": zod.string().optional(),
+  "titleZh": zod.string(),
+  "summaryZh": zod.string().nullish(),
+  "summary": zod.string().nullish(),
+  "goalId": zod.number().nullish(),
+  "coverImageUrl": zod.string().nullish(),
+  "status": zod.string(),
+  "publishedAt": zod.string().nullish()
+}).and(zod.object({
+  "bodyZh": zod.string().nullish(),
+  "body": zod.string().nullish(),
+  "limitationsZh": zod.string().nullish(),
+  "limitations": zod.string().nullish(),
+  "sources": zod.array(zod.object({
+  "citation": zod.string().optional(),
+  "url": zod.string().nullish(),
+  "publishedYear": zod.number().nullish()
+})).optional(),
+  "evidenceLastReviewedAt": zod.string().nullish(),
+  "reviewDueDate": zod.string().nullish()
+}))
+
+
+/**
+ * @summary List published curated collections
+ */
+export const ListCollectionsQueryParams = zod.object({
+  "goal_slug": zod.coerce.string().nullish(),
+  "meal_type": zod.coerce.string().nullish(),
+  "retailer_slug": zod.coerce.string().nullish()
+})
+
+export const ListCollectionsResponseItem = zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
+  "name": zod.string().optional(),
+  "nameZh": zod.string(),
+  "descriptionZh": zod.string().nullish(),
+  "goalId": zod.number().nullish(),
+  "retailerId": zod.number().nullish(),
+  "mealType": zod.string().nullish(),
+  "status": zod.string(),
+  "productCount": zod.number().optional()
+})
+export const ListCollectionsResponse = zod.array(ListCollectionsResponseItem)
+
+
+/**
+ * @summary Get a collection with its products
+ */
+export const GetCollectionParams = zod.object({
+  "slug": zod.coerce.string()
+})
+
+export const GetCollectionResponse = zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
+  "name": zod.string().optional(),
+  "nameZh": zod.string(),
+  "descriptionZh": zod.string().nullish(),
+  "goalId": zod.number().nullish(),
+  "retailerId": zod.number().nullish(),
+  "mealType": zod.string().nullish(),
+  "status": zod.string(),
+  "productCount": zod.number().optional()
+}).and(zod.object({
+  "products": zod.array(zod.object({
+  "product": zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "nameZh": zod.string().nullish(),
+  "brandName": zod.string().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "categorySlug": zod.string().nullish(),
+  "categoryName": zod.string().nullish(),
+  "verificationStatus": zod.string(),
+  "overallScore": zod.number().nullish(),
+  "scoreGrade": zod.string().nullish(),
+  "barcode": zod.string().nullish(),
+  "retailerName": zod.string().nullish(),
+  "priceNtd": zod.number().nullish()
+}).optional(),
+  "reason": zod.string().nullish(),
+  "reasonZh": zod.string().nullish()
+})).optional()
+}))
+
+
+/**
+ * @summary Create a goal
+ */
+export const AdminCreateGoalBody = zod.object({
+  "slug": zod.string().optional(),
+  "name": zod.string().optional(),
+  "nameZh": zod.string().optional(),
+  "description": zod.string().nullish(),
+  "descriptionZh": zod.string().nullish(),
+  "status": zod.string().optional(),
+  "icon": zod.string().nullish(),
+  "sortOrder": zod.number().optional()
+})
+
+export const AdminCreateGoalResponse = zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
+  "name": zod.string(),
+  "nameZh": zod.string(),
+  "description": zod.string().nullish(),
+  "descriptionZh": zod.string().nullish(),
+  "status": zod.string(),
+  "icon": zod.string().nullish(),
+  "sortOrder": zod.number().optional()
+})
+
+
+/**
+ * @summary Update a goal
+ */
+export const AdminUpdateGoalParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const AdminUpdateGoalBody = zod.object({
+  "slug": zod.string().optional(),
+  "name": zod.string().optional(),
+  "nameZh": zod.string().optional(),
+  "description": zod.string().nullish(),
+  "descriptionZh": zod.string().nullish(),
+  "status": zod.string().optional(),
+  "icon": zod.string().nullish(),
+  "sortOrder": zod.number().optional()
+})
+
+export const AdminUpdateGoalResponse = zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
+  "name": zod.string(),
+  "nameZh": zod.string(),
+  "description": zod.string().nullish(),
+  "descriptionZh": zod.string().nullish(),
+  "status": zod.string(),
+  "icon": zod.string().nullish(),
+  "sortOrder": zod.number().optional()
+})
+
+
+/**
+ * @summary Publish a goal ruleset
+ */
+export const AdminPublishGoalRulesetBody = zod.object({
+  "goalId": zod.number(),
+  "version": zod.string(),
+  "description": zod.string().nullish(),
+  "rules": zod.record(zod.string(), zod.unknown()),
+  "status": zod.string().optional()
+})
+
+export const AdminPublishGoalRulesetResponse = zod.object({
+  "id": zod.number().optional(),
+  "goalId": zod.number().optional(),
+  "version": zod.string().optional(),
+  "status": zod.string().optional()
+})
+
+
+/**
+ * @summary Update meal context guidance
+ */
+export const AdminUpdateMealContextParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const AdminUpdateMealContextBody = zod.object({
+  "headline": zod.string().optional(),
+  "headlineZh": zod.string().optional(),
+  "chooseMore": zod.array(zod.string()).optional(),
+  "chooseMoreZh": zod.array(zod.string()).optional(),
+  "chooseLess": zod.array(zod.string()).optional(),
+  "chooseLessZh": zod.array(zod.string()).optional(),
+  "ctaText": zod.string().nullish(),
+  "ctaTextZh": zod.string().nullish(),
+  "status": zod.string().optional()
+})
+
+export const AdminUpdateMealContextResponse = zod.object({
+  "id": zod.number().optional(),
+  "status": zod.string().optional()
+})
+
+
+/**
+ * @summary Create a guide
+ */
+export const AdminCreateGuideBody = zod.object({
+  "slug": zod.string().optional(),
+  "title": zod.string().optional(),
+  "titleZh": zod.string().optional(),
+  "summaryZh": zod.string().nullish(),
+  "body": zod.string().nullish(),
+  "bodyZh": zod.string().nullish(),
+  "goalId": zod.number().nullish(),
+  "status": zod.string().optional()
+})
+
+export const AdminCreateGuideResponse = zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
+  "title": zod.string().optional(),
+  "titleZh": zod.string(),
+  "summaryZh": zod.string().nullish(),
+  "summary": zod.string().nullish(),
+  "goalId": zod.number().nullish(),
+  "coverImageUrl": zod.string().nullish(),
+  "status": zod.string(),
+  "publishedAt": zod.string().nullish()
+})
+
+
+/**
+ * @summary Update a guide
+ */
+export const AdminUpdateGuideParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const AdminUpdateGuideBody = zod.object({
+  "slug": zod.string().optional(),
+  "title": zod.string().optional(),
+  "titleZh": zod.string().optional(),
+  "summaryZh": zod.string().nullish(),
+  "body": zod.string().nullish(),
+  "bodyZh": zod.string().nullish(),
+  "goalId": zod.number().nullish(),
+  "status": zod.string().optional()
+})
+
+export const AdminUpdateGuideResponse = zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
+  "title": zod.string().optional(),
+  "titleZh": zod.string(),
+  "summaryZh": zod.string().nullish(),
+  "summary": zod.string().nullish(),
+  "goalId": zod.number().nullish(),
+  "coverImageUrl": zod.string().nullish(),
+  "status": zod.string(),
+  "publishedAt": zod.string().nullish()
+})
+
+
+/**
+ * @summary Create a curated collection
+ */
+export const AdminCreateCollectionBody = zod.object({
+  "slug": zod.string().optional(),
+  "name": zod.string().optional(),
+  "nameZh": zod.string().optional(),
+  "descriptionZh": zod.string().nullish(),
+  "goalId": zod.number().nullish(),
+  "retailerId": zod.number().nullish(),
+  "mealType": zod.string().optional(),
+  "status": zod.string().optional(),
+  "productIds": zod.array(zod.number()).optional()
+})
+
+export const AdminCreateCollectionResponse = zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
+  "name": zod.string().optional(),
+  "nameZh": zod.string(),
+  "descriptionZh": zod.string().nullish(),
+  "goalId": zod.number().nullish(),
+  "retailerId": zod.number().nullish(),
+  "mealType": zod.string().nullish(),
+  "status": zod.string(),
+  "productCount": zod.number().optional()
+})
+
+
+/**
+ * @summary Update a collection
+ */
+export const AdminUpdateCollectionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const AdminUpdateCollectionBody = zod.object({
+  "slug": zod.string().optional(),
+  "name": zod.string().optional(),
+  "nameZh": zod.string().optional(),
+  "descriptionZh": zod.string().nullish(),
+  "goalId": zod.number().nullish(),
+  "retailerId": zod.number().nullish(),
+  "mealType": zod.string().optional(),
+  "status": zod.string().optional(),
+  "productIds": zod.array(zod.number()).optional()
+})
+
+export const AdminUpdateCollectionResponse = zod.object({
+  "id": zod.number(),
+  "slug": zod.string(),
+  "name": zod.string().optional(),
+  "nameZh": zod.string(),
+  "descriptionZh": zod.string().nullish(),
+  "goalId": zod.number().nullish(),
+  "retailerId": zod.number().nullish(),
+  "mealType": zod.string().nullish(),
+  "status": zod.string(),
+  "productCount": zod.number().optional()
+})
+
+
+/**
  * @summary Health check
  */
 export const HealthCheckResponse = zod.object({
@@ -392,6 +1069,40 @@ export const ConfirmOcrResponse = zod.object({
   "reviewNote": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string().optional()
+})
+
+
+/**
+ * @summary Instantly create a provisional product from a confirmed submission and score it
+ */
+export const FinalizeSubmissionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const FinalizeSubmissionResponse = zod.object({
+  "productId": zod.number(),
+  "overallScore": zod.number().optional(),
+  "scoreGrade": zod.string().optional()
+})
+
+
+/**
+ * @summary AI web search for brand/product news with sentiment
+ */
+export const GetProductNewsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetProductNewsResponse = zod.object({
+  "sentiment": zod.enum(['positive', 'negative', 'mixed', 'neutral', 'none']),
+  "summary": zod.string().nullish(),
+  "summaryZh": zod.string().nullish(),
+  "articles": zod.array(zod.object({
+  "title": zod.string(),
+  "url": zod.string().nullish(),
+  "reportType": zod.enum(['news', 'advertorial', 'press_release', 'unknown']).optional()
+})),
+  "fetchedAt": zod.string().nullish()
 })
 
 

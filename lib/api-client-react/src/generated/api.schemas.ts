@@ -13,6 +13,51 @@ export interface ErrorResponse {
   error: string;
 }
 
+export interface FinalizeResult {
+  productId: number;
+  overallScore?: number;
+  scoreGrade?: string;
+}
+
+export type NewsArticleReportType = typeof NewsArticleReportType[keyof typeof NewsArticleReportType];
+
+
+export const NewsArticleReportType = {
+  news: 'news',
+  advertorial: 'advertorial',
+  press_release: 'press_release',
+  unknown: 'unknown',
+} as const;
+
+export interface NewsArticle {
+  title: string;
+  /** @nullable */
+  url?: string | null;
+  reportType?: NewsArticleReportType;
+}
+
+export type ProductNewsResponseSentiment = typeof ProductNewsResponseSentiment[keyof typeof ProductNewsResponseSentiment];
+
+
+export const ProductNewsResponseSentiment = {
+  positive: 'positive',
+  negative: 'negative',
+  mixed: 'mixed',
+  neutral: 'neutral',
+  none: 'none',
+} as const;
+
+export interface ProductNewsResponse {
+  sentiment: ProductNewsResponseSentiment;
+  /** @nullable */
+  summary?: string | null;
+  /** @nullable */
+  summaryZh?: string | null;
+  articles: NewsArticle[];
+  /** @nullable */
+  fetchedAt?: string | null;
+}
+
 export interface Retailer {
   id: number;
   name: string;
@@ -390,6 +435,304 @@ export interface DashboardStats {
   scansToday?: number;
 }
 
+export interface GoalSummary {
+  id: number;
+  slug: string;
+  name: string;
+  nameZh: string;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  descriptionZh?: string | null;
+  status: string;
+  /** @nullable */
+  icon?: string | null;
+  sortOrder?: number;
+}
+
+export interface MealContextSummary {
+  id: number;
+  meal: string;
+  headline?: string;
+  headlineZh: string;
+  chooseMore?: string[];
+  chooseMoreZh: string[];
+  chooseLess?: string[];
+  chooseLessZh: string[];
+  /** @nullable */
+  ctaText?: string | null;
+  /** @nullable */
+  ctaTextZh?: string | null;
+}
+
+export interface GuideSummary {
+  id: number;
+  slug: string;
+  title?: string;
+  titleZh: string;
+  /** @nullable */
+  summaryZh?: string | null;
+  /** @nullable */
+  summary?: string | null;
+  /** @nullable */
+  goalId?: number | null;
+  /** @nullable */
+  coverImageUrl?: string | null;
+  status: string;
+  /** @nullable */
+  publishedAt?: string | null;
+}
+
+export type GoalDetail = GoalSummary & {
+  mealContexts?: MealContextSummary[];
+  guides?: GuideSummary[];
+};
+
+export type UserGoalsResponseActiveGoalsItem = {
+  goalId?: number;
+  goalSlug?: string;
+  goalName?: string;
+  goalNameZh?: string;
+  priority?: string;
+  status?: string;
+};
+
+export interface UserProfile {
+  sessionId: string;
+  preferredRetailers?: string[];
+  /** @nullable */
+  budgetTier?: string | null;
+  wantsMealTiming?: boolean;
+  onboardingCompleted?: boolean;
+  updatedAt?: string;
+}
+
+export interface UserGoalsResponse {
+  sessionId: string;
+  activeGoals: UserGoalsResponseActiveGoalsItem[];
+  profile?: UserProfile;
+  onboardingCompleted?: boolean;
+}
+
+export type UserGoalsInputGoalsItem = {
+  goalId: number;
+  priority: string;
+};
+
+export interface UserGoalsInput {
+  /** @maxItems 2 */
+  goals: UserGoalsInputGoalsItem[];
+}
+
+export interface UserProfileInput {
+  preferredRetailers?: string[];
+  /** @nullable */
+  budgetTier?: string | null;
+  wantsMealTiming?: boolean;
+  /** @nullable */
+  onboardingCompletedAt?: string | null;
+}
+
+export interface FitReason {
+  label: string;
+  labelZh: string;
+  positive: boolean;
+}
+
+export interface GoalFitResult {
+  productId: number;
+  goalSlug: string;
+  /** @nullable */
+  goalName?: string | null;
+  /** @nullable */
+  goalNameZh?: string | null;
+  fitLevel: string;
+  fitReasons?: FitReason[];
+  warnings?: FitReason[];
+  breakfastFit?: string;
+  lunchFit?: string;
+  dinnerFit?: string;
+  snackFit?: string;
+  /** @nullable */
+  inputDataCompleteness?: number | null;
+  goalRulesetVersion: string;
+  evaluatedAt?: string;
+}
+
+export interface MealLogInput {
+  sessionId: string;
+  productId: number;
+  mealType: string;
+  dateStr: string;
+  /** @nullable */
+  note?: string | null;
+}
+
+export interface MealLog {
+  id: number;
+  sessionId: string;
+  productId: number;
+  mealType: string;
+  dateStr: string;
+  loggedAt: string;
+  /** @nullable */
+  note?: string | null;
+  /** @nullable */
+  productName?: string | null;
+  /** @nullable */
+  productNameZh?: string | null;
+  /** @nullable */
+  imageUrl?: string | null;
+  /** @nullable */
+  overallScore?: number | null;
+  /** @nullable */
+  scoreGrade?: string | null;
+}
+
+export interface SearchResultItem {
+  product: ProductSummary;
+  relevanceLabel: string;
+  /** @nullable */
+  relevanceLabelZh?: string | null;
+  /** @nullable */
+  fitLevel?: string | null;
+  matchReasons?: string[];
+  matchReasonsZh?: string[];
+}
+
+export type SearchResultsParsedFilters = { [key: string]: unknown };
+
+export interface SearchResults {
+  query: string;
+  parsedFilters?: SearchResultsParsedFilters;
+  products: SearchResultItem[];
+  guides?: GuideSummary[];
+  total?: number;
+  hasMore?: boolean;
+}
+
+export type GuideDetailSourcesItem = {
+  citation?: string;
+  /** @nullable */
+  url?: string | null;
+  /** @nullable */
+  publishedYear?: number | null;
+};
+
+export type GuideDetail = GuideSummary & ({
+  /** @nullable */
+  bodyZh?: string | null;
+  /** @nullable */
+  body?: string | null;
+  /** @nullable */
+  limitationsZh?: string | null;
+  /** @nullable */
+  limitations?: string | null;
+  sources?: GuideDetailSourcesItem[];
+  /** @nullable */
+  evidenceLastReviewedAt?: string | null;
+  /** @nullable */
+  reviewDueDate?: string | null;
+});
+
+export interface CollectionSummary {
+  id: number;
+  slug: string;
+  name?: string;
+  nameZh: string;
+  /** @nullable */
+  descriptionZh?: string | null;
+  /** @nullable */
+  goalId?: number | null;
+  /** @nullable */
+  retailerId?: number | null;
+  /** @nullable */
+  mealType?: string | null;
+  status: string;
+  productCount?: number;
+}
+
+export type CollectionDetailProductsItem = {
+  product?: ProductSummary;
+  /** @nullable */
+  reason?: string | null;
+  /** @nullable */
+  reasonZh?: string | null;
+};
+
+export type CollectionDetail = CollectionSummary & {
+  products?: CollectionDetailProductsItem[];
+};
+
+export interface AdminGoalInput {
+  slug?: string;
+  name?: string;
+  nameZh?: string;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  descriptionZh?: string | null;
+  status?: string;
+  /** @nullable */
+  icon?: string | null;
+  sortOrder?: number;
+}
+
+export type AdminGoalRulesetInputRules = { [key: string]: unknown };
+
+export interface AdminGoalRulesetInput {
+  goalId: number;
+  version: string;
+  /** @nullable */
+  description?: string | null;
+  rules: AdminGoalRulesetInputRules;
+  status?: string;
+}
+
+export interface AdminMealContextInput {
+  headline?: string;
+  headlineZh?: string;
+  chooseMore?: string[];
+  chooseMoreZh?: string[];
+  chooseLess?: string[];
+  chooseLessZh?: string[];
+  /** @nullable */
+  ctaText?: string | null;
+  /** @nullable */
+  ctaTextZh?: string | null;
+  status?: string;
+}
+
+export interface AdminGuideInput {
+  slug?: string;
+  title?: string;
+  titleZh?: string;
+  /** @nullable */
+  summaryZh?: string | null;
+  /** @nullable */
+  body?: string | null;
+  /** @nullable */
+  bodyZh?: string | null;
+  /** @nullable */
+  goalId?: number | null;
+  status?: string;
+}
+
+export interface AdminCollectionInput {
+  slug?: string;
+  name?: string;
+  nameZh?: string;
+  /** @nullable */
+  descriptionZh?: string | null;
+  /** @nullable */
+  goalId?: number | null;
+  /** @nullable */
+  retailerId?: number | null;
+  mealType?: string;
+  status?: string;
+  productIds?: number[];
+}
+
 export interface ReviewDecision {
   reviewedBy: string;
   /** @nullable */
@@ -411,6 +754,75 @@ export interface ProductUpdate {
   /** @nullable */
   netWeight?: string | null;
 }
+
+export type ListGoalsParams = {
+status?: string;
+};
+
+export type ListMealLogsParams = {
+session_id: string;
+date_str?: string;
+};
+
+export type DeleteMealLog200 = {
+  ok?: boolean;
+};
+
+export type SearchProductsParams = {
+q: string;
+/**
+ * @nullable
+ */
+goal_slug?: string | null;
+/**
+ * @nullable
+ */
+meal_type?: string | null;
+/**
+ * @nullable
+ */
+retailer_slug?: string | null;
+/**
+ * @nullable
+ */
+session_id?: string | null;
+limit?: number;
+};
+
+export type ListGuidesParams = {
+/**
+ * @nullable
+ */
+goal_slug?: string | null;
+limit?: number;
+};
+
+export type ListCollectionsParams = {
+/**
+ * @nullable
+ */
+goal_slug?: string | null;
+/**
+ * @nullable
+ */
+meal_type?: string | null;
+/**
+ * @nullable
+ */
+retailer_slug?: string | null;
+};
+
+export type AdminPublishGoalRuleset201 = {
+  id?: number;
+  goalId?: number;
+  version?: string;
+  status?: string;
+};
+
+export type AdminUpdateMealContext200 = {
+  id?: number;
+  status?: string;
+};
 
 export type ListProductsParams = {
 q?: string;

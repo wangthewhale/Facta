@@ -1,12 +1,16 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
 import { db } from "@workspace/db";
-import { productSubmissionsTable } from "@workspace/db";
+import {
+  productSubmissionsTable, productsTable, brandsTable, barcodesTable,
+  nutritionFactsTable, productEvaluationsTable,
+} from "@workspace/db";
 import {
   GetSubmissionParams, ConfirmOcrParams, ConfirmOcrBody,
-  CreateSubmissionBody, ProcessOcrBody,
+  CreateSubmissionBody, ProcessOcrBody, FinalizeSubmissionParams,
 } from "@workspace/api-zod";
 import { openai } from "@workspace/integrations-openai-ai-server";
+import { calculateScore } from "../lib/scoring.js";
 
 const router: IRouter = Router();
 
@@ -128,6 +132,7 @@ router.patch("/submissions/:id/confirm-ocr", async (req, res): Promise<void> => 
 
   const [updated] = await db.update(productSubmissionsTable).set({
     extractedIngredients: body.data.confirmedIngredients,
+    extractedNutrition: body.data.confirmedNutrition ?? null,
     ocrStatus: "confirmed",
     status: "pending_review",
     updatedAt: new Date(),
@@ -136,6 +141,145 @@ router.patch("/submissions/:id/confirm-ocr", async (req, res): Promise<void> => 
   if (!updated) { res.status(404).json({ error: "Submission not found" }); return; }
 
   res.json(submissionToApi(updated));
+});
+
+/**
+ * Instantly create a provisional product from a confirmed submission.
+ * The product is scored immediately so the user gets a FACTA Report right away;
+ * admin review can later upgrade it to "verified".
+ */
+router.post("/submissions/:id/finalize", async (req, res): Promise<void> => {
+  const params = FinalizeSubmissionParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+
+  try {
+    const outcome = await db.transaction(async (tx) => {
+      // Lock the submission row so concurrent finalize calls serialize
+      const [submission] = await tx.select().from(productSubmissionsTable)
+        .where(eq(productSubmissionsTable.id, params.data.id))
+        .for("update");
+      if (!submission) return { status: 404 as const, error: "Submission not found" };
+
+      // Idempotent: reuse already-created product
+      if (submission.resolvedProductId) {
+        const [evalRow] = await tx.select().from(productEvaluationsTable)
+          .where(eq(productEvaluationsTable.productId, submission.resolvedProductId)).limit(1);
+        return {
+          status: 200 as const,
+          body: {
+            productId: submission.resolvedProductId,
+            overallScore: evalRow?.overallScore,
+            scoreGrade: evalRow?.scoreGrade,
+          },
+        };
+      }
+
+      // Precondition: only finalize submissions with confirmed OCR data
+      if (submission.ocrStatus !== "confirmed" || !submission.extractedIngredients) {
+        return { status: 409 as const, error: "Submission has no confirmed OCR data to finalize" };
+      }
+
+      // Brand: atomic upsert by slug
+      let brandId: number | null = null;
+      if (submission.brandName) {
+        const slug = submission.brandName.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, "-").slice(0, 60) || "unknown";
+        const [brand] = await tx.insert(brandsTable)
+          .values({ name: submission.brandName, slug })
+          .onConflictDoUpdate({ target: brandsTable.slug, set: { updatedAt: new Date() } })
+          .returning();
+        brandId = brand.id;
+      }
+
+      const nutrition = (submission.extractedNutrition ?? null) as Record<string, number | null> | null;
+      const hasNutrition = nutrition && Object.values(nutrition).some(v => v != null);
+      const dataCompleteness = hasNutrition ? 0.6 : 0.4;
+
+      // Create provisional product
+      const [product] = await tx.insert(productsTable).values({
+        name: submission.productName,
+        brandId,
+        verificationStatus: "provisional",
+        dataCompleteness: String(dataCompleteness),
+        ingredientsList: submission.extractedIngredients,
+      }).returning();
+
+      // Attach barcode
+      if (submission.barcode) {
+        await tx.insert(barcodesTable)
+          .values({ barcode: submission.barcode, productId: product.id })
+          .onConflictDoNothing();
+      }
+
+      // Store nutrition facts
+      if (hasNutrition && nutrition) {
+        const num = (v: unknown) => (typeof v === "number" && isFinite(v) ? String(v) : null);
+        await tx.insert(nutritionFactsTable).values({
+          productId: product.id,
+          calories: num(nutrition.calories),
+          totalFat: num(nutrition.totalFat),
+          saturatedFat: num(nutrition.saturatedFat),
+          transFat: num(nutrition.transFat),
+          sodium: num(nutrition.sodium),
+          totalCarbs: num(nutrition.totalCarbs),
+          dietaryFiber: num(nutrition.dietaryFiber),
+          totalSugars: num(nutrition.totalSugars),
+          protein: num(nutrition.protein),
+          sourceType: "ocr",
+        });
+      }
+
+      // Score immediately (deterministic, no I/O)
+      const result = calculateScore({
+        nutrition: hasNutrition && nutrition ? {
+          calories: nutrition.calories ?? null,
+          totalFat: nutrition.totalFat ?? null,
+          saturatedFat: nutrition.saturatedFat ?? null,
+          transFat: nutrition.transFat ?? null,
+          sodium: nutrition.sodium ?? null,
+          totalCarbs: nutrition.totalCarbs ?? null,
+          dietaryFiber: nutrition.dietaryFiber ?? null,
+          totalSugars: nutrition.totalSugars ?? null,
+          protein: nutrition.protein ?? null,
+        } : null,
+        ingredients: [],
+        dataCompleteness,
+      });
+
+      const [saved] = await tx.insert(productEvaluationsTable).values({
+        productId: product.id,
+        rulesetVersion: result.rulesetVersion,
+        overallScore: result.overallScore,
+        nutritionScore: result.nutritionScore,
+        additiveScore: result.additiveScore,
+        scoreGrade: result.scoreGrade,
+        verdict: result.verdict,
+        verdictZh: result.verdictZh,
+        verificationStatus: "provisional",
+        dataCompleteness: String(dataCompleteness),
+        evidenceConfidence: result.evidenceConfidence,
+        topReasons: result.topReasons,
+        additiveFlags: result.additiveFlags,
+      }).returning();
+
+      await tx.update(productSubmissionsTable).set({
+        resolvedProductId: product.id,
+        provisionalScore: result.overallScore,
+        provisionalGrade: result.scoreGrade,
+        updatedAt: new Date(),
+      }).where(eq(productSubmissionsTable.id, submission.id));
+
+      return {
+        status: 200 as const,
+        body: { productId: product.id, overallScore: saved.overallScore, scoreGrade: saved.scoreGrade },
+      };
+    });
+
+    if (outcome.status === 200) { res.json(outcome.body); return; }
+    res.status(outcome.status).json({ error: outcome.error });
+  } catch (err) {
+    req.log.error({ err }, "Finalize submission failed");
+    res.status(500).json({ error: "Failed to finalize submission" });
+  }
 });
 
 export default router;

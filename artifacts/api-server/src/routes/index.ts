@@ -8,6 +8,12 @@ import submissionsRouter from "./submissions.js";
 import preferencesRouter from "./preferences.js";
 import referenceRouter from "./reference.js";
 import adminRouter from "./admin.js";
+import goalsRouter from "./goals.js";
+import mealLogsRouter from "./mealLogs.js";
+import searchRouter from "./search.js";
+import guidesRouter from "./guides.js";
+import collectionsRouter from "./collections.js";
+import newsRouter from "./news.js";
 
 const router = Router();
 
@@ -20,5 +26,11 @@ router.use(submissionsRouter);
 router.use(preferencesRouter);
 router.use(referenceRouter);
 router.use(adminRouter);
+router.use(goalsRouter);
+router.use(mealLogsRouter);
+router.use(searchRouter);
+router.use(guidesRouter);
+router.use(collectionsRouter);
+router.use(newsRouter);
 
 export default router;

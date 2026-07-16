@@ -74,6 +74,32 @@ const translations = {
     edit_products: '商品管理',
     approve: '核准',
     reject: '退回',
+
+    // Goals
+    onboarding_title: '你現在最想改善什麼？',
+    goal_disclaimer: '目標只影響個人化建議，不改變商品客觀 FACTA Score。',
+    goal_limit_statement: '單一商品不能保證達成目標；FACTA 根據目前可取得的營養、成分與證據協助你比較。',
+    preferred_retailers: '你通常在哪裡買東西？',
+    allergens_dietary: '有需要避開的成分嗎？',
+    meal_timing_q: 'FACTA 可以根據用餐時間提供建議嗎？',
+
+    // Home
+    search_placeholder: '搜尋你正在吃、準備買，或想比較的商品',
+    set_goal_cta: '告訴 FACTA 你現在想改善什麼',
+    today_goal: '你現在最想改善什麼？',
+    choose_more: '這一餐多選',
+    choose_less: '這一餐少一點',
+    my_day: 'My Day',
+    add_to_my_day: '加入 My Day',
+
+    // Fit
+    goal_fit: '對你的目標',
+    fit_great: '非常符合',
+    fit_good: '符合',
+    fit_mixed: '部分符合',
+    fit_poor: '不太符合',
+    fit_insufficient: '資料不足',
+    set_goals_prompt: '設定目標後可查看個人化適配結果',
   },
   en: {
     app_name: 'FACTA',
@@ -146,6 +172,32 @@ const translations = {
     edit_products: 'Manage Products',
     approve: 'Approve',
     reject: 'Reject',
+
+    // Goals
+    onboarding_title: 'What do you most want to improve?',
+    goal_disclaimer: 'Goals affect personalized recommendations only — never the objective FACTA Score.',
+    goal_limit_statement: 'No single product can guarantee a goal outcome. FACTA compares based on available nutritional and ingredient evidence.',
+    preferred_retailers: 'Where do you usually shop?',
+    allergens_dietary: 'Any ingredients to avoid?',
+    meal_timing_q: 'Can FACTA give meal-time suggestions?',
+
+    // Home
+    search_placeholder: 'Search a product you are eating, buying, or comparing',
+    set_goal_cta: 'Tell FACTA what you want to improve',
+    today_goal: 'What are you working on today?',
+    choose_more: 'Choose more of',
+    choose_less: 'Have less of',
+    my_day: 'My Day',
+    add_to_my_day: 'Add to My Day',
+
+    // Fit
+    goal_fit: 'Goal Fit',
+    fit_great: 'Great fit',
+    fit_good: 'Good fit',
+    fit_mixed: 'Mixed fit',
+    fit_poor: 'Poor fit',
+    fit_insufficient: 'Insufficient data',
+    set_goals_prompt: 'Set your goals to see personalized fit results',
   }
 };
 
