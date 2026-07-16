@@ -3,20 +3,34 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: FACTA — Independent product intelligence API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: products
+    description: Product operations
+  - name: evaluations
+    description: FACTA scoring and reports
+  - name: alternatives
+    description: Alternative product recommendations
+  - name: scan
+    description: Barcode scanning and history
+  - name: submissions
+    description: Unknown product submissions and OCR
+  - name: preferences
+    description: User allergen and dietary preferences
+  - name: admin
+    description: Admin review and management
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +38,939 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ── Products ──────────────────────────────────────────────────────────────
+
+  /products:
+    get:
+      operationId: listProducts
+      tags: [products]
+      summary: List products with optional filters
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string }
+        - name: category
+          in: query
+          schema: { type: string }
+        - name: retailer_id
+          in: query
+          schema: { type: ["integer", "null"] }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        "200":
+          description: List of products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProductSummary"
+
+  /products/barcode/{barcode}:
+    get:
+      operationId: getProductByBarcode
+      tags: [products]
+      summary: Look up product by barcode
+      parameters:
+        - name: barcode
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Product found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+        "404":
+          description: Product not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /products/{id}:
+    get:
+      operationId: getProduct
+      tags: [products]
+      summary: Get full product detail
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Product detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ── Evaluations (FACTA Reports) ───────────────────────────────────────────
+
+  /evaluations/product/{productId}:
+    get:
+      operationId: getProductEvaluation
+      tags: [evaluations]
+      summary: Get latest FACTA Report for a product
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: FACTA Report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Evaluation"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ── Alternatives ──────────────────────────────────────────────────────────
+
+  /alternatives/{productId}:
+    get:
+      operationId: getAlternatives
+      tags: [alternatives]
+      summary: Get better alternative products
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Alternative products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AlternativeProduct"
+
+  # ── Scan history ─────────────────────────────────────────────────────────
+
+  /scan/history:
+    get:
+      operationId: getScanHistory
+      tags: [scan]
+      summary: Get recent scan history for session
+      parameters:
+        - name: user_session
+          in: query
+          required: true
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        "200":
+          description: Scan history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ScanEvent"
+    post:
+      operationId: recordScan
+      tags: [scan]
+      summary: Record a scan event
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScanEventInput"
+      responses:
+        "201":
+          description: Scan recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanEvent"
+
+  # ── Submissions (unknown products) ────────────────────────────────────────
+
+  /submissions:
+    post:
+      operationId: createSubmission
+      tags: [submissions]
+      summary: Submit an unknown product for review
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmissionInput"
+      responses:
+        "201":
+          description: Submission created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Submission"
+
+  /submissions/{id}:
+    get:
+      operationId: getSubmission
+      tags: [submissions]
+      summary: Get submission status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Submission
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Submission"
+
+  /submissions/{id}/confirm-ocr:
+    patch:
+      operationId: confirmOcr
+      tags: [submissions]
+      summary: User confirms or corrects OCR results
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OcrConfirmation"
+      responses:
+        "200":
+          description: OCR confirmed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Submission"
+
+  /submissions/ocr:
+    post:
+      operationId: processOcr
+      tags: [submissions]
+      summary: Run OCR on uploaded image and return extracted text
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OcrRequest"
+      responses:
+        "200":
+          description: OCR result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OcrResult"
+
+  # ── User Preferences ──────────────────────────────────────────────────────
+
+  /preferences/{sessionId}:
+    get:
+      operationId: getPreferences
+      tags: [preferences]
+      summary: Get user preferences
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: User preferences
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserPreferences"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: savePreferences
+      tags: [preferences]
+      summary: Save user preferences
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserPreferencesInput"
+      responses:
+        "200":
+          description: Preferences saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserPreferences"
+
+  # ── Retailers & Reference Data ────────────────────────────────────────────
+
+  /retailers:
+    get:
+      operationId: listRetailers
+      tags: [products]
+      summary: List retailers
+      responses:
+        "200":
+          description: Retailers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Retailer"
+
+  /categories:
+    get:
+      operationId: listCategories
+      tags: [products]
+      summary: List product categories
+      responses:
+        "200":
+          description: Categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Category"
+
+  # ── Data Corrections ──────────────────────────────────────────────────────
+
+  /corrections:
+    post:
+      operationId: submitCorrection
+      tags: [products]
+      summary: Report a data error on a product
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CorrectionInput"
+      responses:
+        "201":
+          description: Correction submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Correction"
+
+  # ── Share Cards ───────────────────────────────────────────────────────────
+
+  /share-cards/{productId}:
+    get:
+      operationId: getShareCard
+      tags: [evaluations]
+      summary: Get share card data for a product
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Share card data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShareCard"
+
+  # ── Dashboard / wow endpoints ─────────────────────────────────────────────
+
+  /dashboard/stats:
+    get:
+      operationId: getDashboardStats
+      tags: [products]
+      summary: App-level statistics (products verified, scans today, etc.)
+      responses:
+        "200":
+          description: Stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStats"
+
+  /products/recent:
+    get:
+      operationId: listRecentProducts
+      tags: [products]
+      summary: Recently verified products (for homepage showcase)
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 6 }
+      responses:
+        "200":
+          description: Recent products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProductSummary"
+
+  # ── Admin ─────────────────────────────────────────────────────────────────
+
+  /admin/pending:
+    get:
+      operationId: adminListPending
+      tags: [admin]
+      summary: List pending submissions awaiting review
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        "200":
+          description: Pending submissions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Submission"
+
+  /admin/submissions/{id}/verify:
+    post:
+      operationId: adminVerifySubmission
+      tags: [admin]
+      summary: Verify (approve) a pending submission
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewDecision"
+      responses:
+        "200":
+          description: Review recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Submission"
+
+  /admin/submissions/{id}/reject:
+    post:
+      operationId: adminRejectSubmission
+      tags: [admin]
+      summary: Reject a pending submission
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewDecision"
+      responses:
+        "200":
+          description: Review recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Submission"
+
+  /admin/products/{id}:
+    patch:
+      operationId: adminUpdateProduct
+      tags: [admin]
+      summary: Admin edit product data
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductUpdate"
+      responses:
+        "200":
+          description: Updated product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+
+  /admin/corrections:
+    get:
+      operationId: adminListCorrections
+      tags: [admin]
+      summary: List reported data corrections
+      responses:
+        "200":
+          description: Corrections
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Correction"
+
 components:
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
         status:
           type: string
-      required:
-        - status
 
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    # ── Core entities ─────────────────────────────────────────────────────
+
+    Retailer:
+      type: object
+      required: [id, name, slug]
+      properties:
+        id:   { type: integer }
+        name: { type: string }
+        slug: { type: string }
+        logoUrl: { type: ["string", "null"] }
+
+    Category:
+      type: object
+      required: [id, name, slug]
+      properties:
+        id:   { type: integer }
+        name: { type: string }
+        slug: { type: string }
+        nameZh: { type: ["string", "null"] }
+
+    NutritionFact:
+      type: object
+      required: [id, productId]
+      properties:
+        id:               { type: integer }
+        productId:        { type: integer }
+        servingSize:      { type: ["string", "null"] }
+        servingSizeUnit:  { type: ["string", "null"] }
+        calories:         { type: ["number", "null"] }
+        totalFat:         { type: ["number", "null"] }
+        saturatedFat:     { type: ["number", "null"] }
+        transFat:         { type: ["number", "null"] }
+        sodium:           { type: ["number", "null"] }
+        totalCarbs:       { type: ["number", "null"] }
+        dietaryFiber:     { type: ["number", "null"] }
+        totalSugars:      { type: ["number", "null"] }
+        protein:          { type: ["number", "null"] }
+
+    IngredientItem:
+      type: object
+      required: [id, name]
+      properties:
+        id:             { type: integer }
+        name:           { type: string }
+        nameZh:         { type: ["string", "null"] }
+        riskLevel:      { type: ["string", "null"] }
+        riskReason:     { type: ["string", "null"] }
+        evidenceStrength: { type: ["string", "null"] }
+        isAdditive:     { type: boolean }
+
+    AllergenAlert:
+      type: object
+      required: [name, severity]
+      properties:
+        name:     { type: string }
+        nameZh:   { type: ["string", "null"] }
+        severity: { type: string }
+        source:   { type: ["string", "null"] }
+
+    ProductSummary:
+      type: object
+      required: [id, name, verificationStatus]
+      properties:
+        id:                 { type: integer }
+        name:               { type: string }
+        nameZh:             { type: ["string", "null"] }
+        brandName:          { type: ["string", "null"] }
+        imageUrl:           { type: ["string", "null"] }
+        categorySlug:       { type: ["string", "null"] }
+        categoryName:       { type: ["string", "null"] }
+        verificationStatus: { type: string }
+        overallScore:       { type: ["integer", "null"] }
+        scoreGrade:         { type: ["string", "null"] }
+        barcode:            { type: ["string", "null"] }
+        retailerName:       { type: ["string", "null"] }
+        priceNtd:           { type: ["number", "null"] }
+
+    Product:
+      type: object
+      required: [id, name, verificationStatus]
+      properties:
+        id:                 { type: integer }
+        name:               { type: string }
+        nameZh:             { type: ["string", "null"] }
+        brandName:          { type: ["string", "null"] }
+        imageUrl:           { type: ["string", "null"] }
+        barcode:            { type: ["string", "null"] }
+        categorySlug:       { type: ["string", "null"] }
+        categoryName:       { type: ["string", "null"] }
+        categoryNameZh:     { type: ["string", "null"] }
+        verificationStatus: { type: string }
+        dataCompleteness:   { type: ["number", "null"] }
+        retailerName:       { type: ["string", "null"] }
+        retailerId:         { type: ["integer", "null"] }
+        priceNtd:           { type: ["number", "null"] }
+        netWeight:          { type: ["string", "null"] }
+        ingredientsList:    { type: ["string", "null"] }
+        ingredients:
+          type: array
+          items:
+            $ref: "#/components/schemas/IngredientItem"
+        nutritionFacts:
+          oneOf:
+            - $ref: "#/components/schemas/NutritionFact"
+            - type: "null"
+        allergens:
+          type: array
+          items:
+            $ref: "#/components/schemas/AllergenAlert"
+        createdAt:  { type: string }
+        updatedAt:  { type: string }
+
+    # ── Evaluation / FACTA Report ─────────────────────────────────────────
+
+    EvaluationReason:
+      type: object
+      required: [label, impact]
+      properties:
+        label:           { type: string }
+        labelZh:         { type: ["string", "null"] }
+        impact:          { type: string }
+        evidenceStrength: { type: ["string", "null"] }
+        source:          { type: ["string", "null"] }
+
+    AdditiveFlag:
+      type: object
+      required: [name, riskLevel]
+      properties:
+        name:            { type: string }
+        nameZh:          { type: ["string", "null"] }
+        riskLevel:       { type: string }
+        reason:          { type: ["string", "null"] }
+        evidenceStrength: { type: ["string", "null"] }
+
+    PersonalAlert:
+      type: object
+      required: [type, message]
+      properties:
+        type:       { type: string }
+        message:    { type: string }
+        messageZh:  { type: ["string", "null"] }
+        severity:   { type: string }
+
+    Evaluation:
+      type: object
+      required: [id, productId, overallScore, scoreGrade, verdict, verificationStatus, rulesetVersion, evaluatedAt]
+      properties:
+        id:                  { type: integer }
+        productId:           { type: integer }
+        productName:         { type: ["string", "null"] }
+        productNameZh:       { type: ["string", "null"] }
+        brandName:           { type: ["string", "null"] }
+        imageUrl:            { type: ["string", "null"] }
+        overallScore:        { type: integer }
+        nutritionScore:      { type: ["integer", "null"] }
+        additiveScore:       { type: ["integer", "null"] }
+        scoreGrade:          { type: string }
+        verdict:             { type: string }
+        verdictZh:           { type: ["string", "null"] }
+        verificationStatus:  { type: string }
+        dataCompleteness:    { type: ["number", "null"] }
+        evidenceConfidence:  { type: ["string", "null"] }
+        rulesetVersion:      { type: string }
+        evaluatedAt:         { type: string }
+        topReasons:
+          type: array
+          items:
+            $ref: "#/components/schemas/EvaluationReason"
+        additiveFlags:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdditiveFlag"
+        allergenAlerts:
+          type: array
+          items:
+            $ref: "#/components/schemas/AllergenAlert"
+        personalAlerts:
+          type: array
+          items:
+            $ref: "#/components/schemas/PersonalAlert"
+
+    # ── Alternatives ──────────────────────────────────────────────────────
+
+    AlternativeProduct:
+      type: object
+      required: [product, whyBetter]
+      properties:
+        product:
+          $ref: "#/components/schemas/ProductSummary"
+        scoreImprovement:  { type: ["integer", "null"] }
+        whyBetter:         { type: string }
+        whyBetterZh:       { type: ["string", "null"] }
+        priceDifferenceNtd: { type: ["number", "null"] }
+        sameRetailer:      { type: boolean }
+
+    # ── Scan Events ───────────────────────────────────────────────────────
+
+    ScanEvent:
+      type: object
+      required: [id, eventType, createdAt]
+      properties:
+        id:          { type: integer }
+        eventType:   { type: string }
+        barcode:     { type: ["string", "null"] }
+        productId:   { type: ["integer", "null"] }
+        productName: { type: ["string", "null"] }
+        productScore: { type: ["integer", "null"] }
+        productGrade: { type: ["string", "null"] }
+        imageUrl:    { type: ["string", "null"] }
+        userSession: { type: ["string", "null"] }
+        hasUpdate:   { type: boolean }
+        createdAt:   { type: string }
+
+    ScanEventInput:
+      type: object
+      required: [eventType]
+      properties:
+        eventType:   { type: string }
+        barcode:     { type: ["string", "null"] }
+        productId:   { type: ["integer", "null"] }
+        userSession: { type: ["string", "null"] }
+
+    # ── Submissions ───────────────────────────────────────────────────────
+
+    OcrRequest:
+      type: object
+      required: [imageBase64]
+      properties:
+        imageBase64:  { type: string }
+        imageType:    { type: string, default: "ingredients" }
+
+    OcrResult:
+      type: object
+      required: [extractedText, confidence]
+      properties:
+        extractedText:      { type: string }
+        confidence:         { type: number }
+        structuredData:
+          type: object
+          additionalProperties: true
+        rawIngredients:     { type: ["string", "null"] }
+        parsedNutrition:
+          type: object
+          additionalProperties: true
+
+    SubmissionInput:
+      type: object
+      required: [productName]
+      properties:
+        productName:      { type: string }
+        brandName:        { type: ["string", "null"] }
+        barcode:          { type: ["string", "null"] }
+        retailerSlug:     { type: ["string", "null"] }
+        frontImageBase64: { type: ["string", "null"] }
+        ingredientsImageBase64: { type: ["string", "null"] }
+        nutritionImageBase64:   { type: ["string", "null"] }
+        rawIngredientsText: { type: ["string", "null"] }
+        userSession:      { type: ["string", "null"] }
+        userConsented:    { type: boolean, default: false }
+
+    OcrConfirmation:
+      type: object
+      required: [confirmedIngredients]
+      properties:
+        confirmedIngredients: { type: string }
+        confirmedNutrition:
+          type: object
+          additionalProperties: true
+        userCorrections:  { type: ["string", "null"] }
+
+    Submission:
+      type: object
+      required: [id, productName, status, createdAt]
+      properties:
+        id:              { type: integer }
+        productName:     { type: string }
+        brandName:       { type: ["string", "null"] }
+        barcode:         { type: ["string", "null"] }
+        status:          { type: string }
+        ocrStatus:       { type: ["string", "null"] }
+        extractedIngredients: { type: ["string", "null"] }
+        provisionalScore: { type: ["integer", "null"] }
+        provisionalGrade: { type: ["string", "null"] }
+        dataCompleteness: { type: ["number", "null"] }
+        userSession:     { type: ["string", "null"] }
+        reviewNote:      { type: ["string", "null"] }
+        createdAt:       { type: string }
+        updatedAt:       { type: string }
+
+    # ── User Preferences ──────────────────────────────────────────────────
+
+    UserPreferencesInput:
+      type: object
+      properties:
+        allergens:
+          type: array
+          items: { type: string }
+        dietaryPreferences:
+          type: array
+          items: { type: string }
+        avoidIngredients:
+          type: array
+          items: { type: string }
+        locale: { type: string, default: "zh-TW" }
+
+    UserPreferences:
+      type: object
+      required: [sessionId, allergens, dietaryPreferences, avoidIngredients, locale]
+      properties:
+        sessionId:          { type: string }
+        allergens:
+          type: array
+          items: { type: string }
+        dietaryPreferences:
+          type: array
+          items: { type: string }
+        avoidIngredients:
+          type: array
+          items: { type: string }
+        locale:             { type: string }
+        updatedAt:          { type: string }
+
+    # ── Corrections ───────────────────────────────────────────────────────
+
+    CorrectionInput:
+      type: object
+      required: [productId, issueType, description]
+      properties:
+        productId:   { type: integer }
+        issueType:   { type: string }
+        description: { type: string }
+        userSession: { type: ["string", "null"] }
+
+    Correction:
+      type: object
+      required: [id, productId, issueType, status, createdAt]
+      properties:
+        id:          { type: integer }
+        productId:   { type: integer }
+        issueType:   { type: string }
+        description: { type: ["string", "null"] }
+        status:      { type: string }
+        userSession: { type: ["string", "null"] }
+        createdAt:   { type: string }
+
+    # ── Share Card ────────────────────────────────────────────────────────
+
+    ShareCard:
+      type: object
+      required: [productName, overallScore, scoreGrade, verdict]
+      properties:
+        productName:       { type: string }
+        productNameZh:     { type: ["string", "null"] }
+        brandName:         { type: ["string", "null"] }
+        imageUrl:          { type: ["string", "null"] }
+        overallScore:      { type: integer }
+        scoreGrade:        { type: string }
+        verdict:           { type: string }
+        verdictZh:         { type: ["string", "null"] }
+        topReasons:
+          type: array
+          items:
+            $ref: "#/components/schemas/EvaluationReason"
+        evidenceConfidence: { type: ["string", "null"] }
+        alternativeName:   { type: ["string", "null"] }
+        alternativeNameZh: { type: ["string", "null"] }
+        rulesetVersion:    { type: string }
+        evaluatedAt:       { type: string }
+
+    # ── Dashboard ─────────────────────────────────────────────────────────
+
+    DashboardStats:
+      type: object
+      required: [totalProducts, verifiedProducts, totalScans, pendingReviews]
+      properties:
+        totalProducts:    { type: integer }
+        verifiedProducts: { type: integer }
+        totalScans:       { type: integer }
+        pendingReviews:   { type: integer }
+        scansToday:       { type: integer }
+
+    # ── Admin ─────────────────────────────────────────────────────────────
+
+    ReviewDecision:
+      type: object
+      required: [reviewedBy]
+      properties:
+        reviewedBy: { type: string }
+        note:       { type: ["string", "null"] }
+
+    ProductUpdate:
+      type: object
+      properties:
+        name:               { type: string }
+        nameZh:             { type: ["string", "null"] }
+        ingredientsList:    { type: ["string", "null"] }
+        verificationStatus: { type: ["string", "null"] }
+        imageUrl:           { type: ["string", "null"] }
+        priceNtd:           { type: ["number", "null"] }
+        netWeight:          { type: ["string", "null"] }

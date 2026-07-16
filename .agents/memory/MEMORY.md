@@ -1,0 +1,1 @@
+- [FACTA Architecture](facta-architecture.md) — stack decisions, scoring engine, AI integration, and data model patterns for this project.

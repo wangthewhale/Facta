@@ -1,0 +1,54 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Toaster } from '@/components/ui/toaster';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import NotFound from '@/pages/not-found';
+import { Route, Switch, Router as WouterRouter } from 'wouter';
+import { I18nProvider } from '@/lib/i18n';
+
+import Home from '@/pages/home';
+import Scan from '@/pages/scan';
+import Report from '@/pages/report';
+import Submit from '@/pages/submit';
+import Alternatives from '@/pages/alternatives';
+import Preferences from '@/pages/preferences';
+import History from '@/pages/history';
+import Admin from '@/pages/admin';
+import ShareCard from '@/pages/share';
+import Methodology from '@/pages/methodology';
+
+const queryClient = new QueryClient();
+
+function Router() {
+  return (
+    <Switch>
+      <Route path="/" component={Home} />
+      <Route path="/scan" component={Scan} />
+      <Route path="/report/:id" component={Report} />
+      <Route path="/submit" component={Submit} />
+      <Route path="/alternatives/:id" component={Alternatives} />
+      <Route path="/preferences" component={Preferences} />
+      <Route path="/history" component={History} />
+      <Route path="/admin" component={Admin} />
+      <Route path="/share/:id" component={ShareCard} />
+      <Route path="/methodology" component={Methodology} />
+      <Route component={NotFound} />
+    </Switch>
+  );
+}
+
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <I18nProvider>
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
+            <Router />
+          </WouterRouter>
+          <Toaster />
+        </I18nProvider>
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+}
+
+export default App;

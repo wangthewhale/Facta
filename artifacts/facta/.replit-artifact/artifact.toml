@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "FACTA"
+version = "1.0.0"
+id = "artifacts/facta"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 21663
+
+[services.development]
+run = "pnpm --filter @workspace/facta run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/facta", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/facta/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21663"
+BASE_PATH = "/"

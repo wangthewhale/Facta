@@ -1,0 +1,506 @@
+# FACTA — Replit 完整產品開發 Prompt
+
+請直接將以下整段內容貼給 Replit Agent。
+
+---
+
+你是一位資深產品設計師、全端工程師、資料架構師與 AI 應用工程師。請在目前 Replit 專案中，設計並開發一個可以實際操作的 mobile-first web app MVP。不要只製作靜態 mockup、landing page 或假按鈕；核心掃描、拍照、分析、結果、替代品與分享流程都必須可以運作。
+
+在開始前先檢查目前 repository、既有程式碼、套件、資料庫與 Replit 可用服務。保留可用的既有架構，避免無必要的重寫。若專案是空白，使用穩定、適合 Replit 部署的 TypeScript 全端架構。建議 Next.js／React、Tailwind CSS、PostgreSQL、Drizzle ORM；若 Replit 環境已有更適合的標準模板，可以採用，但請在 README 說明選擇。
+
+除非遇到會根本改變產品方向的阻礙，請自行作出合理決策並繼續完成，不要反覆向我詢問小問題。
+
+## 一、產品與品牌
+
+產品名稱固定為：
+
+**FACTA**
+
+英文主 slogan：
+
+**Every choice deserves evidence.**
+
+中文主 slogan：
+
+**每個選擇，都值得有證據。**
+
+品牌定位：
+
+**The independent intelligence behind everyday products.**
+
+中文定位：
+
+**日常商品背後的獨立情報標準。**
+
+社群 campaign line：
+
+**Brands make claims. FACTA checks the evidence.**
+
+**包裝負責說故事。FACTA 負責看證據。**
+
+信任承諾：
+
+**Independent by design. No paid rankings.**
+
+**獨立評分，不接受品牌付費改分。**
+
+FACTA 不是減肥 App、卡路里計算器、醫療診斷工具，也不是只會摘要成分的 AI 聊天機器人。它是一個獨立的商品情報與購物決策產品：使用者站在貨架前掃描條碼或拍攝成分表，在幾秒內理解商品、風險、證據與更好的替代選擇。
+
+品牌名稱、slogan、色票、文案與 logo path 請集中放在一個 brand configuration／design token 檔案中，不要散落硬編碼，方便未來更換名稱或語言。
+
+## 二、第一階段市場與產品目標
+
+第一階段只服務台灣包裝食品，優先場景：
+
+- 7-ELEVEN
+- 全家便利商店
+- 全聯
+- 家樂福
+- Costco
+
+未來才會延伸至保養品、清潔用品，以及香港、新加坡、日本、韓國與其他亞洲市場。因此，資料架構不能把所有欄位寫死為食品專用，但本次 UI 與評分規則只需完整支援食品。
+
+核心價值：
+
+> 在消費者準備掏錢的那一秒，清楚告訴他這個商品是否適合自己，以及同一通路、相近價位還有什麼更好的選擇。
+
+MVP 的三個核心功能：
+
+1. 掃描商品條碼，或拍攝成分表與營養標示。
+2. 顯示簡單結論、分數、原因、證據強度與個人化警示。
+3. 推薦同通路、同品類、相近價位的替代商品。
+
+## 三、必須完成的使用者流程
+
+### Flow A：資料庫已有商品
+
+1. 使用者開啟首頁。
+2. 點擊「掃描商品」。
+3. 請求相機權限並掃描 EAN／UPC／GTIN 條碼。
+4. 從資料庫取得商品、最新驗證資料與評分版本。
+5. 優先在 3 秒內顯示 FACTA Report。
+6. 使用者可以查看扣分原因、成分、營養、過敏原、證據來源、替代商品與分享卡。
+
+### Flow B：資料庫沒有商品
+
+1. 顯示友善訊息：「FACTA 還沒看過這件商品。拍下標示，我們現在一起看。」
+2. 引導使用者依序拍攝：商品正面、成分表、營養標示；條碼若已讀取則自動帶入。
+3. 使用 AI vision／OCR 擷取文字並標準化成分名稱與營養欄位。
+4. 讓使用者確認或修正 OCR 結果。
+5. 由規則引擎產生「暫定分析」，清楚顯示資料完整度與信心等級。
+6. 建立 pending verification 商品，進入後台審核佇列。
+7. 未經驗證的商品可以提供暫定成分解釋，但不能進入正式替代品排名，也不能顯示成「FACTA Verified」。
+
+### Flow C：拍攝成分表，不掃條碼
+
+首頁必須提供「拍攝成分表」入口，讓日本、韓國、美國等尚未建檔的商品也能獲得暫定分析。要求使用者補充商品名稱、品牌、商品正面及條碼；沒有條碼仍可分析，但資料狀態必須標示 incomplete。
+
+### Flow D：個人化警示
+
+使用者可以設定：
+
+- 過敏原：乳、蛋、花生、堅果、芝麻、大豆、小麥／麩質、魚、甲殼類等
+- 飲食偏好：純素、蛋奶素
+- 宗教飲食：清真、猶太潔食；若無足夠認證資料，只能顯示「無法確認」，不可自行認定
+- 其他避開項目
+
+結果頁將一般商品分析與「你的警示」分開。嚴重過敏原應優先顯示，但避免提供醫療保證。
+
+## 四、主要畫面
+
+請完成以下 responsive mobile-first 畫面：
+
+1. **首頁／掃描入口**
+   - FACTA wordmark
+   - Every choice deserves evidence.
+   - 每個選擇，都值得有證據。
+   - 主 CTA：「掃描商品」
+   - 次 CTA：「拍攝成分表」
+   - 簡短信任聲明：「獨立評分，不接受品牌付費改分。」
+   - 可展示最近掃描與一個示範 FACTA Report，但不要讓首頁變成冗長行銷頁
+
+2. **相機掃描畫面**
+   - 清楚掃描框、手電筒、相簿上傳、手動輸入條碼
+   - 使用 BarcodeDetector API 時提供不支援瀏覽器的 fallback，例如 ZXing
+   - 權限失敗時提供可理解的替代流程
+
+3. **未知商品拍攝流程**
+   - 分步拍攝，不要一次丟給使用者複雜表單
+   - 顯示完成進度與照片品質提示
+   - OCR 後提供可編輯確認畫面
+
+4. **FACTA Report 結果頁**
+   - 商品圖片、品牌、品名、規格、通路與參考價格
+   - FACTA Score：0–100
+   - 等級：Excellent／Good／Consider／Poor
+   - 一句簡單結論
+   - 三個子區塊：營養、添加物、個人化警示
+   - 每個警示附原因、證據強度、來源與最後更新日
+   - 顯示資料狀態：Verified／Provisional／Incomplete
+   - 顯示本次使用的評分規則版本
+   - 「更好的選擇」替代商品
+   - 「產生分享卡」
+   - 「資料有誤」回報入口
+
+5. **替代商品比較頁**
+   - 以同通路、同品類、相近價格為主要篩選條件
+   - 比較 FACTA Score、價格、營養重點、主要警示與個人適配度
+   - 不要只推薦最高分但完全不同用途或價格帶的商品
+
+6. **個人偏好設定**
+   - 過敏原、飲食需求與避免項目
+   - 清楚說明個人資料如何影響警示，不應偷偷改變客觀基礎分數
+
+7. **掃描歷史**
+   - 顯示最近商品、時間、分數與是否有資料更新
+
+8. **方法與獨立性頁面**
+   - 解釋 FACTA 如何評分
+   - AI 做什麼、規則引擎做什麼
+   - 資料來源、證據等級、版本日期
+   - 不接受品牌付費影響分數
+   - 醫療與資料限制聲明
+
+9. **管理後台**
+   - 僅管理員可進入
+   - pending 商品審核佇列
+   - 檢視原始照片、OCR 結果、使用者修正與 AI 標準化結果
+   - 編輯產品事實資料
+   - 合併重複商品或包裝版本
+   - 驗證／退回商品
+   - 編輯成分知識、法規、證據與規則版本
+   - 所有人工修改保留 audit log
+
+## 五、FACTA Report 與評分原則
+
+評分系統必須是 deterministic、可解釋、可測試、可版本控制的規則引擎。AI 不得直接自由產生最終分數或風險等級。
+
+建議資料輸出包含：
+
+- `overall_score`
+- `nutrition_score`
+- `additive_score`
+- `personal_fit_status`
+- `verdict`
+- `top_reasons[]`
+- `allergen_alerts[]`
+- `additive_flags[]`
+- `evidence_confidence`
+- `data_completeness`
+- `verification_status`
+- `ruleset_version`
+- `evaluated_at`
+
+初版可以先建立透明、可替換的 scoring configuration，不要宣稱複製 Yuka 或使用其公式。請為規則引擎撰寫 unit tests，確認相同輸入在同一版本會得到相同輸出。
+
+若資料缺失，不要假設缺失項目等於零或安全。降低 data completeness／confidence，並在結果頁說明缺少哪些資料。
+
+個人過敏原警示屬於獨立層：商品的客觀基礎分數不應因某位使用者過敏而改變，但該使用者的結果頁可以顯示醒目的「不適合你」。
+
+## 六、AI 的責任與禁止事項
+
+AI 可以負責：
+
+- OCR 與圖片文字擷取
+- 中英日韓成分名稱標準化
+- 成分 alias 比對
+- 商品分類建議
+- 解析營養標示為結構化欄位
+- 找出可能過敏原，交由規則引擎確認
+- 比對新舊包裝差異
+- 把已確定的規則結果改寫成一般人看得懂的文字
+
+AI 不得自行決定或宣稱：
+
+- 某成分「有毒」
+- 某商品會致癌
+- 最終風險等級或最終分數
+- 孕婦、兒童或病患一定可以／不可以使用
+- 某商品符合清真或猶太潔食，除非有可驗證認證資料
+- 缺少資料就代表安全
+
+所有風險結論必須能回溯至結構化規則、資料來源、法規地區、證據強度與更新日期。若 AI 無法確定成分，標記 `needs_review`，不要猜測。
+
+優先使用 Replit 提供的 managed AI integration／model access，不要要求我自行建立 API key，前提是 Replit 環境確實提供。若 runtime 沒有可用的 managed AI，請建立 provider adapter 與 `.env.example`，讓模型可以替換；同時提供清楚標示的 demo mode，使其他非 AI 功能仍可測試。不要把金鑰寫入程式碼或前端。
+
+## 七、資料模型
+
+至少建立以下核心資料表或相等結構：
+
+- `products`
+- `product_versions`
+- `barcodes`
+- `brands`
+- `retailers`
+- `product_retailer_prices`
+- `product_images`
+- `ingredients`
+- `ingredient_aliases`
+- `product_ingredients`
+- `nutrition_facts`
+- `allergens`
+- `product_allergens`
+- `dietary_certifications`
+- `regulations`
+- `evidence_sources`
+- `ingredient_evidence`
+- `scoring_rulesets`
+- `scoring_rules`
+- `product_evaluations`
+- `alternative_product_links`
+- `user_preferences`
+- `scan_events`
+- `product_submissions`
+- `verification_reviews`
+- `data_corrections`
+- `audit_logs`
+
+重要要求：
+
+- 商品包裝會改版，因此產品事實資料需要 versioning。
+- 條碼、商品、包裝版本不要混為一張不可追蹤的表。
+- 每個外部欄位保留 `source_type`、`source_url`、`source_record_id`、`retrieved_at` 與授權／attribution 資訊。
+- 評分結果保留使用的商品版本與 ruleset version，不能每次開頁都把歷史結果無痕覆蓋。
+- 建立適合人工匯入的 CSV／JSON schema 與 admin import 功能。
+
+## 八、資料來源與授權邊界
+
+第一版請把資料管線設計好，但不要假造大量真實商品或健康結論。
+
+資料來源優先順序：
+
+1. 台灣官方資料：用於添加物、營養、過敏原、健康食品許可與法規知識。
+2. 經人工拍攝、輸入與驗證的高頻商品。
+3. 使用者提交，狀態先為 pending。
+4. 品牌提交的事實資料；品牌不可影響評分。
+5. Open Food Facts 僅作外部補充來源。
+
+Open Food Facts 資料與圖片有各自授權條件。不要直接大量匯入並混成無來源的核心資料庫。每個欄位保留來源與 attribution，將外部連接器與自有資料分層。README 中列出授權注意事項。
+
+Seed data 可以建立少量明確標記為 `demo` 的虛構商品，用來測試完整流程。不要替真實品牌捏造分數、成分或負面結論。
+
+## 九、替代商品邏輯
+
+只有 Verified 商品能成為正式替代選項。
+
+候選排序至少考慮：
+
+- 同 retailer
+- 同 category／使用情境
+- 價格差距
+- 規格或單位價格
+- FACTA Score 改善幅度
+- 使用者過敏原與飲食需求
+- 商品是否仍在售與價格資料更新時間
+
+替代品卡片必須說明「為什麼更適合」，例如：
+
+> 同樣在全家可買到，價格多 NT$4，糖少 38%，且沒有你設定要避開的乳成分。
+
+若沒有足夠可靠候選，顯示「目前沒有足夠資料推薦」，不要硬湊替代品。
+
+## 十、可分享的 FACTA Report
+
+完成可產生並下載／分享的直式圖片卡，建議 1080 × 1350，適合 Threads 與 Instagram。
+
+卡片包含：
+
+- 商品名稱與圖片
+- FACTA Score 與等級
+- 一句具有分享力、但不誇大的結論
+- 2–3 個主要原因
+- Evidence confidence
+- 一個更好的替代商品；沒有可靠資料時省略
+- FACTA wordmark
+- `Every choice deserves evidence.`
+- 評分日期與短版規則版本
+
+生成內容前必須經過相同的安全文案規則。卡片不可使用「毒」「致癌食品」等沒有充分依據的聳動詞。
+
+## 十一、品牌視覺與 UI 原則
+
+整體視覺必須像國際消費者情報品牌，而不是一般健康 App、AI 工具或可愛掃碼器。
+
+設計方向：
+
+- editorial、evidence-led、minimal、authoritative
+- 主色：近黑 `#11120F`
+- 背景：象牙白 `#F4F1E8`
+- 高分／主要互動綠：`#B9F24A`
+- 警示黃：`#F2B84B`
+- 風險紅：`#E45145`
+- 中性灰請建立完整 accessible scale
+- 使用高辨識度無襯線字體；若使用外部字體，確保載入效能與合法授權
+- 大量留白、清楚資訊層級、強數字排版、細緻分隔線
+- 動畫簡短且有功能性，優先用於掃描、載入與分數揭示
+
+避免：
+
+- 綠葉、蘋果、盾牌、醫療十字或蜜蜂 logo
+- 大面積健康綠
+- 紫色 AI 漸層
+- glassmorphism
+- 過多圓角卡片與陰影
+- 卡通吉祥物
+- emoji 作為主要 UI icon
+- 看起來像模板的 landing page
+
+Logo 初版只需乾淨的 FACTA wordmark，以及一個可用於 app icon 的幾何 F／標示掃描概念。使用 SVG 或程式化向量，不需要複雜插畫。
+
+Primary language 為繁體中文 `zh-TW`，同時完成英文 `en` 翻譯與 i18n 架構。所有介面文案不得散落硬編碼。預留日文、韓文未來加入的位置。
+
+## 十二、建議介面文案
+
+首頁：
+
+- `Every choice deserves evidence.`
+- `每個選擇，都值得有證據。`
+- `掃描商品`
+- `拍攝成分表`
+- `獨立評分，不接受品牌付費改分。`
+
+未知商品：
+
+- `FACTA 還沒看過這件商品。`
+- `拍下標示，我們現在一起看。`
+
+分析中：
+
+- `正在讀取標示`
+- `正在比對成分與法規`
+- `正在整理證據`
+
+結果狀態：
+
+- `資料已驗證`
+- `暫定分析，等待人工確認`
+- `資料不完整`
+- `這項警示與你設定的過敏原有關`
+- `目前沒有足夠資料做出可靠推薦`
+
+方法頁：
+
+- `包裝負責說故事。FACTA 負責看證據。`
+- `AI 協助讀取與解釋；可版本控制的規則與證據決定評分。`
+
+## 十三、帳號、權限、隱私與安全
+
+MVP 可以讓訪客直接完成首次掃描，以降低進入門檻；需要保存歷史、偏好或投稿時再引導登入。
+
+角色至少包括：
+
+- guest
+- user
+- reviewer
+- admin
+
+安全要求：
+
+- 後台與管理 API 必須做 server-side authorization
+- 圖片上傳限制格式、大小與數量
+- 移除不必要 EXIF metadata
+- 對掃描、OCR 與 AI endpoint 做 rate limiting
+- 使用 signed upload 或伺服器安全代理，不暴露 storage credentials
+- 所有輸入進行 validation
+- 不在 log 中記錄秘密、完整個人敏感資料或未處理圖片內容
+- 提供刪除帳號與使用者投稿資料的可行架構
+- 清楚取得使用者同意後，才將未知商品照片用於資料庫建檔
+
+## 十四、產品分析事件
+
+建立簡單、可替換的 analytics abstraction，至少追蹤：
+
+- `scan_started`
+- `barcode_detected`
+- `known_product_found`
+- `unknown_product_started`
+- `photo_uploaded`
+- `ocr_completed`
+- `ocr_confirmed`
+- `report_viewed`
+- `alternative_viewed`
+- `share_card_created`
+- `report_shared`
+- `correction_submitted`
+- `signup_completed`
+
+不得在未同意情況下把成分照片、過敏原或敏感個人偏好傳給第三方分析服務。
+
+## 十五、非本次 MVP 範圍
+
+暫時不要投入大量時間製作：
+
+- 社群 feed
+- 留言、追蹤與創作者系統
+- 品牌廣告後台
+- 複雜訂閱方案
+- 保養品與清潔用品正式評分
+- 全亞洲商品資料
+- 遊戲化排行榜
+- 醫療建議
+
+可以在架構中預留，但不要犧牲核心掃描流程。
+
+## 十六、工程品質與驗收
+
+必須完成：
+
+- 可部署的 working app
+- 資料庫 schema 與 migration
+- demo seed data
+- 已知條碼 demo flow
+- 未知商品拍照／上傳 flow
+- OCR provider abstraction 與 demo fallback
+- deterministic scoring engine
+- 結果頁與替代品頁
+- 個人化警示
+- FACTA 分享卡生成
+- 管理後台 pending review flow
+- i18n：繁中與英文
+- loading、empty、error、permission denied 等狀態
+- responsive 手機與桌面版
+- accessibility：鍵盤、focus、contrast、semantic labels
+- 基本 analytics events
+- unit tests：評分規則、替代商品排序、資料完整度
+- 至少一個 end-to-end happy path test
+- `.env.example`
+- README：本機執行、Replit 部署、資料匯入、AI provider、評分規則、授權與安全說明
+
+完成前請執行並修正：
+
+- typecheck
+- lint
+- unit tests
+- end-to-end／smoke test
+- production build
+
+不要以「之後可以做」代替本次要求的核心功能。若某個外部服務在 Replit 環境無法使用，建立清楚的 adapter、fallback 與可測試 demo，不要留下完全無反應的按鈕。
+
+## 十七、建議開發順序
+
+1. 檢查 repository 與 Replit 環境。
+2. 建立 design tokens、brand config 與 i18n。
+3. 建立資料模型、migration 與 demo seed。
+4. 完成掃描、條碼查詢與已知商品流程。
+5. 完成未知商品拍攝、OCR、確認與 pending submission。
+6. 建立 deterministic scoring engine 與測試。
+7. 完成 FACTA Report、個人化警示與替代品。
+8. 完成分享卡。
+9. 完成管理後台審核流程與 audit log。
+10. 加入安全、分析事件、錯誤狀態與 accessibility。
+11. 執行測試、production build 並修正問題。
+12. 啟動 Replit preview，提供可操作網址與測試帳號／demo 條碼。
+
+## 十八、完成時請回報
+
+完成後請用精簡清單告訴我：
+
+1. 已完成哪些功能。
+2. 使用的技術架構與原因。
+3. 如何測試已知商品與未知商品流程。
+4. demo 條碼與 reviewer／admin 測試帳號。
+5. 哪些功能正在使用 demo data 或 fallback。
+6. 接上正式 TFDA 知識資料、商品種子庫與正式 AI provider 前，還需要我提供什麼。
+7. typecheck、tests、build 的實際結果。
+
+現在請先檢查專案，提出一份短的實作計畫，接著直接開始開發，不要停留在規劃階段。
