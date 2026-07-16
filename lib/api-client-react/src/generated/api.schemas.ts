@@ -352,6 +352,10 @@ export interface OcrResult {
   /** @nullable */
   rawIngredients?: string | null;
   parsedNutrition?: OcrResultParsedNutrition;
+  /** @nullable */
+  productName?: string | null;
+  /** @nullable */
+  brandName?: string | null;
 }
 
 export interface SubmissionInput {
@@ -380,6 +384,10 @@ export type OcrConfirmationConfirmedNutrition = { [key: string]: unknown };
 export interface OcrConfirmation {
   confirmedIngredients: string;
   confirmedNutrition?: OcrConfirmationConfirmedNutrition;
+  /** @nullable */
+  confirmedProductName?: string | null;
+  /** @nullable */
+  confirmedBrandName?: string | null;
   /** @nullable */
   userCorrections?: string | null;
 }

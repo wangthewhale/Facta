@@ -1523,6 +1523,8 @@ components:
         parsedNutrition:
           type: object
           additionalProperties: true
+        productName:        { type: ["string", "null"] }
+        brandName:          { type: ["string", "null"] }
 
     SubmissionInput:
       type: object
@@ -1547,6 +1549,8 @@ components:
         confirmedNutrition:
           type: object
           additionalProperties: true
+        confirmedProductName: { type: ["string", "null"] }
+        confirmedBrandName:   { type: ["string", "null"] }
         userCorrections:  { type: ["string", "null"] }
 
     Submission:

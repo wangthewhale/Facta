@@ -11,5 +11,9 @@ export interface OcrConfirmation {
   confirmedIngredients: string;
   confirmedNutrition?: OcrConfirmationConfirmedNutrition;
   /** @nullable */
+  confirmedProductName?: string | null;
+  /** @nullable */
+  confirmedBrandName?: string | null;
+  /** @nullable */
   userCorrections?: string | null;
 }

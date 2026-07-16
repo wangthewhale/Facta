@@ -28,6 +28,8 @@ export default function Submit() {
   const [submissionId, setSubmissionId] = useState<number | null>(null);
   const [extractedText, setExtractedText] = useState('');
   const [parsedNutrition, setParsedNutrition] = useState<Record<string, number | null> | null>(null);
+  const [detectedProductName, setDetectedProductName] = useState<string | null>(null);
+  const [detectedBrandName, setDetectedBrandName] = useState<string | null>(null);
 
   const createSubmissionMut = useCreateSubmission();
   const processOcrMut = useProcessOcr();
@@ -79,6 +81,13 @@ export default function Submit() {
         });
         setExtractedText(ocrRes.extractedText);
         setParsedNutrition((ocrRes.parsedNutrition as Record<string, number | null> | null) ?? null);
+        // Prefer the detailed label names detected by OCR over hand-typed ones
+        if (ocrRes.productName && ocrRes.productName.length > formData.productName.length) {
+          setDetectedProductName(ocrRes.productName);
+        }
+        if (ocrRes.brandName && !formData.brandName) {
+          setDetectedBrandName(ocrRes.brandName);
+        }
         setStep(4); // Confirm text
       } else {
         // Skip OCR if no image
@@ -99,6 +108,8 @@ export default function Submit() {
           data: {
             confirmedIngredients: extractedText,
             ...(parsedNutrition ? { confirmedNutrition: parsedNutrition } : {}),
+            ...(detectedProductName ? { confirmedProductName: detectedProductName } : {}),
+            ...(detectedBrandName ? { confirmedBrandName: detectedBrandName } : {}),
           }
         });
         // Instantly create a provisional product + FACTA Report

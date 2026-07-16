@@ -15,4 +15,8 @@ export interface OcrResult {
   /** @nullable */
   rawIngredients?: string | null;
   parsedNutrition?: OcrResultParsedNutrition;
+  /** @nullable */
+  productName?: string | null;
+  /** @nullable */
+  brandName?: string | null;
 }

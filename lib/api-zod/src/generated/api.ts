@@ -1051,6 +1051,8 @@ export const ConfirmOcrParams = zod.object({
 export const ConfirmOcrBody = zod.object({
   "confirmedIngredients": zod.string(),
   "confirmedNutrition": zod.record(zod.string(), zod.unknown()).optional(),
+  "confirmedProductName": zod.string().nullish(),
+  "confirmedBrandName": zod.string().nullish(),
   "userCorrections": zod.string().nullish()
 })
 
@@ -1173,7 +1175,9 @@ export const ProcessOcrResponse = zod.object({
   "confidence": zod.number(),
   "structuredData": zod.record(zod.string(), zod.unknown()).optional(),
   "rawIngredients": zod.string().nullish(),
-  "parsedNutrition": zod.record(zod.string(), zod.unknown()).optional()
+  "parsedNutrition": zod.record(zod.string(), zod.unknown()).optional(),
+  "productName": zod.string().nullish(),
+  "brandName": zod.string().nullish()
 })
 
 

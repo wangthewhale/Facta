@@ -43,6 +43,8 @@ router.post("/submissions/ocr", async (req, res): Promise<void> => {
     const systemPrompt = `You are an OCR assistant for FACTA, a food product intelligence app in Taiwan.
 Extract text from food product label images. Return a JSON object with:
 - extractedText: the full raw text extracted
+- productName: the full detailed product name exactly as printed on the label (e.g. "愛之味雙纖麥仔茶 590ml"), or null if not visible
+- brandName: the brand/manufacturer name as printed (e.g. "愛之味"), or null if not visible
 - rawIngredients: the ingredients list if visible (as a single string)
 - parsedNutrition: an object with numeric nutrition values if a nutrition facts panel is visible
   (calories, totalFat, saturatedFat, transFat, sodium, totalCarbs, dietaryFiber, totalSugars, protein — all in standard units)
@@ -80,6 +82,8 @@ Do not invent data. If something is not visible, set it to null. Return only the
       structuredData: parsed2,
       rawIngredients: parsed2.rawIngredients ?? null,
       parsedNutrition: parsed2.parsedNutrition ?? null,
+      productName: typeof parsed2.productName === "string" && parsed2.productName.trim() ? parsed2.productName.trim() : null,
+      brandName: typeof parsed2.brandName === "string" && parsed2.brandName.trim() ? parsed2.brandName.trim() : null,
     });
   } catch (err) {
     // Demo fallback when AI is unavailable
@@ -130,9 +134,14 @@ router.patch("/submissions/:id/confirm-ocr", async (req, res): Promise<void> => 
   const body = ConfirmOcrBody.safeParse(req.body);
   if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
 
+  const nameUpdates: Record<string, string> = {};
+  if (body.data.confirmedProductName?.trim()) nameUpdates.productName = body.data.confirmedProductName.trim();
+  if (body.data.confirmedBrandName?.trim()) nameUpdates.brandName = body.data.confirmedBrandName.trim();
+
   const [updated] = await db.update(productSubmissionsTable).set({
     extractedIngredients: body.data.confirmedIngredients,
     extractedNutrition: body.data.confirmedNutrition ?? null,
+    ...nameUpdates,
     ocrStatus: "confirmed",
     status: "pending_review",
     updatedAt: new Date(),
@@ -179,12 +188,18 @@ router.post("/submissions/:id/finalize", async (req, res): Promise<void> => {
         return { status: 409 as const, error: "Submission has no confirmed OCR data to finalize" };
       }
 
+      const hasCJK = (s: string) => /[\u4e00-\u9fff]/.test(s);
+
       // Brand: atomic upsert by slug
       let brandId: number | null = null;
       if (submission.brandName) {
         const slug = submission.brandName.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, "-").slice(0, 60) || "unknown";
         const [brand] = await tx.insert(brandsTable)
-          .values({ name: submission.brandName, slug })
+          .values({
+            name: submission.brandName,
+            nameZh: hasCJK(submission.brandName) ? submission.brandName : null,
+            slug,
+          })
           .onConflictDoUpdate({ target: brandsTable.slug, set: { updatedAt: new Date() } })
           .returning();
         brandId = brand.id;
@@ -197,6 +212,7 @@ router.post("/submissions/:id/finalize", async (req, res): Promise<void> => {
       // Create provisional product
       const [product] = await tx.insert(productsTable).values({
         name: submission.productName,
+        nameZh: hasCJK(submission.productName) ? submission.productName : null,
         brandId,
         verificationStatus: "provisional",
         dataCompleteness: String(dataCompleteness),
