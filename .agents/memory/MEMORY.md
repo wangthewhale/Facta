@@ -1,3 +1,4 @@
 - [FACTA Architecture](facta-architecture.md) — stack decisions, scoring engine, AI integration, and data model patterns for this project.
 - [AI proxy web search](ai-proxy-web-search.md) — OpenAI proxy Responses API supports web_search tool at app runtime; external-apis connectors are agent-only.
+- [Catalog seed staging](catalog-seed-staging.md) — facta_catalog_seed is unverified retailer data; never score or infer label facts until verified.
 - [Orval v8 + TanStack Query v5 pattern](orval-tanstack-query-v5-pattern.md) — query options require `as any`; additive riskLevel must be "avoid"; UserGoalsResponseActiveGoalsItem uses goalSlug/goalName prefix; MealContextSummary uses `meal` not `mealType`.
