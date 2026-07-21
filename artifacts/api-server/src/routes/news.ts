@@ -25,6 +25,49 @@ interface NewsArticle {
   affectsProduct: boolean | null;
 }
 
+interface CuratedBrandNews {
+  brandAliases: string[];
+  sentiment: "negative" | "mixed" | "neutral";
+  summary: string;
+  summaryZh: string;
+  article: NewsArticle;
+}
+
+/**
+ * Small, source-verified registry for high-impact current events that must not
+ * disappear when the live search provider is slow. Entries remain explicitly
+ * dated and scoped; they complement, rather than replace, the live search.
+ * Every entry requires a directly reviewable article URL and an explicit note
+ * about whether the event affects the exact product or only its brand.
+ */
+const CURATED_BRAND_NEWS: CuratedBrandNews[] = [{
+  brandAliases: ["愛之味", "agv"],
+  sentiment: "negative",
+  summary: "On July 16, 2026, independent reporting said AGV recalled specified batches of Preserved Bamboo Shoots and Vegetarian Satay Sauce after an upstream oil issue. The report states that other AGV products were not affected; this is a brand-level event and does not implicate this exact product.",
+  summaryZh: "2026 年 7 月 16 日獨立報導指出，愛之味因上游問題油回收「珍保玉筍」與「素食沙茶醬」指定批號；報導同時指出其他愛之味商品未受影響。這是品牌層級事件，未指向本款商品。",
+  article: {
+    title: "用到致癌油！愛之味「2產品」急下架　批號、退貨辦法一次看",
+    url: "https://news.tvbs.com.tw/life/3259103?from=politics_extend",
+    sourceName: "TVBS 新聞網",
+    publishedAt: "2026-07-16",
+    reportType: "news",
+    scope: "brand",
+    affectsProduct: false,
+  },
+}];
+
+function normalizedText(value: string): string {
+  return value.toLowerCase().replace(/[\s\-_·・|｜]/g, "");
+}
+
+function curatedNewsForBrand(brandNames: string[]): CuratedBrandNews | null {
+  const normalizedBrands = brandNames.map(normalizedText);
+  return CURATED_BRAND_NEWS.find(item => item.brandAliases.some(alias => {
+    const normalizedAlias = normalizedText(alias);
+    return normalizedBrands.some(brand => brand.includes(normalizedAlias) || normalizedAlias.includes(brand));
+  })) ?? null;
+}
+
 function validPublishedDate(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const match = value.match(/^\d{4}-\d{2}-\d{2}/);
@@ -107,8 +150,27 @@ router.get("/products/:id/news", async (req, res): Promise<void> => {
 
   const [cached] = await db.select().from(productNewsTable)
     .where(eq(productNewsTable.productId, product.id));
+  const curated = curatedNewsForBrand(brandNames);
+  const cachedArticles = sanitizeArticles(cached?.articles);
+
+  // A newly verified high-impact event takes precedence over an older cache.
+  if (curated && !cachedArticles.some(article => article.url === curated.article.url)) {
+    const values = {
+      productId: product.id,
+      sentiment: curated.sentiment,
+      summary: curated.summary,
+      summaryZh: curated.summaryZh,
+      articles: sanitizeArticles([curated.article, ...cachedArticles]),
+      fetchedAt: new Date(),
+    };
+    const [saved] = await db.insert(productNewsTable).values(values)
+      .onConflictDoUpdate({ target: productNewsTable.productId, set: values })
+      .returning();
+    res.json(newsToApi(saved, "fresh", query));
+    return;
+  }
+
   if (cached && Date.now() - cached.fetchedAt.getTime() < NEWS_TTL_MS) {
-    const cachedArticles = sanitizeArticles(cached.articles);
     res.json(newsToApi(cached, cachedArticles.length === 0 && cached.sentiment === "none" ? "no_results" : "cached", query));
     return;
   }
