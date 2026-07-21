@@ -6,7 +6,8 @@
  * Same product_data_version + goal_ruleset_version = same result, always.
  */
 
-export const GOAL_RULESET_VERSION = "1.0.0";
+// v1.1 invalidates goal-fit caches created from legacy demo nutrition rows.
+export const GOAL_RULESET_VERSION = "1.1.0";
 
 export type FitLevel = "great_fit" | "good_fit" | "mixed_fit" | "poor_fit" | "insufficient_data";
 

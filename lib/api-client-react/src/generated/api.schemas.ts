@@ -127,6 +127,7 @@ export const ProductNewsResponseStatus = {
   stale: 'stale',
   no_results: 'no_results',
   unavailable: 'unavailable',
+  identity_unverified: 'identity_unverified',
 } as const;
 
 export interface ProductNewsResponse {
@@ -263,6 +264,10 @@ export interface Product {
   priceNtd?: number | null;
   /** @nullable */
   netWeight?: string | null;
+  /** @nullable */
+  catalogSourceUrl?: string | null;
+  /** @nullable */
+  barcodeSourceUrl?: string | null;
   /** @nullable */
   ingredientsList?: string | null;
   ingredients?: IngredientItem[];

@@ -8,6 +8,7 @@ import {
 } from "@workspace/db";
 import { GetAlternativesParams } from "@workspace/api-zod";
 import { RULESET_VERSION } from "../lib/scoring.js";
+import { resolveCatalogProduct } from "../lib/catalogEvidence.js";
 
 const router: IRouter = Router();
 
@@ -36,19 +37,22 @@ router.get("/alternatives/:productId", async (req, res): Promise<void> => {
       .from(productEvaluationsTable).where(eq(productEvaluationsTable.productId, altProduct.id))
       .orderBy(desc(productEvaluationsTable.evaluatedAt)).limit(1);
 
+    const presentation = resolveCatalogProduct(altProduct, barcode?.barcode, brand);
+    if (presentation.verificationStatus !== "verified") return null;
+
     return {
       product: {
         id: altProduct.id,
-        name: altProduct.name,
-        nameZh: altProduct.nameZh,
-        brandName: brand?.name ?? null,
-        imageUrl: altProduct.imageUrl,
+        name: presentation.name,
+        nameZh: presentation.nameZh,
+        brandName: presentation.brandName,
+        imageUrl: presentation.imageUrl,
         categorySlug: category?.slug ?? null,
         categoryName: category?.name ?? null,
-        verificationStatus: altProduct.verificationStatus,
+        verificationStatus: presentation.verificationStatus,
         overallScore: evalRow?.rulesetVersion === RULESET_VERSION ? evalRow.overallScore : null,
         scoreGrade: evalRow?.rulesetVersion === RULESET_VERSION ? evalRow.scoreGrade : null,
-        barcode: barcode?.barcode ?? null,
+        barcode: presentation.barcode,
         retailerName: retailer?.name ?? null,
         priceNtd: priceRow?.priceNtd ? parseFloat(priceRow.priceNtd) : null,
       },

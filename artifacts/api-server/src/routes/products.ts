@@ -11,6 +11,12 @@ import {
   GetProductByBarcodeParams, GetProductParams, ListProductsQueryParams,
   ListRecentProductsQueryParams, SubmitCorrectionBody,
 } from "@workspace/api-zod";
+import { RULESET_VERSION } from "../lib/scoring.js";
+import {
+  getTrustedProductEvidenceByBarcode,
+  isValidGtin,
+  resolveCatalogProduct,
+} from "../lib/catalogEvidence.js";
 
 const router: IRouter = Router();
 
@@ -24,22 +30,29 @@ async function buildProductSummary(p: typeof productsTable.$inferSelect) {
 
   // Get latest evaluation score
   const { productEvaluationsTable } = await import("@workspace/db");
-  const [evalRow] = await db.select({ overallScore: productEvaluationsTable.overallScore, scoreGrade: productEvaluationsTable.scoreGrade })
+  const [evalRow] = await db.select({
+    overallScore: productEvaluationsTable.overallScore,
+    scoreGrade: productEvaluationsTable.scoreGrade,
+    rulesetVersion: productEvaluationsTable.rulesetVersion,
+  })
     .from(productEvaluationsTable).where(eq(productEvaluationsTable.productId, p.id))
     .orderBy(desc(productEvaluationsTable.evaluatedAt)).limit(1);
 
+  const presentation = resolveCatalogProduct(p, barcode?.barcode, brand);
+  const canShowScore = presentation.verificationStatus === "verified" && evalRow?.rulesetVersion === RULESET_VERSION;
+
   return {
     id: p.id,
-    name: p.name,
-    nameZh: p.nameZh,
-    brandName: brand?.name ?? null,
-    imageUrl: p.imageUrl,
+    name: presentation.name,
+    nameZh: presentation.nameZh,
+    brandName: presentation.brandName,
+    imageUrl: presentation.imageUrl,
     categorySlug: category?.slug ?? null,
     categoryName: category?.name ?? null,
-    verificationStatus: p.verificationStatus,
-    overallScore: evalRow?.overallScore ?? null,
-    scoreGrade: evalRow?.scoreGrade ?? null,
-    barcode: barcode?.barcode ?? null,
+    verificationStatus: presentation.verificationStatus,
+    overallScore: canShowScore ? evalRow.overallScore : null,
+    scoreGrade: canShowScore ? evalRow.scoreGrade : null,
+    barcode: presentation.barcode,
     retailerName: retailer?.name ?? null,
     priceNtd: priceRow?.priceNtd ? parseFloat(priceRow.priceNtd) : null,
   };
@@ -65,17 +78,25 @@ router.get("/products/recent", async (req, res): Promise<void> => {
 
   const rows = await db.select().from(productsTable)
     .where(eq(productsTable.verificationStatus, "verified"))
-    .orderBy(desc(productsTable.updatedAt)).limit(limit);
+    .orderBy(desc(productsTable.updatedAt)).limit(Math.max(limit * 4, 24));
 
   const summaries = await Promise.all(rows.map(buildProductSummary));
-  res.json(summaries);
+  res.json(summaries.filter(item => item.verificationStatus === "verified").slice(0, limit));
 });
 
 router.get("/products/barcode/:barcode", async (req, res): Promise<void> => {
   const params = GetProductByBarcodeParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
 
-  const [barcodeRow] = await db.select().from(barcodesTable).where(eq(barcodesTable.barcode, params.data.barcode));
+  if (!isValidGtin(params.data.barcode)) {
+    res.status(422).json({ error: "Barcode check digit is invalid" });
+    return;
+  }
+
+  const trusted = getTrustedProductEvidenceByBarcode(params.data.barcode);
+  const [barcodeRow] = trusted
+    ? [{ productId: trusted.productId }]
+    : await db.select().from(barcodesTable).where(eq(barcodesTable.barcode, params.data.barcode));
   if (!barcodeRow) { res.status(404).json({ error: "Product not found for this barcode" }); return; }
 
   const [product] = await db.select().from(productsTable).where(eq(productsTable.id, barcodeRow.productId));
@@ -117,56 +138,100 @@ async function buildFullProduct(p: typeof productsTable.$inferSelect) {
     .leftJoin(allergensTable, eq(productAllergensTable.allergenId, allergensTable.id))
     .where(eq(productAllergensTable.productId, p.id));
 
+  const presentation = resolveCatalogProduct(p, barcode?.barcode, brand);
+  const trustedNutrition = presentation.evidence?.nutrition ?? null;
+  const canUseDatabaseEvidence = presentation.verificationStatus !== "catalog_unverified";
+  const resolvedNutrition = trustedNutrition ?? (canUseDatabaseEvidence && nutrition ? {
+    servingSize: parseNullableNumber(nutrition.servingSize),
+    servingSizeUnit: nutrition.servingSizeUnit,
+    calories: parseNullableNumber(nutrition.calories),
+    totalFat: parseNullableNumber(nutrition.totalFat),
+    saturatedFat: parseNullableNumber(nutrition.saturatedFat),
+    transFat: parseNullableNumber(nutrition.transFat),
+    sodium: parseNullableNumber(nutrition.sodium),
+    totalCarbs: parseNullableNumber(nutrition.totalCarbs),
+    dietaryFiber: parseNullableNumber(nutrition.dietaryFiber),
+    totalSugars: parseNullableNumber(nutrition.totalSugars),
+    protein: parseNullableNumber(nutrition.protein),
+  } : null);
+
+  const trustedIngredientNames = presentation.evidence
+    ? splitDisplayIngredients(presentation.evidence.ingredientsList)
+    : null;
+  const resolvedIngredients = trustedIngredientNames
+    ? trustedIngredientNames.map((name, index) => ({
+        id: -(index + 1),
+        name,
+        nameZh: name,
+        riskLevel: "unknown",
+        riskReason: null,
+        evidenceStrength: null,
+        isAdditive: false,
+      }))
+    : canUseDatabaseEvidence
+      ? ingredientRows.map(r => ({
+          id: r.ing?.id ?? 0,
+          name: r.pi.rawName,
+          nameZh: r.ing?.nameZh ?? null,
+          riskLevel: r.ing?.riskLevel ?? null,
+          riskReason: r.ing?.riskReason ?? null,
+          evidenceStrength: r.ing?.evidenceStrength ?? null,
+          isAdditive: r.ing?.isAdditive === "true",
+        }))
+      : [];
+
+  const resolvedAllergens = presentation.evidence?.allergens ?? (canUseDatabaseEvidence
+    ? allergenRows.map(r => ({
+        name: r.al?.name ?? "Unknown",
+        nameZh: r.al?.nameZh ?? null,
+        severity: r.al?.severity ?? "moderate",
+        source: r.pa.sourceType,
+      }))
+    : []);
+
   return {
     id: p.id,
-    name: p.name,
-    nameZh: p.nameZh,
-    brandName: brand?.name ?? null,
-    imageUrl: p.imageUrl,
-    barcode: barcode?.barcode ?? null,
+    name: presentation.name,
+    nameZh: presentation.nameZh,
+    brandName: presentation.brandName,
+    imageUrl: presentation.imageUrl,
+    barcode: presentation.barcode,
     categorySlug: category?.slug ?? null,
     categoryName: category?.name ?? null,
     categoryNameZh: category?.nameZh ?? null,
-    verificationStatus: p.verificationStatus,
-    dataCompleteness: p.dataCompleteness ? parseFloat(p.dataCompleteness) : null,
+    verificationStatus: presentation.verificationStatus,
+    dataCompleteness: presentation.evidence ? 1 : (p.dataCompleteness ? parseFloat(p.dataCompleteness) : null),
     retailerName: retailer?.name ?? null,
     retailerId: retailer?.id ?? null,
     priceNtd: priceRow?.priceNtd ? parseFloat(priceRow.priceNtd) : null,
-    netWeight: p.netWeight,
-    ingredientsList: p.ingredientsList,
-    ingredients: ingredientRows.map(r => ({
-      id: r.ing?.id ?? 0,
-      name: r.pi.rawName,
-      nameZh: r.ing?.nameZh ?? null,
-      riskLevel: r.ing?.riskLevel ?? null,
-      riskReason: r.ing?.riskReason ?? null,
-      evidenceStrength: r.ing?.evidenceStrength ?? null,
-      isAdditive: r.ing?.isAdditive === "true",
-    })),
-    nutritionFacts: nutrition ? {
-      id: nutrition.id,
-      productId: nutrition.productId,
-      servingSize: nutrition.servingSize,
-      servingSizeUnit: nutrition.servingSizeUnit,
-      calories: nutrition.calories ? parseFloat(nutrition.calories) : null,
-      totalFat: nutrition.totalFat ? parseFloat(nutrition.totalFat) : null,
-      saturatedFat: nutrition.saturatedFat ? parseFloat(nutrition.saturatedFat) : null,
-      transFat: nutrition.transFat ? parseFloat(nutrition.transFat) : null,
-      sodium: nutrition.sodium ? parseFloat(nutrition.sodium) : null,
-      totalCarbs: nutrition.totalCarbs ? parseFloat(nutrition.totalCarbs) : null,
-      dietaryFiber: nutrition.dietaryFiber ? parseFloat(nutrition.dietaryFiber) : null,
-      totalSugars: nutrition.totalSugars ? parseFloat(nutrition.totalSugars) : null,
-      protein: nutrition.protein ? parseFloat(nutrition.protein) : null,
+    netWeight: presentation.evidence?.netWeight ?? p.netWeight,
+    catalogSourceUrl: presentation.evidence?.productSourceUrl ?? null,
+    barcodeSourceUrl: presentation.evidence?.barcodeSourceUrl ?? null,
+    ingredientsList: presentation.ingredientsList,
+    ingredients: resolvedIngredients,
+    nutritionFacts: resolvedNutrition ? {
+      id: nutrition?.id ?? 0,
+      productId: p.id,
+      ...resolvedNutrition,
     } : null,
-    allergens: allergenRows.map(r => ({
-      name: r.al?.name ?? "Unknown",
-      nameZh: r.al?.nameZh ?? null,
-      severity: r.al?.severity ?? "moderate",
-      source: r.pa.sourceType,
-    })),
+    allergens: resolvedAllergens,
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),
   };
+}
+
+function parseNullableNumber(value: string | number | null | undefined): number | null {
+  if (value == null || value === "") return null;
+  const parsed = typeof value === "number" ? value : parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function splitDisplayIngredients(raw: string): string[] {
+  return raw
+    .split(/[、,，;；\n]/)
+    .map(value => value.trim())
+    .filter(Boolean)
+    .slice(0, 100);
 }
 
 // Data corrections

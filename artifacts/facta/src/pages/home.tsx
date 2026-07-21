@@ -105,7 +105,9 @@ function ProductExampleCard({ productId, label, intent }: { productId: number; l
           <p className="text-[9px] font-bold text-muted-foreground mt-1">{scopeLabel}</p>
         </div>
       </div>
-      <p className="text-xs font-bold leading-relaxed border-l-4 border-border pl-3">{evaluation.verdictZh || evaluation.verdict}</p>
+      <p className="text-sm font-black leading-relaxed border-l-4 border-border pl-3">
+        {intent === 'better' ? '可以先留在候選清單，但仍要看成分與過敏原。' : '先別急著放進購物籃；紅燈指標值得和別款比較。'}
+      </p>
       {findings.length > 0 && (
         <ul className="flex flex-col gap-2">
           {findings.map((reason, index) => (
@@ -122,7 +124,7 @@ function ProductExampleCard({ productId, label, intent }: { productId: number; l
         onClick={() => { track('sample_report_viewed', { productId }); setLocation(`/report/${productId}`); }}
         className="mt-auto w-full py-3 border border-foreground font-bold text-xs hover:bg-foreground hover:text-background transition-colors"
       >
-        查看完整證據與最新消息
+        看它為什麼被判成這樣
       </button>
     </article>
   );
@@ -132,15 +134,15 @@ function ProductComparison() {
   return (
     <section id="product-comparison" className="flex flex-col gap-4 scroll-mt-4">
       <div>
-        <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">真的分得出差異</p>
-        <h2 className="text-xl font-black mt-2">同一套規則，看出較佳與較差選擇</h2>
+        <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">別只相信包裝上的形容詞</p>
+        <h2 className="text-xl font-black mt-2">一個營養負擔較低，一個要更小心；差別藏在每 100g／ml。</h2>
         <p className="text-xs text-muted-foreground leading-relaxed mt-2">
-          先把包裝上的每份數值統一換算成每 100g／ml，再依同一門檻比較；資料不完整時只顯示「初評」，不假裝是完整安全結論。
+          我們把品牌話術先放旁邊，只比同一基準下的糖、鈉、飽和脂肪。缺資料就停在「初評」，不拿半張標示假裝完整答案。
         </p>
       </div>
       <div className="grid grid-cols-1 gap-4">
-        <ProductExampleCard productId={BETTER_SAMPLE_PRODUCT_ID} label="營養表現較佳" intent="better" />
-        <ProductExampleCard productId={WORSE_SAMPLE_PRODUCT_ID} label="營養表現較差" intent="worse" />
+        <ProductExampleCard productId={BETTER_SAMPLE_PRODUCT_ID} label="相對較放心" intent="better" />
+        <ProductExampleCard productId={WORSE_SAMPLE_PRODUCT_ID} label="先別急著拿" intent="worse" />
       </div>
       <Link href="/methodology" className="text-xs font-bold underline">看完整判定規則與門檻 →</Link>
     </section>
@@ -425,22 +427,22 @@ export default function Home() {
         <header className="flex flex-col gap-3">
           <div className="flex justify-between items-start">
             <h1 className="text-5xl font-black tracking-tighter text-foreground">FACTA</h1>
-            <span className="text-[10px] font-black px-2 py-1 bg-primary text-black tracking-widest">食品比較工具</span>
+            <span className="text-[10px] font-black px-2 py-1 bg-primary text-black tracking-widest">食品真相掃描</span>
           </div>
 
-          <p className="text-xs font-black tracking-widest text-primary-strong mt-4">給會看標示、但沒時間逐項查的人</p>
+          <p className="text-xs font-black tracking-widest text-primary-strong mt-4">包裝只給你 3 秒，真正該擔心的常藏在背面</p>
           <h2 className="text-[28px] font-black leading-[1.25]">
-            買之前、吃之前，<br />30 秒看懂這款食品值不值得選。
+            別讓「看起來健康」騙過你。<br />掃一下，再決定要不要買。
           </h2>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            在超商、賣場或家裡，掃條碼或拍下成分與營養標示。FACTA 會統一份量、指出高糖／高鈉／高飽和脂肪，並補上同商品、品牌與公司的最新食安消息。
+            先掃條碼確認是哪一款；資料不夠，再拍背面的營養與成分標示。FACTA 會拆穿容易誤判的「每份」，直接指出糖、鈉、飽和脂肪哪一項最需要小心，並查同商品與品牌的近期食安消息。
           </p>
 
           <div className="grid grid-cols-1 gap-2 mt-2" aria-label="適合使用 FACTA 的情境">
             {[
-              '兩款商品看起來都健康，不知道怎麼選',
-              '想控制糖、鈉或飽和脂肪，卻被「每份」數字誤導',
-              '看到陌生成分或品牌新聞，想先查證再買',
+              '怕買到寫著高纖、無添加，糖或鈉卻更高的商品',
+              '家人常吃同一款，想知道長期最該留意什麼',
+              '品牌剛上新聞，不確定手上這一款有沒有被波及',
             ].map((scenario, index) => (
               <div key={scenario} className="flex items-start gap-3 bg-card border border-border p-3">
                 <span className="w-5 h-5 bg-foreground text-background text-[10px] font-black flex items-center justify-center shrink-0">{index + 1}</span>
@@ -454,7 +456,7 @@ export default function Home() {
               onClick={() => { track('hero_free_analysis_clicked'); setLocation('/scan'); }}
               className="w-full py-4 bg-foreground text-background font-black tracking-widest text-base flex items-center justify-center gap-3 hover:bg-foreground/90 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
             >
-              <ScanLine className="w-5 h-5" /> 掃條碼或拍標示開始
+              <ScanLine className="w-5 h-5" /> 先掃條碼，再決定要不要買
             </button>
             <button
               onClick={() => {
@@ -463,12 +465,12 @@ export default function Home() {
               }}
               className="w-full py-3.5 border-2 border-foreground font-bold tracking-widest text-sm hover:bg-muted transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
             >
-              先看好／壞產品怎麼判斷
+              先看一份真實分析
             </button>
           </div>
 
           <ul className="flex flex-col gap-1.5 mt-4">
-            {['資料不足就說不足，不硬給高分', '新聞標示來源、日期與商品／品牌範圍', '固定規則計算，同樣資料得到同樣結果'].map(p => (
+            {['找不到資料就直說，不亂猜', '品牌事件和商品營養分開算', '每個結論都能回頭看來源'].map(p => (
               <li key={p} className="flex items-center gap-2 text-xs font-bold text-muted-foreground">
                 <ShieldCheck className="w-3.5 h-3.5 text-primary-strong shrink-0" /> {p}
               </li>
@@ -479,9 +481,9 @@ export default function Home() {
         {/* 2. Why this is needed */}
         <section className="bg-foreground text-background p-6 flex flex-col gap-3">
           <Scale className="w-6 h-6 text-primary" />
-          <h2 className="text-lg font-black">為什麼不能只看包裝正面？</h2>
+          <h2 className="text-lg font-black">你以為在比健康，其實常在比誰把「每份」切得更小。</h2>
           <p className="text-xs text-background/75 leading-relaxed">
-            不同商品用不同「每份量」呈現，15g、30g、100ml 的數字不能直接比較；「無添加」「高纖」也不代表糖、鈉或飽和脂肪一定較低。FACTA 先統一到每 100g／ml，再把營養、成分證據和近期新聞分開呈現。
+            15g、30g、100ml 看起來都像「一份」，數字卻完全不能直接比。「無添加」「高纖」也不等於糖、鈉或飽和脂肪比較低。FACTA 先換成每 100g／ml，再把營養、成分證據和近期新聞一件一件拆開。
           </p>
         </section>
 
@@ -489,20 +491,20 @@ export default function Home() {
         <ProductComparison />
 
         <p className="text-center text-sm font-bold border-y border-border py-4">
-          「包裝負責說故事。FACTA 負責看證據。」
+          「包裝讓你想買；FACTA 先幫你看有沒有哪裡不對勁。」
         </p>
 
         {/* 4. How it works */}
         <section className="flex flex-col gap-4">
           <div>
             <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">如何開始</p>
-            <h2 className="text-xl font-black mt-2">第一次使用只要三步</h2>
+            <h2 className="text-xl font-black mt-2">第一次不用研究，照這三步就好</h2>
           </div>
           <ol className="flex flex-col gap-3">
             {[
-              { icon: ScanLine, title: '先掃條碼', desc: '有既有資料就直接開報告；沒有資料再拍商品背面。' },
-              { icon: Camera, title: '拍成分與營養標示', desc: '確認 AI 辨識出的每份量、糖、鈉、飽和脂肪與成分文字。' },
-              { icon: CheckCircle2, title: '看結論，也看證據邊界', desc: '完整資料才顯示完整評分；缺資料會清楚標示初評或資料不足。' },
+              { icon: ScanLine, title: '先掃條碼', desc: '先確認是哪一款；資料已驗證，就直接看報告。' },
+              { icon: Camera, title: '不夠就拍背面', desc: '最好一張拍到營養標示和成分；分開印就補第二張。' },
+              { icon: CheckCircle2, title: '先看最該擔心哪一項', desc: '糖、鈉、飽和脂肪會統一換算；缺資料就清楚說缺什麼。' },
             ].map((s, i) => (
               <li key={i} className="flex items-start gap-4 bg-card border border-border p-4">
                 <span className="w-8 h-8 shrink-0 bg-foreground text-background font-black flex items-center justify-center">{i + 1}</span>
@@ -517,7 +519,7 @@ export default function Home() {
             onClick={() => { track('hero_free_analysis_clicked', { source: 'how_it_works' }); setLocation('/scan'); }}
             className="w-full py-4 bg-primary text-black font-black tracking-widest text-sm"
           >
-            開始分析第一款食品
+            拿一款常買的，現在試試
           </button>
         </section>
 
@@ -528,7 +530,7 @@ export default function Home() {
             <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">FACTA 如何評分</h2>
           </div>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            營養初評依食藥署 2026 年包裝正面營養資訊草案的固體／液體門檻；添加物只有在成分證據完成足夠比例對照後才計分。AI 只做文字辨識，不決定分數。
+            分數不是 AI 猜的。鏡頭只負責讀包裝文字；真正的比較依食藥署 2026 年紅黃綠指引，把固體與液體分開、固定門檻計算。成分證據不夠，就不硬算添加物分數。
           </p>
           <Link href="/methodology" className="text-xs font-bold underline">查看完整評分方法 →</Link>
         </section>
@@ -538,7 +540,7 @@ export default function Home() {
           <span className="self-start bg-primary text-black px-2 py-0.5 text-[10px] font-black tracking-widest">一次性服務</span>
           <h2 className="text-xl font-black leading-snug">FACTA 家庭食品健檢</h2>
           <p className="text-xs text-background/80 leading-relaxed">
-            一次檢查家裡最常吃的 10 項食品，找出需要注意的成分、行銷話術與更適合的替代品。24 小時內完成報告。
+            把家裡每天都在吃的 10 款一次翻底，先找出最值得換掉的那一款，再看成分、行銷話術與替代選擇。24 小時內完成報告。
           </p>
           <div className="flex items-end gap-2 mt-1">
             <span className="text-2xl font-black">NT$299</span>

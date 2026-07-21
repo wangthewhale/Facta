@@ -8,6 +8,7 @@ import {
   safetyAlertItemsTable,
 } from "@workspace/db";
 import { GetProductSafetyCheckParams } from "@workspace/api-zod";
+import { resolveCatalogProduct } from "../lib/catalogEvidence.js";
 
 const router: IRouter = Router();
 
@@ -51,8 +52,18 @@ router.get("/products/:id/safety-check", async (req, res): Promise<void> => {
     ? await db.select().from(brandsTable).where(eq(brandsTable.id, product.brandId))
     : [null];
 
+  const catalogProduct = resolveCatalogProduct(product, null, brand);
+  if (catalogProduct.verificationStatus !== "verified") {
+    res.json({ affected: false, matches: [] });
+    return;
+  }
+
   const haystack = [
-    brand?.name, brand?.nameZh, product.name, product.nameZh,
+    catalogProduct.evidence?.brandName,
+    catalogProduct.evidence?.brandNameZh,
+    catalogProduct.brandName,
+    catalogProduct.name,
+    catalogProduct.nameZh,
   ].filter(Boolean).join(" ").toLowerCase();
 
   const alerts = await db.select().from(safetyAlertsTable).where(eq(safetyAlertsTable.active, true));

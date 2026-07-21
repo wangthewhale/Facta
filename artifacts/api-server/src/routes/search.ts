@@ -10,6 +10,8 @@ import {
 import { SearchProductsQueryParams } from "@workspace/api-zod";
 import { calculateGoalFit, GOAL_RULESET_VERSION } from "../lib/goalFit.js";
 import { nutritionFactsTable } from "@workspace/db";
+import { RULESET_VERSION } from "../lib/scoring.js";
+import { resolveCatalogProduct } from "../lib/catalogEvidence.js";
 
 const router: IRouter = Router();
 
@@ -91,7 +93,11 @@ router.get("/search", async (req, res): Promise<void> => {
   const results = await Promise.all(products.map(async (p) => {
     const [brand] = p.brandId ? await db.select().from(brandsTable).where(eq(brandsTable.id, p.brandId)) : [null];
     const [barcode] = await db.select().from(barcodesTable).where(eq(barcodesTable.productId, p.id)).limit(1);
-    const [evalRow] = await db.select({ overallScore: productEvaluationsTable.overallScore, scoreGrade: productEvaluationsTable.scoreGrade })
+    const [evalRow] = await db.select({
+      overallScore: productEvaluationsTable.overallScore,
+      scoreGrade: productEvaluationsTable.scoreGrade,
+      rulesetVersion: productEvaluationsTable.rulesetVersion,
+    })
       .from(productEvaluationsTable).where(eq(productEvaluationsTable.productId, p.id))
       .orderBy(desc(productEvaluationsTable.evaluatedAt)).limit(1);
     const [category] = p.categoryId ? await db.select().from(categoriesTable).where(eq(categoriesTable.id, p.categoryId)) : [null];
@@ -99,13 +105,17 @@ router.get("/search", async (req, res): Promise<void> => {
       .from(productRetailerPricesTable).where(eq(productRetailerPricesTable.productId, p.id)).limit(1);
     const [retailer] = priceRow?.retailerId ? await db.select().from(retailersTable).where(eq(retailersTable.id, priceRow.retailerId)) : [null];
 
+    const presentation = resolveCatalogProduct(p, barcode?.barcode, brand);
+    if (presentation.verificationStatus !== "verified") return null;
+    const canShowScore = evalRow?.rulesetVersion === RULESET_VERSION;
     const productSummary = {
-      id: p.id, name: p.name, nameZh: p.nameZh,
-      brandName: brand?.name ?? null, imageUrl: p.imageUrl,
+      id: p.id, name: presentation.name, nameZh: presentation.nameZh,
+      brandName: presentation.brandName, imageUrl: presentation.imageUrl,
       categorySlug: category?.slug ?? null, categoryName: category?.name ?? null,
-      verificationStatus: p.verificationStatus,
-      overallScore: evalRow?.overallScore ?? null, scoreGrade: evalRow?.scoreGrade ?? null,
-      barcode: barcode?.barcode ?? null,
+      verificationStatus: presentation.verificationStatus,
+      overallScore: canShowScore ? evalRow.overallScore : null,
+      scoreGrade: canShowScore ? evalRow.scoreGrade : null,
+      barcode: presentation.barcode,
       retailerName: retailer?.name ?? null,
       priceNtd: priceRow?.priceNtd ? parseFloat(priceRow.priceNtd) : null,
     };
@@ -128,12 +138,19 @@ router.get("/search", async (req, res): Promise<void> => {
 
       if (!cached) {
         const [nutrition] = await db.select().from(nutritionFactsTable).where(eq(nutritionFactsTable.productId, p.id));
+        const nutritionEvidence = presentation.evidence?.nutrition ?? {
+          protein: numeric(nutrition?.protein),
+          dietaryFiber: numeric(nutrition?.dietaryFiber),
+          totalSugars: numeric(nutrition?.totalSugars),
+          sodium: numeric(nutrition?.sodium),
+          calories: numeric(nutrition?.calories),
+        };
         const result = calculateGoalFit(effectiveGoalSlug, {
-          protein: nutrition?.protein ? parseFloat(nutrition.protein) : null,
-          dietaryFiber: nutrition?.dietaryFiber ? parseFloat(nutrition.dietaryFiber) : null,
-          totalSugars: nutrition?.totalSugars ? parseFloat(nutrition.totalSugars) : null,
-          sodium: nutrition?.sodium ? parseFloat(nutrition.sodium) : null,
-          calories: nutrition?.calories ? parseFloat(nutrition.calories) : null,
+          protein: nutritionEvidence.protein ?? null,
+          dietaryFiber: nutritionEvidence.dietaryFiber ?? null,
+          totalSugars: nutritionEvidence.totalSugars ?? null,
+          sodium: nutritionEvidence.sodium ?? null,
+          calories: nutritionEvidence.calories ?? null,
         });
         fitLevel = result.fitLevel;
         matchReasonsZh.push(...result.fitReasons.filter(r => r.positive).map(r => r.labelZh).slice(0, 2));
@@ -243,3 +260,9 @@ router.get("/search", async (req, res): Promise<void> => {
 });
 
 export default router;
+
+function numeric(value: string | number | null | undefined): number | null {
+  if (value == null || value === "") return null;
+  const parsed = typeof value === "number" ? value : parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}

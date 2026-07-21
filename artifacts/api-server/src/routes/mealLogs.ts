@@ -3,14 +3,22 @@ import { eq, and, isNull, desc } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { mealLogsTable, productsTable, productEvaluationsTable } from "@workspace/db";
 import { ListMealLogsQueryParams, AddMealLogBody, DeleteMealLogParams } from "@workspace/api-zod";
+import { RULESET_VERSION } from "../lib/scoring.js";
+import { resolveCatalogProduct } from "../lib/catalogEvidence.js";
 
 const router: IRouter = Router();
 
 async function logToApi(log: typeof mealLogsTable.$inferSelect) {
   const [product] = await db.select().from(productsTable).where(eq(productsTable.id, log.productId));
-  const [evalRow] = await db.select({ overallScore: productEvaluationsTable.overallScore, scoreGrade: productEvaluationsTable.scoreGrade })
+  const presentation = product ? resolveCatalogProduct(product, null, null) : null;
+  const [evalRow] = await db.select({
+    overallScore: productEvaluationsTable.overallScore,
+    scoreGrade: productEvaluationsTable.scoreGrade,
+    rulesetVersion: productEvaluationsTable.rulesetVersion,
+  })
     .from(productEvaluationsTable).where(eq(productEvaluationsTable.productId, log.productId))
     .orderBy(desc(productEvaluationsTable.evaluatedAt)).limit(1);
+  const canShowScore = presentation?.verificationStatus === "verified" && evalRow?.rulesetVersion === RULESET_VERSION;
 
   return {
     id: log.id,
@@ -20,11 +28,11 @@ async function logToApi(log: typeof mealLogsTable.$inferSelect) {
     dateStr: log.dateStr,
     loggedAt: log.loggedAt.toISOString(),
     note: log.note,
-    productName: product?.name ?? null,
-    productNameZh: product?.nameZh ?? null,
-    imageUrl: product?.imageUrl ?? null,
-    overallScore: evalRow?.overallScore ?? null,
-    scoreGrade: evalRow?.scoreGrade ?? null,
+    productName: presentation?.name ?? null,
+    productNameZh: presentation?.nameZh ?? null,
+    imageUrl: presentation?.imageUrl ?? null,
+    overallScore: canShowScore ? evalRow.overallScore : null,
+    scoreGrade: canShowScore ? evalRow.scoreGrade : null,
   };
 }
 

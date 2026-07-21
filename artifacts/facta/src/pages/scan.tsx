@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useSearch } from 'wouter';
 import { useTranslation } from '@/lib/i18n';
 import { Layout } from '@/components/layout';
-import { Camera, Flashlight, ArrowRight, X, Image as ImageIcon, Keyboard, RefreshCw } from 'lucide-react';
+import { Camera, Flashlight, ArrowRight, X, Image as ImageIcon, Keyboard, RefreshCw, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { useRecordScan, useGetProductByBarcode } from '@workspace/api-client-react';
 import { getSessionId } from '@/lib/session';
 import { cn } from '@/lib/utils';
@@ -18,6 +18,8 @@ export default function Scan() {
   const [flashlightOn, setFlashlightOn] = useState(false);
   const [manualMode, setManualMode] = useState(false);
   const [unknownBarcode, setUnknownBarcode] = useState<string>('');
+  const [unverifiedProductName, setUnverifiedProductName] = useState<string>('');
+  const [invalidBarcode, setInvalidBarcode] = useState<string>('');
   const [lookupFailed, setLookupFailed] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
   const sessionId = getSessionId();
@@ -34,13 +36,21 @@ export default function Scan() {
     if (!productData && !isError) return;
     
     if (productData) {
-      setLocation(`/report/${productData.id}`);
+      if (productData.verificationStatus === 'verified') {
+        setLocation(`/report/${productData.id}`);
+      } else {
+        track('unverified_barcode_detected', { barcode: barcodeStr, productId: productData.id });
+        setUnverifiedProductName(productData.nameZh || productData.name);
+        setUnknownBarcode(barcodeStr);
+      }
     } else if (isError) {
       const status = (error as any)?.status;
       if (status === 404) {
         // Not in database — show a value-first prompt instead of dumping the user into a form
         track('unknown_barcode_detected', { barcode: barcodeStr });
         setUnknownBarcode(barcodeStr);
+      } else if (status === 422) {
+        setInvalidBarcode(barcodeStr);
       } else {
         // Transport/server failure — let the user retry instead of a misleading "not found"
         setLookupFailed(true);
@@ -147,10 +157,21 @@ export default function Scan() {
   }, [scanning, manualMode, retryKey]);
 
   const handleDetect = (code: string) => {
+    const normalizedCode = code.replace(/\D/g, '');
     setScanning(false);
-    setBarcodeStr(code);
-    track('scan_started', { barcode: code });
-    recordScanMutation.mutate({ data: { eventType: 'scan_started', barcode: code, userSession: sessionId } });
+    setLookupFailed(false);
+    setUnknownBarcode('');
+    setUnverifiedProductName('');
+    if (!isValidRetailBarcode(normalizedCode)) {
+      setInvalidBarcode(normalizedCode || code);
+      setBarcodeStr('');
+      track('invalid_barcode_detected', { barcode: normalizedCode || code });
+      return;
+    }
+    setInvalidBarcode('');
+    setBarcodeStr(normalizedCode);
+    track('scan_started', { barcode: normalizedCode });
+    recordScanMutation.mutate({ data: { eventType: 'scan_started', barcode: normalizedCode, userSession: sessionId } });
   };
 
   const retryCamera = () => {
@@ -210,22 +231,66 @@ export default function Scan() {
     );
   }
 
+  if (invalidBarcode) {
+    return (
+      <Layout>
+        <div className="flex flex-col min-h-full bg-background text-foreground p-6 pt-16 gap-6">
+          <AlertTriangle className="w-10 h-10 text-[#9A6700]" />
+          <h1 className="text-2xl font-black leading-snug">這組條碼可能少一碼，或鏡頭掃錯了。</h1>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            商品條碼最後一碼會用來檢查前面的數字。這組號碼沒有通過校驗，所以 FACTA 不會拿它去配對商品。
+          </p>
+          <p className="text-[11px] font-mono text-muted-foreground break-all">讀到：{invalidBarcode}</p>
+          <div className="flex flex-col gap-3 mt-2">
+            <button
+              onClick={() => { setInvalidBarcode(''); setManualMode(false); setHasCamera(null); setScanning(true); setRetryKey(k => k + 1); }}
+              className="w-full py-4 bg-foreground text-background font-black tracking-widest"
+            >
+              對準包裝，再掃一次
+            </button>
+            <button
+              onClick={() => { setInvalidBarcode(''); setManualMode(true); setScanning(false); }}
+              className="w-full py-3.5 border-2 border-border font-bold tracking-widest text-sm"
+            >
+              改成手動輸入
+            </button>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
   // Unknown barcode — value-first prompt
   if (unknownBarcode) {
     return (
       <Layout>
         <div className="flex flex-col min-h-full bg-background text-foreground p-6 pt-16 gap-6">
-          <h1 className="text-2xl font-black leading-snug">這項商品還沒收錄，但仍然可以立即分析。</h1>
+          <h1 className="text-2xl font-black leading-snug">
+            {unverifiedProductName
+              ? `條碼對上「${unverifiedProductName}」，但資料還沒驗證完。`
+              : '條碼只認出商品；要判斷值不值得買，還需要背面標示。'}
+          </h1>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            拍攝成分表，FACTA 會自動辨識商品資訊，約需 30 秒。
+            最好一張拍到「營養標示＋成分」；若分開印，下一步可以再補第二張。FACTA 會換算每 100g／ml，先告訴你糖、鈉、飽和脂肪最該注意哪一項。
           </p>
           <p className="text-[11px] font-mono text-muted-foreground">條碼：{unknownBarcode}</p>
+          <ul className="flex flex-col gap-2 border-y border-border py-4">
+            {[
+              '辨識錯的數字會先讓你確認，不直接下結論',
+              '資料不足就明說，不把未知當成安全',
+              '營養分數和品牌新聞分開呈現',
+            ].map(item => (
+              <li key={item} className="flex items-start gap-2 text-xs font-bold leading-relaxed">
+                <CheckCircle2 className="w-4 h-4 text-primary-strong shrink-0 mt-0.5" /> {item}
+              </li>
+            ))}
+          </ul>
           <div className="flex flex-col gap-3 mt-2">
             <button
               onClick={() => setLocation(`/submit?barcode=${unknownBarcode}`)}
               className="w-full py-4 bg-foreground text-background font-black tracking-widest flex items-center justify-center gap-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
             >
-              <Camera className="w-5 h-5" /> 拍攝成分表
+              <Camera className="w-5 h-5" /> 拍商品背面，繼續分析
             </button>
             <button
               onClick={() => setLocation('/')}
@@ -234,9 +299,6 @@ export default function Scan() {
               稍後再分析
             </button>
           </div>
-          <p className="text-xs text-muted-foreground leading-relaxed border-t border-border pt-4 mt-2">
-            協助確認商品資料，可獲得一次免費深度分析。
-          </p>
         </div>
       </Layout>
     );
@@ -250,7 +312,7 @@ export default function Scan() {
           <button onClick={() => setLocation('/')} className="p-2" aria-label="關閉掃描">
             <X className="w-6 h-6 text-white" />
           </button>
-          <span className="font-mono text-sm font-bold tracking-widest uppercase">{t('scan_product')}</span>
+          <span className="font-mono text-sm font-bold tracking-widest uppercase">先掃條碼</span>
           <button onClick={toggleFlashlight} className="p-2" aria-label="開關手電筒" disabled={!hasCamera || manualMode}>
             <Flashlight className={cn("w-6 h-6", flashlightOn ? "text-primary-strong" : "text-white opacity-70")} />
           </button>
@@ -263,15 +325,15 @@ export default function Scan() {
               <div className="p-8 flex flex-col gap-4 w-full max-w-sm">
                 <div className="flex flex-col items-center text-center gap-3 mb-2">
                   <Camera className="w-10 h-10 opacity-60" aria-hidden="true" />
-                  <h2 className="text-xl font-black">暫時無法使用相機</h2>
-                  <p className="text-sm text-white/70 leading-relaxed">你仍然可以從相簿選擇照片，或手動輸入條碼。</p>
+                  <h2 className="text-xl font-black">相機打不開，也不會卡住</h2>
+                  <p className="text-sm text-white/70 leading-relaxed">先手動輸入條碼；沒有條碼時，再選商品背面「成分＋營養」照片。</p>
                 </div>
                 <label className="relative w-full py-4 bg-primary text-black font-black tracking-widest text-sm flex items-center justify-center gap-2 cursor-pointer focus-within:outline focus-within:outline-2 focus-within:outline-white">
-                  <ImageIcon className="w-5 h-5" aria-hidden="true" /> 從相簿選擇照片
+                  <ImageIcon className="w-5 h-5" aria-hidden="true" /> 選擇商品背面照片
                   <input
                     type="file"
                     accept="image/*"
-                    aria-label="從相簿選擇成分表照片"
+                    aria-label="從相簿選擇商品背面成分與營養標示照片"
                     className="absolute inset-0 opacity-0 cursor-pointer"
                     onChange={(e) => {
                       const file = e.target.files?.[0];
@@ -324,6 +386,11 @@ export default function Scan() {
                       查詢中⋯
                     </div>
                   )}
+
+                  <div className="absolute -bottom-24 inset-x-0 text-center px-2">
+                    <p className="font-black text-sm">把條碼完整放進框內</p>
+                    <p className="text-[11px] text-white/70 leading-relaxed mt-1">條碼先確認是哪一款；資料不夠，再拍背面標示。</p>
+                  </div>
                 </div>
 
                 <button 
@@ -355,7 +422,7 @@ export default function Scan() {
                 className="w-full py-4 bg-foreground text-background font-bold tracking-widest flex items-center justify-center gap-2"
                 disabled={isFetching}
               >
-                {isFetching ? '...' : t('scan_product')} <ArrowRight className="w-5 h-5" />
+                {isFetching ? '查詢中⋯' : '查這個條碼'} <ArrowRight className="w-5 h-5" />
               </button>
             </form>
             <button 
@@ -370,4 +437,26 @@ export default function Scan() {
       </div>
     </Layout>
   );
+}
+
+function isValidRetailBarcode(value: string): boolean {
+  if (!/^\d{8}$|^\d{12,14}$/.test(value)) return false;
+
+  const validates = (digits: string): boolean => {
+    const payload = digits.slice(0, -1).split('').map(Number).reverse();
+    const sum = payload.reduce((total, digit, index) => total + digit * (index % 2 === 0 ? 3 : 1), 0);
+    return (10 - (sum % 10)) % 10 === Number(digits.at(-1));
+  };
+  if (validates(value)) return true;
+
+  if (value.length !== 8 || !/^[01]/.test(value)) return false;
+  const [numberSystem, d1, d2, d3, d4, d5, d6, check] = value;
+  const payload = d6 === '0' || d6 === '1' || d6 === '2'
+    ? `${numberSystem}${d1}${d2}${d6}0000${d3}${d4}${d5}`
+    : d6 === '3'
+      ? `${numberSystem}${d1}${d2}${d3}00000${d4}${d5}`
+      : d6 === '4'
+        ? `${numberSystem}${d1}${d2}${d3}${d4}00000${d5}`
+        : `${numberSystem}${d1}${d2}${d3}${d4}${d5}0000${d6}`;
+  return validates(`${payload}${check}`);
 }

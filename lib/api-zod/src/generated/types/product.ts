@@ -38,6 +38,10 @@ export interface Product {
   /** @nullable */
   netWeight?: string | null;
   /** @nullable */
+  catalogSourceUrl?: string | null;
+  /** @nullable */
+  barcodeSourceUrl?: string | null;
+  /** @nullable */
   ingredientsList?: string | null;
   ingredients?: IngredientItem[];
   nutritionFacts?: NutritionFact | null;

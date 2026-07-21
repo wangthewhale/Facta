@@ -10,6 +10,8 @@ import {
   GetCollectionParams, ListCollectionsQueryParams,
   AdminCreateCollectionBody, AdminUpdateCollectionParams, AdminUpdateCollectionBody,
 } from "@workspace/api-zod";
+import { RULESET_VERSION } from "../lib/scoring.js";
+import { resolveCatalogProduct } from "../lib/catalogEvidence.js";
 
 const router: IRouter = Router();
 
@@ -74,21 +76,30 @@ router.get("/collections/:slug", async (req, res): Promise<void> => {
     const [brand] = p.brandId ? await db.select().from(brandsTable).where(eq(brandsTable.id, p.brandId)) : [null];
     const [category] = p.categoryId ? await db.select().from(categoriesTable).where(eq(categoriesTable.id, p.categoryId)) : [null];
     const [barcode] = await db.select().from(barcodesTable).where(eq(barcodesTable.productId, p.id)).limit(1);
-    const [evalRow] = await db.select({ overallScore: productEvaluationsTable.overallScore, scoreGrade: productEvaluationsTable.scoreGrade })
+    const [evalRow] = await db.select({
+      overallScore: productEvaluationsTable.overallScore,
+      scoreGrade: productEvaluationsTable.scoreGrade,
+      rulesetVersion: productEvaluationsTable.rulesetVersion,
+    })
       .from(productEvaluationsTable).where(eq(productEvaluationsTable.productId, p.id))
       .orderBy(desc(productEvaluationsTable.evaluatedAt)).limit(1);
     const [priceRow] = await db.select({ priceNtd: productRetailerPricesTable.priceNtd, retailerId: productRetailerPricesTable.retailerId })
       .from(productRetailerPricesTable).where(eq(productRetailerPricesTable.productId, p.id)).limit(1);
     const [retailer] = priceRow?.retailerId ? await db.select().from(retailersTable).where(eq(retailersTable.id, priceRow.retailerId)) : [null];
 
+    const presentation = resolveCatalogProduct(p, barcode?.barcode, brand);
+    if (presentation.verificationStatus !== "verified") return null;
+    const canShowScore = evalRow?.rulesetVersion === RULESET_VERSION;
+
     return {
       product: {
-        id: p.id, name: p.name, nameZh: p.nameZh,
-        brandName: brand?.name ?? null, imageUrl: p.imageUrl,
+        id: p.id, name: presentation.name, nameZh: presentation.nameZh,
+        brandName: presentation.brandName, imageUrl: presentation.imageUrl,
         categorySlug: category?.slug ?? null, categoryName: category?.name ?? null,
-        verificationStatus: p.verificationStatus,
-        overallScore: evalRow?.overallScore ?? null, scoreGrade: evalRow?.scoreGrade ?? null,
-        barcode: barcode?.barcode ?? null,
+        verificationStatus: presentation.verificationStatus,
+        overallScore: canShowScore ? evalRow.overallScore : null,
+        scoreGrade: canShowScore ? evalRow.scoreGrade : null,
+        barcode: presentation.barcode,
         retailerName: retailer?.name ?? null,
         priceNtd: priceRow?.priceNtd ? parseFloat(priceRow.priceNtd) : null,
       },

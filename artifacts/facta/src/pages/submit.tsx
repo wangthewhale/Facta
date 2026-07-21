@@ -113,7 +113,7 @@ export default function Submit() {
     return { imageMimeType: match[1] as SupportedMime, imageBase64: match[2] };
   };
 
-  /** Photo-first: as soon as the ingredients photo is chosen, start AI recognition. */
+  /** Photo-first: start reading the label as soon as the back-label photo is chosen. */
   const handleIngredientsPhoto = async (file: File) => {
     const validationError = validateImage(file);
     if (validationError) { setErrorMsg(validationError); return; }
@@ -229,20 +229,20 @@ export default function Submit() {
         {step === 'photo' && (
           <div className="flex flex-col gap-6 flex-1 mt-2">
             <div>
-              <h1 className="text-2xl font-black leading-snug">拍攝商品背面標示</h1>
+              <h1 className="text-2xl font-black leading-snug">拍背面，不要只拍正面</h1>
               <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-                先拍清楚的成分表；如果同一張沒有營養標示，辨識後可再補拍。完整資料才能公平判定較佳或較差。
+                最好一張拍到「營養標示＋成分」。如果兩塊分開印，先拍成分，讀完後再補一張營養標示。少一塊，FACTA 就會少算一塊，不會假裝完整。
               </p>
             </div>
 
             <label className="relative border-2 border-dashed border-foreground bg-card flex flex-col items-center justify-center gap-3 aspect-[4/3] cursor-pointer hover:bg-muted transition-colors focus-within:outline focus-within:outline-2 focus-within:outline-primary">
               <Camera className="w-10 h-10" />
-              <span className="font-bold text-sm">拍攝或選擇成分表照片</span>
+              <span className="font-bold text-sm">拍攝或選擇商品背面照片</span>
               <span className="text-[11px] text-muted-foreground">JPG、PNG、WebP，最多 8MB</span>
               <input
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
-                aria-label="拍攝或上傳成分表照片"
+                aria-label="拍攝或上傳商品背面成分與營養標示照片"
                 className="absolute inset-0 opacity-0 cursor-pointer"
                 onChange={(e) => {
                   if (e.target.files?.[0]) handleIngredientsPhoto(e.target.files[0]);
@@ -254,7 +254,7 @@ export default function Submit() {
               {[
                 { icon: Clock, text: '約 20–30 秒完成' },
                 { icon: ShieldCheck, text: '原始照片不寫入 FACTA 商品資料庫' },
-                { icon: AlertTriangle, text: '辨識後仍需由你確認數值與成分' },
+                { icon: AlertTriangle, text: '讀錯一個小數點就會差很多，送出前請對照包裝' },
               ].map(({ icon: Icon, text }) => (
                 <li key={text} className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                   <Icon className="w-3.5 h-3.5 text-primary-strong shrink-0" /> {text}
@@ -274,8 +274,8 @@ export default function Submit() {
           <div className="flex flex-col items-center justify-center flex-1 py-20 text-center gap-6">
             <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin" role="status" aria-label="分析中"></div>
             <div>
-              <h2 className="text-xl font-black mb-2">AI 辨識中</h2>
-              <p className="text-sm text-muted-foreground">正在辨識商品名稱、成分與營養標示⋯約 20–30 秒</p>
+              <h2 className="text-xl font-black mb-2">正在讀包裝背面</h2>
+              <p className="text-sm text-muted-foreground">找商品名稱、成分、每份量與關鍵營養數字⋯約 20–30 秒</p>
             </div>
           </div>
         )}
@@ -284,9 +284,9 @@ export default function Submit() {
         {step === 'confirm' && (
           <div className="flex flex-col gap-6 flex-1 mt-2">
             <div>
-              <h1 className="text-2xl font-black">確認辨識結果</h1>
+              <h1 className="text-2xl font-black">最後對一次，別讓小數點害你判錯</h1>
               <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-                請對照實體包裝確認。FACTA 只有在每份量與關鍵營養數值足夠時才會顯示營養分數。
+                請直接對照手上的包裝。每份量、g／ml、糖、鈉和飽和脂肪會影響換算；資料不夠時，報告不會硬給完整分數。
               </p>
             </div>
 
@@ -330,7 +330,7 @@ export default function Submit() {
             </div>
 
             <div className="flex flex-col gap-2">
-              <label htmlFor="ingredients-text" className="text-xs font-bold uppercase tracking-widest">成分表（AI 辨識結果，可修改）</label>
+              <label htmlFor="ingredients-text" className="text-xs font-bold uppercase tracking-widest">成分表（請對照包裝，可修改）</label>
               <textarea
                 id="ingredients-text"
                 className="w-full h-40 p-4 border-2 border-border focus:border-foreground bg-card outline-none font-mono text-sm leading-relaxed"

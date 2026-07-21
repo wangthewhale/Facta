@@ -144,6 +144,24 @@ function NewsSection({ productId }: { productId: number }) {
     );
   }
 
+  if (news?.status === 'identity_unverified') {
+    return (
+      <div className="p-6 border-b border-border bg-card/50 flex flex-col gap-3">
+        <h3 className="text-xs font-mono tracking-widest text-muted-foreground uppercase">
+          {lang === 'zh' ? '最新品牌與食安消息' : 'Latest brand & safety news'}
+        </h3>
+        <div className="border border-[#D9A21B] bg-[#F2B84B]/10 p-4">
+          <p className="text-sm font-bold">{lang === 'zh' ? '先確認是哪一款，才不會把新聞套錯商品' : 'Verify the exact product before matching news'}</p>
+          <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+            {lang === 'zh'
+              ? '這款商品的品牌或條碼資料還沒驗證完成，因此暫不顯示新聞結果。補拍包裝背面後再查會更可靠。'
+              : 'Brand or barcode evidence is incomplete, so news matching is paused until the package is confirmed.'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (isError || !news || news.status === 'unavailable') {
     return (
       <div className="p-6 border-b border-border bg-card/50 flex flex-col gap-3">
@@ -470,11 +488,21 @@ export default function Report() {
               )}>
                 {product.verificationStatus === 'verified' ? t('verified') : t('provisional')}
               </span>
+              {product.catalogSourceUrl && (
+                <a href={product.catalogSourceUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold underline text-muted-foreground">
+                  對照商品與標示來源
+                </a>
+              )}
             </div>
             <button onClick={() => setLocation(`/share/${productId}`)} className="flex items-center gap-1 text-xs font-bold uppercase tracking-widest">
               <Share className="w-4 h-4" /> {t('share_card')}
             </button>
           </div>
+          {product.barcodeSourceUrl && product.barcodeSourceUrl !== product.catalogSourceUrl && (
+            <a href={product.barcodeSourceUrl} target="_blank" rel="noopener noreferrer" className="inline-block mt-3 text-[10px] font-bold underline text-muted-foreground">
+              對照條碼來源
+            </a>
+          )}
         </div>
 
         {/* Score Section */}

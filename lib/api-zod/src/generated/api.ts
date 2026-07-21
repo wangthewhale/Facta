@@ -759,6 +759,8 @@ export const GetProductByBarcodeResponse = zod.object({
   "retailerId": zod.number().nullish(),
   "priceNtd": zod.number().nullish(),
   "netWeight": zod.string().nullish(),
+  "catalogSourceUrl": zod.string().nullish(),
+  "barcodeSourceUrl": zod.string().nullish(),
   "ingredientsList": zod.string().nullish(),
   "ingredients": zod.array(zod.object({
   "id": zod.number(),
@@ -818,6 +820,8 @@ export const GetProductResponse = zod.object({
   "retailerId": zod.number().nullish(),
   "priceNtd": zod.number().nullish(),
   "netWeight": zod.string().nullish(),
+  "catalogSourceUrl": zod.string().nullish(),
+  "barcodeSourceUrl": zod.string().nullish(),
   "ingredientsList": zod.string().nullish(),
   "ingredients": zod.array(zod.object({
   "id": zod.number(),
@@ -1159,7 +1163,7 @@ export const GetProductNewsParams = zod.object({
 
 export const GetProductNewsResponse = zod.object({
   "sentiment": zod.enum(['positive', 'negative', 'mixed', 'neutral', 'none']),
-  "status": zod.enum(['fresh', 'cached', 'stale', 'no_results', 'unavailable']),
+  "status": zod.enum(['fresh', 'cached', 'stale', 'no_results', 'unavailable', 'identity_unverified']),
   "query": zod.string(),
   "lookbackDays": zod.number(),
   "summary": zod.string().nullish(),
@@ -1482,6 +1486,8 @@ export const AdminUpdateProductResponse = zod.object({
   "retailerId": zod.number().nullish(),
   "priceNtd": zod.number().nullish(),
   "netWeight": zod.string().nullish(),
+  "catalogSourceUrl": zod.string().nullish(),
+  "barcodeSourceUrl": zod.string().nullish(),
   "ingredientsList": zod.string().nullish(),
   "ingredients": zod.array(zod.object({
   "id": zod.number(),

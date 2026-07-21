@@ -4,16 +4,18 @@ import { db } from "@workspace/db";
 import {
   productEvaluationsTable, productsTable, brandsTable,
   nutritionFactsTable, productIngredientsTable, ingredientsTable,
-  productAllergensTable, allergensTable,
+  productAllergensTable, allergensTable, barcodesTable,
 } from "@workspace/db";
 import { GetProductEvaluationParams, GetShareCardParams } from "@workspace/api-zod";
 import { calculateScore, RULESET_VERSION } from "../lib/scoring.js";
+import { resolveCatalogProduct } from "../lib/catalogEvidence.js";
 
 const router: IRouter = Router();
 
 async function getOrComputeEvaluation(productId: number) {
   const [product] = await db.select().from(productsTable).where(eq(productsTable.id, productId));
   if (!product) return null;
+  const catalogProduct = resolveCatalogProduct(product, null, null);
 
   // Reuse a cache only when both the rules and source product are unchanged.
   const [cached] = await db.select().from(productEvaluationsTable)
@@ -33,7 +35,11 @@ async function getOrComputeEvaluation(productId: number) {
     .leftJoin(ingredientsTable, eq(productIngredientsTable.ingredientId, ingredientsTable.id))
     .where(eq(productIngredientsTable.productId, productId));
 
-  const ingredients = ingredientRows.length > 0
+  const canUseDatabaseEvidence = catalogProduct.verificationStatus !== "catalog_unverified";
+  const trustedIngredientList = catalogProduct.evidence?.ingredientsList ?? null;
+  const ingredients = trustedIngredientList
+    ? await mapRawIngredients(trustedIngredientList)
+    : canUseDatabaseEvidence && ingredientRows.length > 0
     ? ingredientRows.map(r => ({
         name: r.pi.rawName,
         riskLevel: r.ing?.riskLevel ?? null,
@@ -41,24 +47,33 @@ async function getOrComputeEvaluation(productId: number) {
         evidenceStrength: r.ing?.evidenceStrength ?? null,
         riskReason: r.ing?.riskReason ?? null,
       }))
-    : await mapRawIngredients(product.ingredientsList);
+    : canUseDatabaseEvidence
+      ? await mapRawIngredients(product.ingredientsList)
+      : [];
 
-  const dataCompleteness = calculateCompleteness(product, nutrition ?? null, ingredients);
+  const resolvedNutrition = catalogProduct.evidence?.nutrition ?? (canUseDatabaseEvidence && nutrition ? {
+    servingSize: parseNullableNumber(nutrition.servingSize),
+    servingSizeUnit: nutrition.servingSizeUnit,
+    calories: parseNullableNumber(nutrition.calories),
+    totalFat: parseNullableNumber(nutrition.totalFat),
+    saturatedFat: parseNullableNumber(nutrition.saturatedFat),
+    transFat: parseNullableNumber(nutrition.transFat),
+    sodium: parseNullableNumber(nutrition.sodium),
+    totalCarbs: parseNullableNumber(nutrition.totalCarbs),
+    dietaryFiber: parseNullableNumber(nutrition.dietaryFiber),
+    totalSugars: parseNullableNumber(nutrition.totalSugars),
+    protein: parseNullableNumber(nutrition.protein),
+  } : null);
+
+  const evidenceProduct = {
+    ...product,
+    ingredientsList: catalogProduct.ingredientsList,
+    imageUrl: catalogProduct.imageUrl,
+  };
+  const dataCompleteness = calculateCompleteness(evidenceProduct, resolvedNutrition, ingredients);
 
   const result = calculateScore({
-    nutrition: nutrition ? {
-      servingSize: nutrition.servingSize ? parseFloat(nutrition.servingSize) : null,
-      servingSizeUnit: nutrition.servingSizeUnit,
-      calories: nutrition.calories ? parseFloat(nutrition.calories) : null,
-      totalFat: nutrition.totalFat ? parseFloat(nutrition.totalFat) : null,
-      saturatedFat: nutrition.saturatedFat ? parseFloat(nutrition.saturatedFat) : null,
-      transFat: nutrition.transFat ? parseFloat(nutrition.transFat) : null,
-      sodium: nutrition.sodium ? parseFloat(nutrition.sodium) : null,
-      totalCarbs: nutrition.totalCarbs ? parseFloat(nutrition.totalCarbs) : null,
-      dietaryFiber: nutrition.dietaryFiber ? parseFloat(nutrition.dietaryFiber) : null,
-      totalSugars: nutrition.totalSugars ? parseFloat(nutrition.totalSugars) : null,
-      protein: nutrition.protein ? parseFloat(nutrition.protein) : null,
-    } : null,
+    nutrition: resolvedNutrition,
     ingredients,
     dataCompleteness,
   });
@@ -73,7 +88,7 @@ async function getOrComputeEvaluation(productId: number) {
     scoreGrade: result.scoreGrade,
     verdict: result.verdict,
     verdictZh: result.verdictZh,
-    verificationStatus: product.verificationStatus,
+    verificationStatus: catalogProduct.verificationStatus,
     dataCompleteness: String(dataCompleteness),
     evidenceConfidence: result.evidenceConfidence,
     topReasons: result.topReasons,
@@ -82,6 +97,12 @@ async function getOrComputeEvaluation(productId: number) {
   }).returning();
 
   return saved;
+}
+
+function parseNullableNumber(value: string | number | null | undefined): number | null {
+  if (value == null || value === "") return null;
+  const parsed = typeof value === "number" ? value : parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function normalizeIngredientName(value: string): string {
@@ -145,6 +166,8 @@ router.get("/evaluations/product/:productId", async (req, res): Promise<void> =>
 
   const [product] = await db.select().from(productsTable).where(eq(productsTable.id, params.data.productId));
   const [brand] = product?.brandId ? await db.select().from(brandsTable).where(eq(brandsTable.id, product.brandId)) : [null];
+  const [barcode] = product ? await db.select().from(barcodesTable).where(eq(barcodesTable.productId, product.id)).limit(1) : [null];
+  const catalogProduct = product ? resolveCatalogProduct(product, barcode?.barcode, brand) : null;
 
   const allergenRows = await db
     .select({ pa: productAllergensTable, al: allergensTable })
@@ -155,10 +178,10 @@ router.get("/evaluations/product/:productId", async (req, res): Promise<void> =>
   res.json({
     id: evaluation.id,
     productId: evaluation.productId,
-    productName: product?.name ?? null,
-    productNameZh: product?.nameZh ?? null,
-    brandName: brand?.name ?? null,
-    imageUrl: product?.imageUrl ?? null,
+    productName: catalogProduct?.name ?? null,
+    productNameZh: catalogProduct?.nameZh ?? null,
+    brandName: catalogProduct?.brandName ?? null,
+    imageUrl: catalogProduct?.imageUrl ?? null,
     overallScore: evaluation.overallScore,
     nutritionScore: evaluation.nutritionScore,
     additiveScore: evaluation.additiveScore,
@@ -176,12 +199,12 @@ router.get("/evaluations/product/:productId", async (req, res): Promise<void> =>
     evaluatedAt: evaluation.evaluatedAt.toISOString(),
     topReasons: (evaluation.topReasons as any[]) ?? [],
     additiveFlags: (evaluation.additiveFlags as any[]) ?? [],
-    allergenAlerts: allergenRows.map(r => ({
+    allergenAlerts: catalogProduct?.evidence?.allergens ?? (catalogProduct?.verificationStatus === "catalog_unverified" ? [] : allergenRows.map(r => ({
       name: r.al?.name ?? "Unknown",
       nameZh: r.al?.nameZh ?? null,
       severity: r.al?.severity ?? "moderate",
       source: r.pa.sourceType,
-    })),
+    }))),
     personalAlerts: [],
   });
 });
@@ -195,6 +218,8 @@ router.get("/share-cards/:productId", async (req, res): Promise<void> => {
 
   const [product] = await db.select().from(productsTable).where(eq(productsTable.id, params.data.productId));
   const [brand] = product?.brandId ? await db.select().from(brandsTable).where(eq(brandsTable.id, product.brandId)) : [null];
+  const [barcode] = product ? await db.select().from(barcodesTable).where(eq(barcodesTable.productId, product.id)).limit(1) : [null];
+  const catalogProduct = product ? resolveCatalogProduct(product, barcode?.barcode, brand) : null;
 
   const { alternativeProductLinksTable, productsTable: pt } = await import("@workspace/db");
   const [altLink] = await db.select()
@@ -202,14 +227,15 @@ router.get("/share-cards/:productId", async (req, res): Promise<void> => {
     .where(eq(alternativeProductLinksTable.productId, params.data.productId))
     .limit(1);
   const [altProduct] = altLink ? await db.select().from(pt).where(eq(pt.id, altLink.alternativeProductId)) : [null];
+  const altCatalogProduct = altProduct ? resolveCatalogProduct(altProduct, null, null) : null;
 
   const topReasons = ((evaluation.topReasons as any[]) ?? []).slice(0, 3);
 
   res.json({
-    productName: product?.name ?? "Unknown",
-    productNameZh: product?.nameZh ?? null,
-    brandName: brand?.name ?? null,
-    imageUrl: product?.imageUrl ?? null,
+    productName: catalogProduct?.name ?? "Unknown",
+    productNameZh: catalogProduct?.nameZh ?? null,
+    brandName: catalogProduct?.brandName ?? null,
+    imageUrl: catalogProduct?.imageUrl ?? null,
     overallScore: evaluation.overallScore,
     analysisScope:
       evaluation.nutritionScore != null && evaluation.additiveScore != null ? "complete" :
@@ -220,8 +246,8 @@ router.get("/share-cards/:productId", async (req, res): Promise<void> => {
     verdictZh: evaluation.verdictZh,
     topReasons,
     evidenceConfidence: evaluation.evidenceConfidence,
-    alternativeName: altProduct?.name ?? null,
-    alternativeNameZh: altProduct?.nameZh ?? null,
+    alternativeName: altCatalogProduct?.name ?? null,
+    alternativeNameZh: altCatalogProduct?.nameZh ?? null,
     rulesetVersion: evaluation.rulesetVersion,
     evaluatedAt: evaluation.evaluatedAt.toISOString(),
   });

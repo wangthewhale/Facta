@@ -15,4 +15,5 @@ export const ProductNewsResponseStatus = {
   stale: 'stale',
   no_results: 'no_results',
   unavailable: 'unavailable',
+  identity_unverified: 'identity_unverified',
 } as const;

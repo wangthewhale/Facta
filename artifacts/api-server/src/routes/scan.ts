@@ -3,6 +3,8 @@ import { eq, desc } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { scanEventsTable, productsTable, productEvaluationsTable } from "@workspace/db";
 import { GetScanHistoryQueryParams, RecordScanBody } from "@workspace/api-zod";
+import { RULESET_VERSION } from "../lib/scoring.js";
+import { resolveCatalogProduct } from "../lib/catalogEvidence.js";
 
 const router: IRouter = Router();
 
@@ -24,13 +26,19 @@ router.get("/scan/history", async (req, res): Promise<void> => {
 
     if (row.productId) {
       const [product] = await db.select().from(productsTable).where(eq(productsTable.id, row.productId));
-      productName = product?.name ?? null;
-      imageUrl = product?.imageUrl ?? null;
-      const [evalRow] = await db.select({ overallScore: productEvaluationsTable.overallScore, scoreGrade: productEvaluationsTable.scoreGrade })
+      const presentation = product ? resolveCatalogProduct(product, row.barcode, null) : null;
+      productName = presentation?.nameZh ?? presentation?.name ?? null;
+      imageUrl = presentation?.imageUrl ?? null;
+      const [evalRow] = await db.select({
+        overallScore: productEvaluationsTable.overallScore,
+        scoreGrade: productEvaluationsTable.scoreGrade,
+        rulesetVersion: productEvaluationsTable.rulesetVersion,
+      })
         .from(productEvaluationsTable).where(eq(productEvaluationsTable.productId, row.productId))
         .orderBy(desc(productEvaluationsTable.evaluatedAt)).limit(1);
-      productScore = evalRow?.overallScore ?? null;
-      productGrade = evalRow?.scoreGrade ?? null;
+      const canShowScore = presentation?.verificationStatus === "verified" && evalRow?.rulesetVersion === RULESET_VERSION;
+      productScore = canShowScore ? evalRow.overallScore : null;
+      productGrade = canShowScore ? evalRow.scoreGrade : null;
     }
 
     return {

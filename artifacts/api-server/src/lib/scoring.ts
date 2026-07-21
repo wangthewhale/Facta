@@ -7,7 +7,9 @@
  * treated as evidence that a product is safe.
  */
 
-export const RULESET_VERSION = "2.0.0";
+// v2.1 invalidates legacy cached scores after source-backed catalog evidence
+// replaced the original demo nutrition rows.
+export const RULESET_VERSION = "2.1.0";
 export const TFDA_FOP_GUIDE_URL = "https://www.fda.gov.tw/tc/newsContent.aspx?cid=4&id=31511";
 
 type FoodForm = "solid" | "liquid";

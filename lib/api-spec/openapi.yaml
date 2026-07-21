@@ -1282,7 +1282,7 @@ components:
           enum: [positive, negative, mixed, neutral, none]
         status:
           type: string
-          enum: [fresh, cached, stale, no_results, unavailable]
+          enum: [fresh, cached, stale, no_results, unavailable, identity_unverified]
         query: { type: string }
         lookbackDays: { type: integer }
         summary: { type: ["string", "null"] }
@@ -1389,6 +1389,8 @@ components:
         retailerId:         { type: ["integer", "null"] }
         priceNtd:           { type: ["number", "null"] }
         netWeight:          { type: ["string", "null"] }
+        catalogSourceUrl:   { type: ["string", "null"] }
+        barcodeSourceUrl:   { type: ["string", "null"] }
         ingredientsList:    { type: ["string", "null"] }
         ingredients:
           type: array

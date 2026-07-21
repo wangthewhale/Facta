@@ -4,6 +4,7 @@ import { db } from "@workspace/db";
 import { productsTable, brandsTable, productNewsTable } from "@workspace/db";
 import { GetProductNewsParams } from "@workspace/api-zod";
 import { openai } from "@workspace/integrations-openai-ai-server";
+import { CATALOG_EVIDENCE_UPDATED_AT, resolveCatalogProduct } from "../lib/catalogEvidence.js";
 
 const router: IRouter = Router();
 
@@ -13,7 +14,7 @@ const NEWS_LOOKBACK_DAYS = 365;
 
 type ReportType = "news" | "official_record" | "advertorial" | "press_release" | "unknown";
 type NewsScope = "product" | "brand" | "company";
-type NewsStatus = "fresh" | "cached" | "stale" | "no_results" | "unavailable";
+type NewsStatus = "fresh" | "cached" | "stale" | "no_results" | "unavailable" | "identity_unverified";
 
 interface NewsArticle {
   title: string;
@@ -142,8 +143,27 @@ router.get("/products/:id/news", async (req, res): Promise<void> => {
     ? await db.select().from(brandsTable).where(eq(brandsTable.id, product.brandId))
     : [null];
 
-  const productNames = [...new Set([product.nameZh, product.name].filter(Boolean))] as string[];
-  const brandNames = [...new Set([brand?.nameZh, brand?.name].filter(Boolean))] as string[];
+  const catalogProduct = resolveCatalogProduct(product, null, brand);
+  if (catalogProduct.verificationStatus !== "verified") {
+    res.json({
+      sentiment: "none",
+      status: "identity_unverified",
+      query: `${catalogProduct.brandName ?? "品牌待確認"}｜${catalogProduct.nameZh ?? catalogProduct.name}`,
+      lookbackDays: NEWS_LOOKBACK_DAYS,
+      summary: "Product identity must be verified before brand news can be matched reliably.",
+      summaryZh: "商品身分尚未驗證，暫不比對品牌新聞，避免把別款商品或同名品牌的事件套到這一款。",
+      articles: [],
+      fetchedAt: null,
+    });
+    return;
+  }
+
+  const productNames = [...new Set([catalogProduct.nameZh, catalogProduct.name].filter(Boolean))] as string[];
+  const brandNames = [...new Set([
+    catalogProduct.evidence?.brandNameZh,
+    catalogProduct.evidence?.brandName,
+    catalogProduct.brandName,
+  ].filter(Boolean))] as string[];
   const productLabel = productNames[0] || `product ${product.id}`;
   const brandLabel = brandNames[0] || "unknown brand";
   const query = `${brandLabel}｜${productLabel}`;
@@ -170,7 +190,8 @@ router.get("/products/:id/news", async (req, res): Promise<void> => {
     return;
   }
 
-  if (cached && Date.now() - cached.fetchedAt.getTime() < NEWS_TTL_MS) {
+  const cacheMatchesCurrentIdentity = !catalogProduct.evidence || cached?.fetchedAt.getTime() >= CATALOG_EVIDENCE_UPDATED_AT.getTime();
+  if (cached && cacheMatchesCurrentIdentity && Date.now() - cached.fetchedAt.getTime() < NEWS_TTL_MS) {
     res.json(newsToApi(cached, cachedArticles.length === 0 && cached.sentiment === "none" ? "no_results" : "cached", query));
     return;
   }
