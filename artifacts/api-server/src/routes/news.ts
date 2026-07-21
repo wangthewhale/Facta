@@ -100,6 +100,7 @@ function validPublishedDate(value: unknown): string | null {
 function sanitizeArticles(value: unknown): NewsArticle[] {
   if (!Array.isArray(value)) return [];
   const seen = new Set<string>();
+  const seenTitles = new Set<string>();
   const articles: NewsArticle[] = [];
 
   for (const raw of value) {
@@ -108,8 +109,10 @@ function sanitizeArticles(value: unknown): NewsArticle[] {
     if (!title) continue;
     const url = typeof item.url === "string" && /^https?:\/\//i.test(item.url) ? item.url : null;
     const key = (url || title).toLowerCase();
-    if (seen.has(key)) continue;
+    const titleKey = normalizedText(title).replace(/[^\p{L}\p{N}]/gu, "");
+    if (seen.has(key) || seenTitles.has(titleKey)) continue;
     seen.add(key);
+    seenTitles.add(titleKey);
 
     const reportType: ReportType = ["news", "official_record", "advertorial", "press_release", "unknown"].includes(String(item.reportType))
       ? item.reportType as ReportType : "unknown";
