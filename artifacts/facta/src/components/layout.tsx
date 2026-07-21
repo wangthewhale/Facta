@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Link, useLocation } from 'wouter';
 import { Home, ScanLine, Clock, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -12,10 +12,15 @@ const navItems = [
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [pathname] = useLocation();
+  const mainRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0, behavior: 'auto' });
+  }, [pathname]);
 
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background text-foreground max-w-md mx-auto w-full border-x border-border/50 relative shadow-sm">
-      <main className="flex-1 overflow-y-auto pb-20 w-full relative">
+      <main ref={mainRef} className="flex-1 overflow-y-auto pb-20 w-full relative">
         {children}
       </main>
 

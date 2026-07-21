@@ -116,10 +116,14 @@ router.get("/products/:id/news", async (req, res): Promise<void> => {
   const today = new Date().toISOString().slice(0, 10);
 
   try {
-    const response = await (openai as any).responses.create({
-      model: "gpt-5.6-sol",
-      tools: [{ type: "web_search" }],
-      input: `Today is ${today}. Find the newest relevant reporting from the last ${NEWS_LOOKBACK_DAYS} days for this Taiwan food product and its owner/brand.
+    const searchController = new AbortController();
+    const searchTimeout = setTimeout(() => searchController.abort(), 25_000);
+    let response: any;
+    try {
+      response = await (openai as any).responses.create({
+        model: "gpt-5.6-sol",
+        tools: [{ type: "web_search" }],
+        input: `Today is ${today}. Find the newest relevant reporting from the last ${NEWS_LOOKBACK_DAYS} days for this Taiwan food product and its owner/brand.
 
 Exact product names: ${productNames.map(name => `"${name}"`).join(", ") || `"${productLabel}"`}
 Brand/company names: ${brandNames.map(name => `"${name}"`).join(", ") || `"${brandLabel}"`}
@@ -153,7 +157,10 @@ Return ONLY one JSON object:
   }]
 }
 Return no more than 8 articles. Do not invent a source, date, claim, or URL.`,
-    });
+      }, { signal: searchController.signal });
+    } finally {
+      clearTimeout(searchTimeout);
+    }
 
     const outputText: string = (response as any).output_text ?? "";
     let parsed: Record<string, unknown> = {};
