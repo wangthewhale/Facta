@@ -11,6 +11,7 @@ export type NewsArticleReportType = typeof NewsArticleReportType[keyof typeof Ne
 
 export const NewsArticleReportType = {
   news: 'news',
+  official_record: 'official_record',
   advertorial: 'advertorial',
   press_release: 'press_release',
   unknown: 'unknown',

@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EvaluationReason } from './evaluationReason';
+import type { ShareCardAnalysisScope } from './shareCardAnalysisScope';
 
 export interface ShareCard {
   productName: string;
@@ -16,6 +17,7 @@ export interface ShareCard {
   /** @nullable */
   imageUrl?: string | null;
   overallScore: number;
+  analysisScope: ShareCardAnalysisScope;
   scoreGrade: string;
   verdict: string;
   /** @nullable */

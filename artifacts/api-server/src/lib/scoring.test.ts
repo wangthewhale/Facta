@@ -16,6 +16,8 @@ import { calculateGoalFit, GOAL_RULESET_VERSION } from "./goalFit.js";
 // ─── Fixture data ─────────────────────────────────────────────────────────────
 
 const greenTeaNutrition = {
+  servingSize: 100,
+  servingSizeUnit: "ml",
   calories: 5,
   totalFat: 0,
   saturatedFat: 0,
@@ -28,6 +30,8 @@ const greenTeaNutrition = {
 };
 
 const highSugarDrinkNutrition = {
+  servingSize: 330,
+  servingSizeUnit: "ml",
   calories: 180,
   totalFat: 0,
   saturatedFat: 0,
@@ -40,6 +44,8 @@ const highSugarDrinkNutrition = {
 };
 
 const highProteinSnackNutrition = {
+  servingSize: 50,
+  servingSizeUnit: "g",
   calories: 150,
   totalFat: 5,
   saturatedFat: 1.5,
@@ -66,6 +72,7 @@ describe("FACTA Score — determinism", () => {
     const result = calculateScore({ nutrition: greenTeaNutrition, ingredients: [], dataCompleteness: 0.9 });
     expect(result.overallScore).toBeGreaterThanOrEqual(80);
     expect(result.scoreGrade).toBe("Excellent");
+    expect(result.analysisScope).toBe("nutrition_only");
   });
 
   it("consistently rates high-sugar drink below green tea", () => {
@@ -186,6 +193,18 @@ describe("Invariant: insufficient data is never safe", () => {
     // Should still produce a score (not crash), but it will be low confidence
     expect(result.overallScore).toBeGreaterThan(0);
     expect(result.evidenceConfidence).toBe("low");
+    expect(result.analysisScope).toBe("insufficient");
+  });
+
+  it("does not produce a nutrition rating without a serving-size basis", () => {
+    const result = calculateScore({
+      nutrition: { totalSugars: 0, sodium: 5, saturatedFat: 0 },
+      ingredients: [],
+      dataCompleteness: 0.5,
+    });
+    expect(result.nutritionScore).toBeNull();
+    expect(result.analysisScope).toBe("insufficient");
+    expect(result.topReasons.some(reason => reason.labelZh.includes("每份量"))).toBe(true);
   });
 });
 
@@ -227,6 +246,8 @@ describe("Edge cases", () => {
   it("score is clamped to 0-100", () => {
     const worst = calculateScore({
       nutrition: {
+        servingSize: 100,
+        servingSizeUnit: "g",
         sodium: 3000,
         totalSugars: 80,
         saturatedFat: 20,
@@ -236,12 +257,41 @@ describe("Edge cases", () => {
         protein: 0,
       },
       ingredients: [
-        { name: "Bad additive", riskLevel: "high", isAdditive: "true", evidenceStrength: "high", riskReason: "harmful" },
-        { name: "Very bad", riskLevel: "high", isAdditive: "true", evidenceStrength: "high", riskReason: "harmful" },
+        { name: "Bad additive", riskLevel: "avoid", isAdditive: "true", evidenceStrength: "high", riskReason: "harmful" },
+        { name: "Very bad", riskLevel: "avoid", isAdditive: "true", evidenceStrength: "high", riskReason: "harmful" },
       ],
       dataCompleteness: 0.9,
     });
     expect(worst.overallScore).toBeGreaterThanOrEqual(0);
     expect(worst.overallScore).toBeLessThanOrEqual(100);
+  });
+
+  it("normalizes a snack serving to 100 g before rating it", () => {
+    const result = calculateScore({
+      nutrition: {
+        servingSize: 30,
+        servingSizeUnit: "g",
+        totalSugars: 8,
+        sodium: 310,
+        saturatedFat: 1.5,
+        transFat: 0,
+      },
+      ingredients: [],
+      dataCompleteness: 0.7,
+    });
+    expect(result.nutritionBasis).toBe("per_100g");
+    expect(result.nutritionScore).toBe(25);
+    expect(result.scoreGrade).toBe("Poor");
+  });
+
+  it("unknown ingredient mappings never become a positive safety claim", () => {
+    const result = calculateScore({
+      nutrition: greenTeaNutrition,
+      ingredients: [{ name: "未對照成分", riskLevel: "unknown" }],
+      dataCompleteness: 0.6,
+    });
+    expect(result.additiveScore).toBeNull();
+    expect(result.analysisScope).toBe("nutrition_only");
+    expect(result.topReasons.some(reason => reason.labelZh.includes("未找到需留意"))).toBe(false);
   });
 });

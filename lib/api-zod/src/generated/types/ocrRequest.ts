@@ -5,8 +5,10 @@
  * FACTA — Independent product intelligence API
  * OpenAPI spec version: 0.1.0
  */
+import type { OcrRequestImageMimeType } from './ocrRequestImageMimeType';
 
 export interface OcrRequest {
   imageBase64: string;
   imageType?: string;
+  imageMimeType?: OcrRequestImageMimeType;
 }

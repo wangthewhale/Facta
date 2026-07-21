@@ -14,6 +14,49 @@ import { calculateScore } from "../lib/scoring.js";
 
 const router: IRouter = Router();
 
+const MAX_OCR_IMAGE_BYTES = 8 * 1024 * 1024;
+const OCR_RATE_LIMIT = 8;
+const OCR_RATE_WINDOW_MS = 10 * 60 * 1000;
+const ocrRateBuckets = new Map<string, { count: number; resetAt: number }>();
+
+type ExtractedNutrition = {
+  [key: string]: number | string | null | undefined;
+  servingSize?: number | null;
+  servingSizeUnit?: string | null;
+  calories?: number | null;
+  totalFat?: number | null;
+  saturatedFat?: number | null;
+  transFat?: number | null;
+  sodium?: number | null;
+  totalCarbs?: number | null;
+  dietaryFiber?: number | null;
+  totalSugars?: number | null;
+  protein?: number | null;
+};
+
+function canProcessOcr(clientId: string): { allowed: boolean; retryAfterSeconds: number } {
+  const now = Date.now();
+  const current = ocrRateBuckets.get(clientId);
+  if (!current || current.resetAt <= now) {
+    ocrRateBuckets.set(clientId, { count: 1, resetAt: now + OCR_RATE_WINDOW_MS });
+    return { allowed: true, retryAfterSeconds: 0 };
+  }
+  if (current.count >= OCR_RATE_LIMIT) {
+    return { allowed: false, retryAfterSeconds: Math.ceil((current.resetAt - now) / 1000) };
+  }
+  current.count += 1;
+  return { allowed: true, retryAfterSeconds: 0 };
+}
+
+function splitSubmissionIngredients(raw: string): Array<{ name: string; riskLevel: "unknown" }> {
+  return raw
+    .split(/[、,，;；\n]/)
+    .map(name => name.trim())
+    .filter(Boolean)
+    .slice(0, 100)
+    .map(name => ({ name, riskLevel: "unknown" as const }));
+}
+
 function submissionToApi(s: typeof productSubmissionsTable.$inferSelect) {
   return {
     id: s.id,
@@ -37,7 +80,23 @@ router.post("/submissions/ocr", async (req, res): Promise<void> => {
   const parsed = ProcessOcrBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const { imageBase64, imageType = "ingredients" } = parsed.data;
+  const { imageBase64, imageType = "ingredients", imageMimeType = "image/jpeg" } = parsed.data;
+  const estimatedBytes = Math.floor(imageBase64.replace(/\s/g, "").length * 0.75);
+  if (estimatedBytes > MAX_OCR_IMAGE_BYTES) {
+    res.status(413).json({ error: "Image is larger than the 8 MB limit" });
+    return;
+  }
+  if (!/^[A-Za-z0-9+/=\r\n]+$/.test(imageBase64)) {
+    res.status(400).json({ error: "Invalid base64 image data" });
+    return;
+  }
+
+  const rate = canProcessOcr(req.ip || "unknown");
+  if (!rate.allowed) {
+    res.setHeader("Retry-After", String(rate.retryAfterSeconds));
+    res.status(429).json({ error: "Too many image analyses. Please try again later." });
+    return;
+  }
 
   try {
     const systemPrompt = `You are an OCR assistant for FACTA, a food product intelligence app in Taiwan.
@@ -47,7 +106,7 @@ Extract text from food product label images. Return a JSON object with:
 - brandName: the brand/manufacturer name as printed (e.g. "愛之味"), or null if not visible
 - rawIngredients: the ingredients list if visible (as a single string)
 - parsedNutrition: an object with numeric nutrition values if a nutrition facts panel is visible
-  (calories, totalFat, saturatedFat, transFat, sodium, totalCarbs, dietaryFiber, totalSugars, protein — all in standard units)
+  (servingSize, servingSizeUnit, calories, totalFat, saturatedFat, transFat, sodium, totalCarbs, dietaryFiber, totalSugars, protein — values exactly as shown per labelled serving)
 - confidence: a number 0-1 representing extraction confidence
 
 If the image is ${imageType === "ingredients" ? "an ingredients list" : imageType === "nutrition" ? "a nutrition facts panel" : "a product front"}.
@@ -61,7 +120,7 @@ Do not invent data. If something is not visible, set it to null. Return only the
         {
           role: "user", content: [
             { type: "text", text: `Extract text from this food product ${imageType} image.` },
-            { type: "image_url", image_url: { url: `data:image/jpeg;base64,${imageBase64}` } },
+            { type: "image_url", image_url: { url: `data:${imageMimeType};base64,${imageBase64}` } },
           ]
         }
       ],
@@ -86,15 +145,8 @@ Do not invent data. If something is not visible, set it to null. Return only the
       brandName: typeof parsed2.brandName === "string" && parsed2.brandName.trim() ? parsed2.brandName.trim() : null,
     });
   } catch (err) {
-    // Demo fallback when AI is unavailable
-    req.log.warn({ err }, "OCR AI unavailable, returning demo result");
-    res.json({
-      extractedText: "[Demo mode] 水、砂糖、麥芽糖漿、鹽、香料",
-      confidence: 0.3,
-      structuredData: {},
-      rawIngredients: "水、砂糖、麥芽糖漿、鹽、香料",
-      parsedNutrition: null,
-    });
+    req.log.warn({ err }, "OCR AI unavailable");
+    res.status(503).json({ error: "Image recognition is temporarily unavailable. Please retry or enter the label manually." });
   }
 });
 
@@ -179,6 +231,10 @@ router.post("/submissions/:id/finalize", async (req, res): Promise<void> => {
             productId: submission.resolvedProductId,
             overallScore: evalRow?.overallScore,
             scoreGrade: evalRow?.scoreGrade,
+            analysisScope:
+              evalRow?.nutritionScore != null && evalRow?.additiveScore != null ? "complete" :
+              evalRow?.nutritionScore != null ? "nutrition_only" :
+              evalRow?.additiveScore != null ? "ingredients_only" : "insufficient",
           },
         };
       }
@@ -205,9 +261,13 @@ router.post("/submissions/:id/finalize", async (req, res): Promise<void> => {
         brandId = brand.id;
       }
 
-      const nutrition = (submission.extractedNutrition ?? null) as Record<string, number | null> | null;
-      const hasNutrition = nutrition && Object.values(nutrition).some(v => v != null);
-      const dataCompleteness = hasNutrition ? 0.6 : 0.4;
+      const nutrition = (submission.extractedNutrition ?? null) as ExtractedNutrition | null;
+      const hasNutrition = !!nutrition && Object.entries(nutrition)
+        .some(([key, value]) => key !== "servingSizeUnit" && typeof value === "number" && Number.isFinite(value));
+      const hasNutritionBasis = !!nutrition && typeof nutrition.servingSize === "number" &&
+        nutrition.servingSize > 0 && typeof nutrition.servingSizeUnit === "string" &&
+        nutrition.servingSizeUnit.trim().length > 0;
+      const dataCompleteness = hasNutritionBasis ? 0.7 : hasNutrition ? 0.5 : 0.3;
 
       // Create provisional product
       const [product] = await tx.insert(productsTable).values({
@@ -231,6 +291,8 @@ router.post("/submissions/:id/finalize", async (req, res): Promise<void> => {
         const num = (v: unknown) => (typeof v === "number" && isFinite(v) ? String(v) : null);
         await tx.insert(nutritionFactsTable).values({
           productId: product.id,
+          servingSize: num(nutrition.servingSize),
+          servingSizeUnit: typeof nutrition.servingSizeUnit === "string" ? nutrition.servingSizeUnit.trim().slice(0, 20) : null,
           calories: num(nutrition.calories),
           totalFat: num(nutrition.totalFat),
           saturatedFat: num(nutrition.saturatedFat),
@@ -247,6 +309,8 @@ router.post("/submissions/:id/finalize", async (req, res): Promise<void> => {
       // Score immediately (deterministic, no I/O)
       const result = calculateScore({
         nutrition: hasNutrition && nutrition ? {
+          servingSize: nutrition.servingSize ?? null,
+          servingSizeUnit: typeof nutrition.servingSizeUnit === "string" ? nutrition.servingSizeUnit : null,
           calories: nutrition.calories ?? null,
           totalFat: nutrition.totalFat ?? null,
           saturatedFat: nutrition.saturatedFat ?? null,
@@ -257,7 +321,7 @@ router.post("/submissions/:id/finalize", async (req, res): Promise<void> => {
           totalSugars: nutrition.totalSugars ?? null,
           protein: nutrition.protein ?? null,
         } : null,
-        ingredients: [],
+        ingredients: splitSubmissionIngredients(submission.extractedIngredients),
         dataCompleteness,
       });
 
@@ -286,7 +350,12 @@ router.post("/submissions/:id/finalize", async (req, res): Promise<void> => {
 
       return {
         status: 200 as const,
-        body: { productId: product.id, overallScore: saved.overallScore, scoreGrade: saved.scoreGrade },
+        body: {
+          productId: product.id,
+          overallScore: saved.overallScore,
+          scoreGrade: saved.scoreGrade,
+          analysisScope: result.analysisScope,
+        },
       };
     });
 

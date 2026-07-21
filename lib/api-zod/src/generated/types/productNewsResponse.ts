@@ -7,9 +7,13 @@
  */
 import type { NewsArticle } from './newsArticle';
 import type { ProductNewsResponseSentiment } from './productNewsResponseSentiment';
+import type { ProductNewsResponseStatus } from './productNewsResponseStatus';
 
 export interface ProductNewsResponse {
   sentiment: ProductNewsResponseSentiment;
+  status: ProductNewsResponseStatus;
+  query: string;
+  lookbackDays: number;
   /** @nullable */
   summary?: string | null;
   /** @nullable */

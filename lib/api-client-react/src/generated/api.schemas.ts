@@ -13,10 +13,21 @@ export interface ErrorResponse {
   error: string;
 }
 
+export type FinalizeResultAnalysisScope = typeof FinalizeResultAnalysisScope[keyof typeof FinalizeResultAnalysisScope];
+
+
+export const FinalizeResultAnalysisScope = {
+  complete: 'complete',
+  nutrition_only: 'nutrition_only',
+  ingredients_only: 'ingredients_only',
+  insufficient: 'insufficient',
+} as const;
+
 export interface FinalizeResult {
   productId: number;
   overallScore?: number;
   scoreGrade?: string;
+  analysisScope: FinalizeResultAnalysisScope;
 }
 
 export type SafetyAlertSeverity = typeof SafetyAlertSeverity[keyof typeof SafetyAlertSeverity];
@@ -67,16 +78,33 @@ export type NewsArticleReportType = typeof NewsArticleReportType[keyof typeof Ne
 
 export const NewsArticleReportType = {
   news: 'news',
+  official_record: 'official_record',
   advertorial: 'advertorial',
   press_release: 'press_release',
   unknown: 'unknown',
+} as const;
+
+export type NewsArticleScope = typeof NewsArticleScope[keyof typeof NewsArticleScope];
+
+
+export const NewsArticleScope = {
+  product: 'product',
+  brand: 'brand',
+  company: 'company',
 } as const;
 
 export interface NewsArticle {
   title: string;
   /** @nullable */
   url?: string | null;
-  reportType?: NewsArticleReportType;
+  /** @nullable */
+  sourceName?: string | null;
+  /** @nullable */
+  publishedAt?: string | null;
+  reportType: NewsArticleReportType;
+  scope: NewsArticleScope;
+  /** @nullable */
+  affectsProduct?: boolean | null;
 }
 
 export type ProductNewsResponseSentiment = typeof ProductNewsResponseSentiment[keyof typeof ProductNewsResponseSentiment];
@@ -90,8 +118,22 @@ export const ProductNewsResponseSentiment = {
   none: 'none',
 } as const;
 
+export type ProductNewsResponseStatus = typeof ProductNewsResponseStatus[keyof typeof ProductNewsResponseStatus];
+
+
+export const ProductNewsResponseStatus = {
+  fresh: 'fresh',
+  cached: 'cached',
+  stale: 'stale',
+  no_results: 'no_results',
+  unavailable: 'unavailable',
+} as const;
+
 export interface ProductNewsResponse {
   sentiment: ProductNewsResponseSentiment;
+  status: ProductNewsResponseStatus;
+  query: string;
+  lookbackDays: number;
   /** @nullable */
   summary?: string | null;
   /** @nullable */
@@ -260,6 +302,16 @@ export interface PersonalAlert {
   severity?: string;
 }
 
+export type EvaluationAnalysisScope = typeof EvaluationAnalysisScope[keyof typeof EvaluationAnalysisScope];
+
+
+export const EvaluationAnalysisScope = {
+  complete: 'complete',
+  nutrition_only: 'nutrition_only',
+  ingredients_only: 'ingredients_only',
+  insufficient: 'insufficient',
+} as const;
+
 export interface Evaluation {
   id: number;
   productId: number;
@@ -276,6 +328,7 @@ export interface Evaluation {
   nutritionScore?: number | null;
   /** @nullable */
   additiveScore?: number | null;
+  analysisScope: EvaluationAnalysisScope;
   scoreGrade: string;
   verdict: string;
   /** @nullable */
@@ -336,9 +389,19 @@ export interface ScanEventInput {
   userSession?: string | null;
 }
 
+export type OcrRequestImageMimeType = typeof OcrRequestImageMimeType[keyof typeof OcrRequestImageMimeType];
+
+
+export const OcrRequestImageMimeType = {
+  'image/jpeg': 'image/jpeg',
+  'image/png': 'image/png',
+  'image/webp': 'image/webp',
+} as const;
+
 export interface OcrRequest {
   imageBase64: string;
   imageType?: string;
+  imageMimeType?: OcrRequestImageMimeType;
 }
 
 export type OcrResultStructuredData = { [key: string]: unknown };
@@ -366,12 +429,6 @@ export interface SubmissionInput {
   barcode?: string | null;
   /** @nullable */
   retailerSlug?: string | null;
-  /** @nullable */
-  frontImageBase64?: string | null;
-  /** @nullable */
-  ingredientsImageBase64?: string | null;
-  /** @nullable */
-  nutritionImageBase64?: string | null;
   /** @nullable */
   rawIngredientsText?: string | null;
   /** @nullable */
@@ -454,6 +511,16 @@ export interface Correction {
   createdAt: string;
 }
 
+export type ShareCardAnalysisScope = typeof ShareCardAnalysisScope[keyof typeof ShareCardAnalysisScope];
+
+
+export const ShareCardAnalysisScope = {
+  complete: 'complete',
+  nutrition_only: 'nutrition_only',
+  ingredients_only: 'ingredients_only',
+  insufficient: 'insufficient',
+} as const;
+
 export interface ShareCard {
   productName: string;
   /** @nullable */
@@ -463,6 +530,7 @@ export interface ShareCard {
   /** @nullable */
   imageUrl?: string | null;
   overallScore: number;
+  analysisScope: ShareCardAnalysisScope;
   scoreGrade: string;
   verdict: string;
   /** @nullable */

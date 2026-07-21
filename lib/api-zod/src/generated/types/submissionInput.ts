@@ -15,12 +15,6 @@ export interface SubmissionInput {
   /** @nullable */
   retailerSlug?: string | null;
   /** @nullable */
-  frontImageBase64?: string | null;
-  /** @nullable */
-  ingredientsImageBase64?: string | null;
-  /** @nullable */
-  nutritionImageBase64?: string | null;
-  /** @nullable */
   rawIngredientsText?: string | null;
   /** @nullable */
   userSession?: string | null;

@@ -12,16 +12,19 @@ import { calculateScore, RULESET_VERSION } from "../lib/scoring.js";
 const router: IRouter = Router();
 
 async function getOrComputeEvaluation(productId: number) {
-  // Try cached evaluation
+  const [product] = await db.select().from(productsTable).where(eq(productsTable.id, productId));
+  if (!product) return null;
+
+  // Reuse a cache only when both the rules and source product are unchanged.
   const [cached] = await db.select().from(productEvaluationsTable)
     .where(eq(productEvaluationsTable.productId, productId))
     .orderBy(desc(productEvaluationsTable.evaluatedAt)).limit(1);
 
-  if (cached && cached.rulesetVersion === RULESET_VERSION) return cached;
-
-  // Compute fresh
-  const [product] = await db.select().from(productsTable).where(eq(productsTable.id, productId));
-  if (!product) return null;
+  if (
+    cached &&
+    cached.rulesetVersion === RULESET_VERSION &&
+    cached.evaluatedAt.getTime() >= product.updatedAt.getTime()
+  ) return cached;
 
   const [nutrition] = await db.select().from(nutritionFactsTable).where(eq(nutritionFactsTable.productId, productId));
   const ingredientRows = await db
@@ -30,10 +33,22 @@ async function getOrComputeEvaluation(productId: number) {
     .leftJoin(ingredientsTable, eq(productIngredientsTable.ingredientId, ingredientsTable.id))
     .where(eq(productIngredientsTable.productId, productId));
 
-  const dataCompleteness = calculateCompleteness(product, nutrition ?? null, ingredientRows.length);
+  const ingredients = ingredientRows.length > 0
+    ? ingredientRows.map(r => ({
+        name: r.pi.rawName,
+        riskLevel: r.ing?.riskLevel ?? null,
+        isAdditive: r.ing?.isAdditive ?? null,
+        evidenceStrength: r.ing?.evidenceStrength ?? null,
+        riskReason: r.ing?.riskReason ?? null,
+      }))
+    : await mapRawIngredients(product.ingredientsList);
+
+  const dataCompleteness = calculateCompleteness(product, nutrition ?? null, ingredients);
 
   const result = calculateScore({
     nutrition: nutrition ? {
+      servingSize: nutrition.servingSize ? parseFloat(nutrition.servingSize) : null,
+      servingSizeUnit: nutrition.servingSizeUnit,
       calories: nutrition.calories ? parseFloat(nutrition.calories) : null,
       totalFat: nutrition.totalFat ? parseFloat(nutrition.totalFat) : null,
       saturatedFat: nutrition.saturatedFat ? parseFloat(nutrition.saturatedFat) : null,
@@ -44,13 +59,7 @@ async function getOrComputeEvaluation(productId: number) {
       totalSugars: nutrition.totalSugars ? parseFloat(nutrition.totalSugars) : null,
       protein: nutrition.protein ? parseFloat(nutrition.protein) : null,
     } : null,
-    ingredients: ingredientRows.map(r => ({
-      name: r.pi.rawName,
-      riskLevel: r.ing?.riskLevel ?? null,
-      isAdditive: r.ing?.isAdditive ?? null,
-      evidenceStrength: r.ing?.evidenceStrength ?? null,
-      riskReason: r.ing?.riskReason ?? null,
-    })),
+    ingredients,
     dataCompleteness,
   });
 
@@ -75,15 +84,56 @@ async function getOrComputeEvaluation(productId: number) {
   return saved;
 }
 
-function calculateCompleteness(product: any, nutrition: any, ingredientCount: number): number {
+function normalizeIngredientName(value: string): string {
+  return value.toLowerCase().replace(/[\s()（）\[\]【】.。:：]/g, "");
+}
+
+function splitRawIngredients(raw: string | null): string[] {
+  if (!raw) return [];
+  return raw
+    .split(/[、,，;；\n]/)
+    .map(value => value.trim())
+    .filter(value => value.length > 0)
+    .slice(0, 100);
+}
+
+async function mapRawIngredients(raw: string | null) {
+  const tokens = splitRawIngredients(raw);
+  if (tokens.length === 0) return [];
+
+  const references = await db.select().from(ingredientsTable);
+  const byName = new Map<string, typeof ingredientsTable.$inferSelect>();
+  for (const reference of references) {
+    byName.set(normalizeIngredientName(reference.name), reference);
+    if (reference.nameZh) byName.set(normalizeIngredientName(reference.nameZh), reference);
+  }
+
+  return tokens.map(name => {
+    const reference = byName.get(normalizeIngredientName(name));
+    return {
+      name,
+      riskLevel: reference?.riskLevel ?? "unknown",
+      isAdditive: reference?.isAdditive ?? null,
+      evidenceStrength: reference?.evidenceStrength ?? null,
+      riskReason: reference?.riskReason ?? null,
+    };
+  });
+}
+
+function calculateCompleteness(product: any, nutrition: any, ingredients: Array<{ riskLevel?: string | null }>): number {
   let score = 0;
-  let max = 0;
-  max += 2; if (product.ingredientsList) score += 2;
-  max += 3; if (nutrition) score += 3;
-  max += 2; if (ingredientCount > 0) score += 2;
-  max += 1; if (product.imageUrl) score += 1;
-  max += 1; if (product.brandId) score += 1;
-  return Math.round((score / max) * 100) / 100;
+  if (product.ingredientsList) score += 2;
+  if (nutrition?.totalSugars != null) score += 1;
+  if (nutrition?.sodium != null) score += 1;
+  if (nutrition?.saturatedFat != null) score += 1;
+  if (nutrition?.servingSize && nutrition?.servingSizeUnit) score += 1;
+  if (ingredients.length > 0) {
+    const reviewed = ingredients.filter(item => ["safe", "caution", "avoid"].includes(item.riskLevel ?? "")).length;
+    score += 2 * (reviewed / ingredients.length);
+  }
+  if (product.imageUrl) score += 1;
+  if (product.brandId) score += 1;
+  return Math.round((score / 10) * 100) / 100;
 }
 
 router.get("/evaluations/product/:productId", async (req, res): Promise<void> => {
@@ -112,6 +162,10 @@ router.get("/evaluations/product/:productId", async (req, res): Promise<void> =>
     overallScore: evaluation.overallScore,
     nutritionScore: evaluation.nutritionScore,
     additiveScore: evaluation.additiveScore,
+    analysisScope:
+      evaluation.nutritionScore != null && evaluation.additiveScore != null ? "complete" :
+      evaluation.nutritionScore != null ? "nutrition_only" :
+      evaluation.additiveScore != null ? "ingredients_only" : "insufficient",
     scoreGrade: evaluation.scoreGrade,
     verdict: evaluation.verdict,
     verdictZh: evaluation.verdictZh,
@@ -157,6 +211,10 @@ router.get("/share-cards/:productId", async (req, res): Promise<void> => {
     brandName: brand?.name ?? null,
     imageUrl: product?.imageUrl ?? null,
     overallScore: evaluation.overallScore,
+    analysisScope:
+      evaluation.nutritionScore != null && evaluation.additiveScore != null ? "complete" :
+      evaluation.nutritionScore != null ? "nutrition_only" :
+      evaluation.additiveScore != null ? "ingredients_only" : "insufficient",
     scoreGrade: evaluation.scoreGrade,
     verdict: evaluation.verdict,
     verdictZh: evaluation.verdictZh,

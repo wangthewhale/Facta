@@ -7,6 +7,7 @@ import {
   categoriesTable,
 } from "@workspace/db";
 import { GetAlternativesParams } from "@workspace/api-zod";
+import { RULESET_VERSION } from "../lib/scoring.js";
 
 const router: IRouter = Router();
 
@@ -27,7 +28,11 @@ router.get("/alternatives/:productId", async (req, res): Promise<void> => {
     const [priceRow] = await db.select({ priceNtd: productRetailerPricesTable.priceNtd, retailerId: productRetailerPricesTable.retailerId })
       .from(productRetailerPricesTable).where(eq(productRetailerPricesTable.productId, altProduct.id)).limit(1);
     const [retailer] = priceRow?.retailerId ? await db.select().from(retailersTable).where(eq(retailersTable.id, priceRow.retailerId)) : [null];
-    const [evalRow] = await db.select({ overallScore: productEvaluationsTable.overallScore, scoreGrade: productEvaluationsTable.scoreGrade })
+    const [evalRow] = await db.select({
+      overallScore: productEvaluationsTable.overallScore,
+      scoreGrade: productEvaluationsTable.scoreGrade,
+      rulesetVersion: productEvaluationsTable.rulesetVersion,
+    })
       .from(productEvaluationsTable).where(eq(productEvaluationsTable.productId, altProduct.id))
       .orderBy(desc(productEvaluationsTable.evaluatedAt)).limit(1);
 
@@ -41,8 +46,8 @@ router.get("/alternatives/:productId", async (req, res): Promise<void> => {
         categorySlug: category?.slug ?? null,
         categoryName: category?.name ?? null,
         verificationStatus: altProduct.verificationStatus,
-        overallScore: evalRow?.overallScore ?? null,
-        scoreGrade: evalRow?.scoreGrade ?? null,
+        overallScore: evalRow?.rulesetVersion === RULESET_VERSION ? evalRow.overallScore : null,
+        scoreGrade: evalRow?.rulesetVersion === RULESET_VERSION ? evalRow.scoreGrade : null,
         barcode: barcode?.barcode ?? null,
         retailerName: retailer?.name ?? null,
         priceNtd: priceRow?.priceNtd ? parseFloat(priceRow.priceNtd) : null,

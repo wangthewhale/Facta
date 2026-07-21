@@ -7,6 +7,7 @@
  */
 import type { AdditiveFlag } from './additiveFlag';
 import type { AllergenAlert } from './allergenAlert';
+import type { EvaluationAnalysisScope } from './evaluationAnalysisScope';
 import type { EvaluationReason } from './evaluationReason';
 import type { PersonalAlert } from './personalAlert';
 
@@ -26,6 +27,7 @@ export interface Evaluation {
   nutritionScore?: number | null;
   /** @nullable */
   additiveScore?: number | null;
+  analysisScope: EvaluationAnalysisScope;
   scoreGrade: string;
   verdict: string;
   /** @nullable */

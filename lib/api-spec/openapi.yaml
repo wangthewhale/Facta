@@ -1202,11 +1202,14 @@ components:
 
     FinalizeResult:
       type: object
-      required: [productId]
+      required: [productId, analysisScope]
       properties:
         productId: { type: integer }
         overallScore: { type: integer }
         scoreGrade: { type: string }
+        analysisScope:
+          type: string
+          enum: [complete, nutrition_only, ingredients_only, insufficient]
 
     SafetyAlert:
       type: object
@@ -1256,21 +1259,32 @@ components:
             $ref: "#/components/schemas/SafetyAlertMatch"
     NewsArticle:
       type: object
-      required: [title]
+      required: [title, reportType, scope]
       properties:
         title: { type: string }
         url: { type: ["string", "null"] }
+        sourceName: { type: ["string", "null"] }
+        publishedAt: { type: ["string", "null"] }
         reportType:
           type: string
-          enum: [news, advertorial, press_release, unknown]
+          enum: [news, official_record, advertorial, press_release, unknown]
+        scope:
+          type: string
+          enum: [product, brand, company]
+        affectsProduct: { type: ["boolean", "null"] }
 
     ProductNewsResponse:
       type: object
-      required: [sentiment, articles]
+      required: [sentiment, articles, status, query, lookbackDays]
       properties:
         sentiment:
           type: string
           enum: [positive, negative, mixed, neutral, none]
+        status:
+          type: string
+          enum: [fresh, cached, stale, no_results, unavailable]
+        query: { type: string }
+        lookbackDays: { type: integer }
         summary: { type: ["string", "null"] }
         summaryZh: { type: ["string", "null"] }
         articles:
@@ -1424,7 +1438,7 @@ components:
 
     Evaluation:
       type: object
-      required: [id, productId, overallScore, scoreGrade, verdict, verificationStatus, rulesetVersion, evaluatedAt]
+      required: [id, productId, overallScore, analysisScope, scoreGrade, verdict, verificationStatus, rulesetVersion, evaluatedAt]
       properties:
         id:                  { type: integer }
         productId:           { type: integer }
@@ -1435,6 +1449,9 @@ components:
         overallScore:        { type: integer }
         nutritionScore:      { type: ["integer", "null"] }
         additiveScore:       { type: ["integer", "null"] }
+        analysisScope:
+          type: string
+          enum: [complete, nutrition_only, ingredients_only, insufficient]
         scoreGrade:          { type: string }
         verdict:             { type: string }
         verdictZh:           { type: ["string", "null"] }
@@ -1509,6 +1526,10 @@ components:
       properties:
         imageBase64:  { type: string }
         imageType:    { type: string, default: "ingredients" }
+        imageMimeType:
+          type: string
+          enum: [image/jpeg, image/png, image/webp]
+          default: image/jpeg
 
     OcrResult:
       type: object
@@ -1534,9 +1555,6 @@ components:
         brandName:        { type: ["string", "null"] }
         barcode:          { type: ["string", "null"] }
         retailerSlug:     { type: ["string", "null"] }
-        frontImageBase64: { type: ["string", "null"] }
-        ingredientsImageBase64: { type: ["string", "null"] }
-        nutritionImageBase64:   { type: ["string", "null"] }
         rawIngredientsText: { type: ["string", "null"] }
         userSession:      { type: ["string", "null"] }
         userConsented:    { type: boolean, default: false }
@@ -1632,13 +1650,16 @@ components:
 
     ShareCard:
       type: object
-      required: [productName, overallScore, scoreGrade, verdict]
+      required: [productName, overallScore, analysisScope, scoreGrade, verdict]
       properties:
         productName:       { type: string }
         productNameZh:     { type: ["string", "null"] }
         brandName:         { type: ["string", "null"] }
         imageUrl:          { type: ["string", "null"] }
         overallScore:      { type: integer }
+        analysisScope:
+          type: string
+          enum: [complete, nutrition_only, ingredients_only, insufficient]
         scoreGrade:        { type: string }
         verdict:           { type: string }
         verdictZh:         { type: ["string", "null"] }

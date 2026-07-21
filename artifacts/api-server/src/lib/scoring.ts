@@ -1,13 +1,21 @@
 /**
- * FACTA Deterministic Scoring Engine v1.0.0
+ * FACTA deterministic scoring engine v2.
  *
- * All scores are calculated from structured rules — no AI free-form scoring.
- * Same input + same ruleset version = same output, always.
+ * Nutrition values are normalized from the labelled serving size to 100 g/ml
+ * before applying the 2026 TFDA front-of-pack traffic-light thresholds.
+ * Missing evidence changes the scope/confidence of a result; it is never
+ * treated as evidence that a product is safe.
  */
 
-export const RULESET_VERSION = "1.0.0";
+export const RULESET_VERSION = "2.0.0";
+export const TFDA_FOP_GUIDE_URL = "https://www.fda.gov.tw/tc/newsContent.aspx?cid=4&id=31511";
 
-interface NutritionInput {
+type FoodForm = "solid" | "liquid";
+type TrafficLight = "green" | "yellow" | "red";
+
+export interface NutritionInput {
+  servingSize?: number | null;
+  servingSizeUnit?: string | null;
   calories?: number | null;
   totalFat?: number | null;
   saturatedFat?: number | null;
@@ -19,7 +27,7 @@ interface NutritionInput {
   protein?: number | null;
 }
 
-interface IngredientInput {
+export interface IngredientInput {
   name: string;
   riskLevel?: string | null;
   isAdditive?: string | null;
@@ -30,7 +38,7 @@ interface IngredientInput {
 interface ScoringInput {
   nutrition?: NutritionInput | null;
   ingredients?: IngredientInput[];
-  dataCompleteness: number; // 0-1
+  dataCompleteness: number;
 }
 
 export interface ScoringReason {
@@ -49,6 +57,8 @@ export interface AdditiveFlag {
   evidenceStrength: string;
 }
 
+export type AnalysisScope = "complete" | "nutrition_only" | "ingredients_only" | "insufficient";
+
 export interface ScoringResult {
   overallScore: number;
   nutritionScore: number | null;
@@ -59,156 +69,249 @@ export interface ScoringResult {
   topReasons: ScoringReason[];
   additiveFlags: AdditiveFlag[];
   evidenceConfidence: "high" | "medium" | "low";
+  analysisScope: AnalysisScope;
+  nutritionBasis: "per_100g" | "per_100ml" | null;
+  ingredientCoverage: number | null;
   rulesetVersion: string;
 }
 
-/** Per-100g thresholds (TW dietary guidelines + WHO) */
-const NUTRITION_RULES = {
-  sodium: {
-    low: 120,    // mg — good
-    high: 600,   // mg — concern
-    critical: 1200, // mg — avoid
-  },
-  totalSugars: {
-    low: 5,      // g — good
-    high: 15,    // g — concern
-    critical: 25, // g — avoid
-  },
-  saturatedFat: {
-    low: 1.5,    // g — good
-    high: 5,     // g — concern
-    critical: 10, // g — avoid
-  },
-  transFat: {
-    any: 0.5,   // g — if present, penalize heavily
-  },
-  dietaryFiber: {
-    good: 3,     // g — bonus
-    excellent: 6, // g — bigger bonus
-  },
-  protein: {
-    good: 5,     // g — bonus
-  },
-};
-
-function scoreNutrition(n: NutritionInput): { score: number; reasons: ScoringReason[] } {
-  let score = 70; // neutral baseline
-  const reasons: ScoringReason[] = [];
-
-  // Sodium
-  if (n.sodium != null) {
-    if (n.sodium <= NUTRITION_RULES.sodium.low) {
-      score += 8;
-      reasons.push({ label: "Low sodium", labelZh: "低鈉", impact: "positive", evidenceStrength: "high", source: "TW Dietary Guidelines" });
-    } else if (n.sodium >= NUTRITION_RULES.sodium.critical) {
-      score -= 20;
-      reasons.push({ label: "Very high sodium", labelZh: "鈉含量極高", impact: "negative", evidenceStrength: "high", source: "WHO Salt Reduction" });
-    } else if (n.sodium >= NUTRITION_RULES.sodium.high) {
-      score -= 10;
-      reasons.push({ label: "High sodium", labelZh: "高鈉", impact: "negative", evidenceStrength: "high", source: "TW Dietary Guidelines" });
-    }
-  }
-
-  // Sugars
-  if (n.totalSugars != null) {
-    if (n.totalSugars <= NUTRITION_RULES.totalSugars.low) {
-      score += 6;
-      reasons.push({ label: "Low added sugars", labelZh: "低糖", impact: "positive", evidenceStrength: "high", source: "WHO Sugar Guidelines" });
-    } else if (n.totalSugars >= NUTRITION_RULES.totalSugars.critical) {
-      score -= 18;
-      reasons.push({ label: "Very high sugars", labelZh: "糖分極高", impact: "negative", evidenceStrength: "high", source: "WHO Sugar Guidelines" });
-    } else if (n.totalSugars >= NUTRITION_RULES.totalSugars.high) {
-      score -= 10;
-      reasons.push({ label: "High sugars", labelZh: "高糖", impact: "negative", evidenceStrength: "high", source: "WHO Sugar Guidelines" });
-    }
-  }
-
-  // Saturated fat
-  if (n.saturatedFat != null) {
-    if (n.saturatedFat >= NUTRITION_RULES.saturatedFat.critical) {
-      score -= 15;
-      reasons.push({ label: "Very high saturated fat", labelZh: "飽和脂肪極高", impact: "negative", evidenceStrength: "high", source: "WHO Fat Guidelines" });
-    } else if (n.saturatedFat >= NUTRITION_RULES.saturatedFat.high) {
-      score -= 8;
-      reasons.push({ label: "High saturated fat", labelZh: "飽和脂肪高", impact: "negative", evidenceStrength: "high", source: "WHO Fat Guidelines" });
-    }
-  }
-
-  // Trans fat
-  if (n.transFat != null && n.transFat >= NUTRITION_RULES.transFat.any) {
-    score -= 20;
-    reasons.push({ label: "Contains trans fat", labelZh: "含有反式脂肪", impact: "negative", evidenceStrength: "high", source: "WHO Trans Fat Elimination" });
-  }
-
-  // Fiber bonus
-  if (n.dietaryFiber != null) {
-    if (n.dietaryFiber >= NUTRITION_RULES.dietaryFiber.excellent) {
-      score += 10;
-      reasons.push({ label: "Excellent dietary fiber", labelZh: "膳食纖維充足", impact: "positive", evidenceStrength: "high", source: "TW Dietary Guidelines" });
-    } else if (n.dietaryFiber >= NUTRITION_RULES.dietaryFiber.good) {
-      score += 5;
-      reasons.push({ label: "Good dietary fiber", labelZh: "含有膳食纖維", impact: "positive", evidenceStrength: "medium", source: "TW Dietary Guidelines" });
-    }
-  }
-
-  // Protein bonus
-  if (n.protein != null && n.protein >= NUTRITION_RULES.protein.good) {
-    score += 5;
-    reasons.push({ label: "Good protein content", labelZh: "蛋白質含量佳", impact: "positive", evidenceStrength: "medium", source: "TW Dietary Guidelines" });
-  }
-
-  return { score: Math.max(0, Math.min(100, score)), reasons };
+interface NormalizedNutrition {
+  foodForm: FoodForm;
+  basis: "per_100g" | "per_100ml";
+  values: Omit<NutritionInput, "servingSize" | "servingSizeUnit">;
 }
 
-function scoreAdditives(ingredients: IngredientInput[]): { score: number; reasons: ScoringReason[]; flags: AdditiveFlag[] } {
-  let score = 85; // start high, deduct for bad additives
+const TFDA_THRESHOLDS = {
+  solid: {
+    totalSugars: { green: 5, red: 15, unit: "g" },
+    sodium: { green: 120, red: 500, unit: "mg" },
+    saturatedFat: { green: 1.5, red: 4.5, unit: "g" },
+  },
+  liquid: {
+    totalSugars: { green: 2.5, red: 7.5, unit: "g" },
+    sodium: { green: 120, red: 250, unit: "mg" },
+    saturatedFat: { green: 0.75, red: 2.25, unit: "g" },
+  },
+} as const;
+
+function finiteNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function round(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+export function normalizeNutritionPer100(input: NutritionInput): NormalizedNutrition | null {
+  const servingSize = finiteNumber(input.servingSize);
+  const rawUnit = input.servingSizeUnit?.trim().toLowerCase() ?? "";
+  if (!servingSize || servingSize <= 0) return null;
+
+  const foodForm: FoodForm | null =
+    /^(ml|毫升|毫公升)$/.test(rawUnit) ? "liquid" :
+    /^(g|公克|克)$/.test(rawUnit) ? "solid" : null;
+  if (!foodForm) return null;
+
+  const factor = 100 / servingSize;
+  const keys: Array<keyof Omit<NutritionInput, "servingSize" | "servingSizeUnit">> = [
+    "calories", "totalFat", "saturatedFat", "transFat", "sodium",
+    "totalCarbs", "dietaryFiber", "totalSugars", "protein",
+  ];
+  const values: Record<string, number | null> = {};
+  for (const key of keys) {
+    const value = finiteNumber(input[key]);
+    values[key] = value == null ? null : round(value * factor);
+  }
+
+  return {
+    foodForm,
+    basis: foodForm === "liquid" ? "per_100ml" : "per_100g",
+    values,
+  };
+}
+
+function trafficLight(value: number, green: number, red: number): TrafficLight {
+  if (value <= green) return "green";
+  if (value > red) return "red";
+  return "yellow";
+}
+
+function formatValue(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, "");
+}
+
+function nutritionReason(
+  nutrient: "totalSugars" | "sodium" | "saturatedFat",
+  value: number,
+  level: TrafficLight,
+  basis: "per_100g" | "per_100ml",
+  unit: string,
+): ScoringReason {
+  const names = {
+    totalSugars: { en: "Sugar", zh: "糖" },
+    sodium: { en: "Sodium", zh: "鈉" },
+    saturatedFat: { en: "Saturated fat", zh: "飽和脂肪" },
+  }[nutrient];
+  const levelLabels = {
+    green: { en: "low", zh: "低（綠燈）", impact: "positive" as const },
+    yellow: { en: "moderate", zh: "中等（黃燈）", impact: "neutral" as const },
+    red: { en: "high", zh: "偏高（紅燈）", impact: "negative" as const },
+  }[level];
+  const basisLabel = basis === "per_100ml" ? "100 ml" : "100 g";
+
+  return {
+    label: `${names.en}: ${formatValue(value)} ${unit}/${basisLabel} (${levelLabels.en})`,
+    labelZh: `每 ${basisLabel} ${names.zh} ${formatValue(value)} ${unit}：${levelLabels.zh}`,
+    impact: levelLabels.impact,
+    evidenceStrength: "high",
+    source: TFDA_FOP_GUIDE_URL,
+  };
+}
+
+function scoreNutrition(input: NutritionInput): {
+  score: number | null;
+  reasons: ScoringReason[];
+  basis: "per_100g" | "per_100ml" | null;
+} {
+  const normalized = normalizeNutritionPer100(input);
+  if (!normalized) {
+    return {
+      score: null,
+      basis: null,
+      reasons: [{
+        label: "Serving size or unit is missing, so nutrition values cannot be compared fairly.",
+        labelZh: "缺少每份量或單位，無法公平換算成每 100g／ml。",
+        impact: "neutral",
+        evidenceStrength: "high",
+        source: TFDA_FOP_GUIDE_URL,
+      }],
+    };
+  }
+
+  const thresholds = TFDA_THRESHOLDS[normalized.foodForm];
+  const criticalKeys = ["totalSugars", "sodium", "saturatedFat"] as const;
+  const available = criticalKeys.filter(key => normalized.values[key] != null);
+  if (available.length < 2) {
+    return {
+      score: null,
+      basis: normalized.basis,
+      reasons: [{
+        label: "At least two of sugar, sodium and saturated fat are required for a nutrition rating.",
+        labelZh: "糖、鈉、飽和脂肪至少需有兩項資料，才能產生營養評分。",
+        impact: "neutral",
+        evidenceStrength: "high",
+        source: TFDA_FOP_GUIDE_URL,
+      }],
+    };
+  }
+
+  let score = 70;
   const reasons: ScoringReason[] = [];
-  const flags: AdditiveFlag[] = [];
-
-  const avoidIngredients = ingredients.filter(i => i.riskLevel === "avoid");
-  const cautionIngredients = ingredients.filter(i => i.riskLevel === "caution");
-
-  for (const ing of avoidIngredients) {
-    score -= 15;
-    flags.push({
-      name: ing.name,
-      riskLevel: "avoid",
-      reason: ing.riskReason ?? "Flagged by regulatory evidence",
-      evidenceStrength: ing.evidenceStrength ?? "medium",
-    });
+  for (const key of available) {
+    const value = normalized.values[key] as number;
+    const threshold = thresholds[key];
+    const level = trafficLight(value, threshold.green, threshold.red);
+    const adjustment = key === "saturatedFat"
+      ? (level === "green" ? 4 : level === "yellow" ? -4 : -15)
+      : (level === "green" ? 6 : level === "yellow" ? -4 : -15);
+    score += adjustment;
+    reasons.push(nutritionReason(key, value, level, normalized.basis, threshold.unit));
   }
 
-  for (const ing of cautionIngredients) {
-    score -= 5;
-    flags.push({
-      name: ing.name,
-      riskLevel: "caution",
-      reason: ing.riskReason ?? "Use in moderation",
-      evidenceStrength: ing.evidenceStrength ?? "medium",
-    });
-  }
-
-  if (avoidIngredients.length > 0) {
+  const transFat = normalized.values.transFat;
+  if (transFat != null && transFat >= 0.5) {
+    score -= 20;
     reasons.push({
-      label: `Contains ${avoidIngredients.length} flagged additive(s)`,
-      labelZh: `含有 ${avoidIngredients.length} 種需注意的添加物`,
+      label: `Trans fat: ${formatValue(transFat)} g/${normalized.basis === "per_100ml" ? "100 ml" : "100 g"}`,
+      labelZh: `每 ${normalized.basis === "per_100ml" ? "100 ml" : "100 g"} 反式脂肪 ${formatValue(transFat)} g`,
+      impact: "negative",
+      evidenceStrength: "high",
+      source: "https://www.who.int/publications/i/item/9789240073630",
+    });
+  }
+
+  return { score: Math.max(0, Math.min(100, score)), reasons, basis: normalized.basis };
+}
+
+function scoreAdditives(ingredients: IngredientInput[]): {
+  score: number | null;
+  reasons: ScoringReason[];
+  flags: AdditiveFlag[];
+  coverage: number | null;
+} {
+  if (ingredients.length === 0) {
+    return {
+      score: null,
+      flags: [],
+      coverage: null,
+      reasons: [{
+        label: "Ingredient evidence has not been mapped yet.",
+        labelZh: "成分文字尚未完成證據對照，不能視為沒有高風險成分。",
+        impact: "neutral",
+        evidenceStrength: "high",
+        source: "FACTA ingredient evidence database",
+      }],
+    };
+  }
+
+  const reviewed = ingredients.filter(i => ["safe", "caution", "avoid"].includes(i.riskLevel ?? ""));
+  const coverage = reviewed.length / ingredients.length;
+  const avoidIngredients = reviewed.filter(i => i.riskLevel === "avoid");
+  const cautionIngredients = reviewed.filter(i => i.riskLevel === "caution");
+  const flags: AdditiveFlag[] = [];
+  const reasons: ScoringReason[] = [];
+
+  for (const ingredient of avoidIngredients) {
+    flags.push({
+      name: ingredient.name,
+      riskLevel: "avoid",
+      reason: ingredient.riskReason ?? "Flagged by regulatory evidence",
+      evidenceStrength: ingredient.evidenceStrength ?? "medium",
+    });
+  }
+  for (const ingredient of cautionIngredients) {
+    flags.push({
+      name: ingredient.name,
+      riskLevel: "caution",
+      reason: ingredient.riskReason ?? "Use in moderation",
+      evidenceStrength: ingredient.evidenceStrength ?? "medium",
+    });
+  }
+
+  if (avoidIngredients.length > 0 || cautionIngredients.length > 0) {
+    reasons.push({
+      label: `${avoidIngredients.length + cautionIngredients.length} ingredient flag(s) found`,
+      labelZh: `已找到 ${avoidIngredients.length + cautionIngredients.length} 項需留意成分`,
       impact: "negative",
       evidenceStrength: "medium",
-      source: "FACTA Ingredient Database",
+      source: "FACTA ingredient evidence database",
     });
   }
 
+  if (coverage < 0.8) {
+    reasons.push({
+      label: `Only ${Math.round(coverage * 100)}% of listed ingredients have evidence mapping.`,
+      labelZh: `目前僅 ${Math.round(coverage * 100)}% 的成分完成證據對照，暫不計算添加物分數。`,
+      impact: "neutral",
+      evidenceStrength: "high",
+      source: "FACTA ingredient evidence database",
+    });
+    return { score: null, reasons, flags, coverage };
+  }
+
+  let score = 85 - avoidIngredients.length * 15 - cautionIngredients.length * 5;
   if (avoidIngredients.length === 0 && cautionIngredients.length === 0) {
     reasons.push({
-      label: "No high-risk additives detected",
-      labelZh: "未檢測到高風險添加物",
+      label: "No flagged additives found in the reviewed ingredients.",
+      labelZh: "在已完成對照的成分中，未找到需留意的添加物。",
       impact: "positive",
       evidenceStrength: "medium",
-      source: "FACTA Ingredient Database",
+      source: "FACTA ingredient evidence database",
     });
   }
 
-  return { score: Math.max(0, Math.min(100, score)), reasons, flags };
+  score = Math.max(0, Math.min(100, score));
+  return { score, reasons, flags, coverage };
 }
 
 function gradeFromScore(score: number): "Excellent" | "Good" | "Consider" | "Poor" {
@@ -218,83 +321,74 @@ function gradeFromScore(score: number): "Excellent" | "Good" | "Consider" | "Poo
   return "Poor";
 }
 
-function verdictFromGrade(grade: string): { verdict: string; verdictZh: string } {
+function verdictFromGrade(grade: string, scope: AnalysisScope): { verdict: string; verdictZh: string } {
+  if (scope === "insufficient") {
+    return {
+      verdict: "Not enough verified label data to rate this product yet.",
+      verdictZh: "資料不足，暫時不能判定這款商品是較佳或較差選擇。",
+    };
+  }
+  if (scope === "nutrition_only") {
+    return {
+      verdict: "Nutrition-only rating; ingredient and allergen evidence is still incomplete.",
+      verdictZh: "這是營養初評；成分與過敏原證據尚未完整，不能當作完整安全結論。",
+    };
+  }
+  if (scope === "ingredients_only") {
+    return {
+      verdict: "Ingredient-only rating; nutrition evidence is still incomplete.",
+      verdictZh: "這是成分初評；營養標示資料尚未完整，不能當作完整產品結論。",
+    };
+  }
+
   switch (grade) {
-    case "Excellent":
-      return { verdict: "A strong choice with solid nutritional credentials.", verdictZh: "整體表現優秀，是值得信賴的選擇。" };
-    case "Good":
-      return { verdict: "A decent option — no major red flags, but room to improve.", verdictZh: "整體尚可，無重大問題，但仍有改善空間。" };
-    case "Consider":
-      return { verdict: "Some concerns worth knowing before you buy.", verdictZh: "有些值得注意的問題，購買前請參考詳細說明。" };
-    case "Poor":
-      return { verdict: "Notable concerns — consider the alternatives.", verdictZh: "有明顯問題，建議參考替代選項。" };
-    default:
-      return { verdict: "Analysis complete.", verdictZh: "分析完成。" };
+    case "Excellent": return { verdict: "Per the current FACTA rules, this is a stronger everyday choice.", verdictZh: "依目前 FACTA 規則，這是相對適合日常選擇的商品。" };
+    case "Good": return { verdict: "A reasonable choice, with a few details still worth checking.", verdictZh: "整體表現尚可，仍有少數細節值得確認。" };
+    case "Consider": return { verdict: "Several factors deserve attention before choosing it often.", verdictZh: "有幾項因素需要留意，不建議在未比較前經常選擇。" };
+    case "Poor": return { verdict: "Multiple high-level concerns; compare alternatives before choosing.", verdictZh: "多項指標落在需留意範圍，建議先比較其他選擇。" };
+    default: return { verdict: "Analysis complete.", verdictZh: "分析完成。" };
   }
 }
 
 export function calculateScore(input: ScoringInput): ScoringResult {
-  const allReasons: ScoringReason[] = [];
-  let nutritionScore: number | null = null;
-  let additiveScore: number | null = null;
-  let allFlags: AdditiveFlag[] = [];
+  const nutrition = input.nutrition ? scoreNutrition(input.nutrition) : { score: null, reasons: [], basis: null };
+  const additives = scoreAdditives(input.ingredients ?? []);
 
-  // Nutrition scoring
-  if (input.nutrition) {
-    const { score, reasons } = scoreNutrition(input.nutrition);
-    nutritionScore = score;
-    allReasons.push(...reasons);
-  }
+  const analysisScope: AnalysisScope =
+    nutrition.score !== null && additives.score !== null ? "complete" :
+    nutrition.score !== null ? "nutrition_only" :
+    additives.score !== null ? "ingredients_only" : "insufficient";
 
-  // Additive scoring
-  if (input.ingredients && input.ingredients.length > 0) {
-    const { score, reasons, flags } = scoreAdditives(input.ingredients);
-    additiveScore = score;
-    allReasons.push(...reasons);
-    allFlags = flags;
-  }
-
-  // Combine scores
-  let overallScore: number;
-  if (nutritionScore !== null && additiveScore !== null) {
-    overallScore = Math.round(nutritionScore * 0.6 + additiveScore * 0.4);
-  } else if (nutritionScore !== null) {
-    overallScore = nutritionScore;
-  } else if (additiveScore !== null) {
-    overallScore = additiveScore;
-  } else {
-    overallScore = 50; // unknown
-  }
-
-  // Apply completeness penalty
-  if (input.dataCompleteness < 0.5) {
-    overallScore = Math.round(overallScore * 0.9);
-  }
-
-  overallScore = Math.max(0, Math.min(100, overallScore));
+  const overallScore =
+    nutrition.score !== null && additives.score !== null ? Math.round(nutrition.score * 0.6 + additives.score * 0.4) :
+    nutrition.score ?? additives.score ?? 50;
 
   const scoreGrade = gradeFromScore(overallScore);
-  const { verdict, verdictZh } = verdictFromGrade(scoreGrade);
-
+  const { verdict, verdictZh } = verdictFromGrade(scoreGrade, analysisScope);
   const evidenceConfidence: "high" | "medium" | "low" =
-    input.dataCompleteness >= 0.8 ? "high" :
-    input.dataCompleteness >= 0.5 ? "medium" : "low";
+    analysisScope === "complete" && input.dataCompleteness >= 0.8 ? "high" :
+    analysisScope !== "insufficient" && input.dataCompleteness >= 0.5 ? "medium" : "low";
 
-  // Top reasons: sort by impact (negative first, then positive)
-  const topReasons = allReasons
-    .sort((a, b) => (a.impact === "negative" ? -1 : 1) - (b.impact === "negative" ? -1 : 1))
-    .slice(0, 5);
+  const topReasons = [...nutrition.reasons, ...additives.reasons]
+    .sort((a, b) => {
+      const rank = { negative: 0, neutral: 1, positive: 2 } as const;
+      return rank[a.impact] - rank[b.impact];
+    })
+    .slice(0, 6);
 
   return {
-    overallScore,
-    nutritionScore,
-    additiveScore,
+    overallScore: Math.max(0, Math.min(100, overallScore)),
+    nutritionScore: nutrition.score,
+    additiveScore: additives.score,
     scoreGrade,
     verdict,
     verdictZh,
     topReasons,
-    additiveFlags: allFlags,
+    additiveFlags: additives.flags,
     evidenceConfidence,
+    analysisScope,
+    nutritionBasis: nutrition.basis,
+    ingredientCoverage: additives.coverage == null ? null : round(additives.coverage),
     rulesetVersion: RULESET_VERSION,
   };
 }

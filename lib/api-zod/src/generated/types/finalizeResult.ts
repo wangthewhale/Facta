@@ -5,9 +5,11 @@
  * FACTA — Independent product intelligence API
  * OpenAPI spec version: 0.1.0
  */
+import type { FinalizeResultAnalysisScope } from './finalizeResultAnalysisScope';
 
 export interface FinalizeResult {
   productId: number;
   overallScore?: number;
   scoreGrade?: string;
+  analysisScope: FinalizeResultAnalysisScope;
 }

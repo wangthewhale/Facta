@@ -1,91 +1,102 @@
 import React from 'react';
 import { Layout } from '@/components/layout';
-import { useTranslation } from '@/lib/i18n';
-import { ShieldCheck, Scale, Database, AlertCircle } from 'lucide-react';
+import { ShieldCheck, Scale, Database, AlertCircle, Newspaper, CheckCircle2 } from 'lucide-react';
+
+const TFDA_SOURCE = 'https://www.fda.gov.tw/tc/newsContent.aspx?cid=4&id=31511';
+const WHO_FAT_SOURCE = 'https://www.who.int/publications/i/item/9789240073630';
 
 export default function Methodology() {
-  const { t } = useTranslation();
-
   return (
     <Layout>
       <div className="flex flex-col min-h-full bg-background text-foreground pb-20">
-        
-        {/* Header */}
-        <div className="p-6 bg-card border-b border-border sticky top-0 z-10">
-          <h1 className="text-2xl font-bold">Methodology</h1>
-          <p className="text-sm text-muted-foreground mt-1 tracking-wide">
-            How FACTA evaluates products.
+        <header className="p-6 bg-card border-b border-border sticky top-0 z-10">
+          <p className="text-[10px] font-black tracking-widest text-primary-strong">RULESET 2.0.0</p>
+          <h1 className="text-2xl font-black mt-1">FACTA 如何判定好壞</h1>
+          <p className="text-sm text-muted-foreground mt-2 leading-relaxed">同一份標示、同一版本規則，會得到同一結果。資料不足時不硬給完整分數。</p>
+        </header>
+
+        <section className="p-6 border-b border-border bg-primary/5 flex flex-col gap-3">
+          <ShieldCheck className="w-7 h-7 text-primary-strong" />
+          <h2 className="text-lg font-black">先確認能不能公平比較</h2>
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            包裝通常標示「每一份」，但不同商品份量不一。FACTA 必須先取得每份量與 g／ml 單位，才能換算成每 100g（固體）或每 100ml（液體）。糖、鈉、飽和脂肪至少要有兩項，否則顯示「資料不足」。
           </p>
-        </div>
+        </section>
 
-        <div className="flex flex-col">
-          
-          {/* Independence */}
-          <div className="p-8 border-b border-border bg-primary/5 flex flex-col gap-4">
-            <ShieldCheck className="w-8 h-8 text-primary-strong" />
-            <h2 className="text-xl font-bold uppercase tracking-widest">{t('trust_statement')}</h2>
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              FACTA operates independently. We do not accept payment from food brands to improve scores, alter rankings, or remove negative evidence. Our revenue model does not rely on brand partnerships.
-            </p>
+        <section className="p-6 border-b border-border flex flex-col gap-4">
+          <div className="flex items-center gap-3">
+            <Scale className="w-6 h-6" />
+            <h2 className="text-lg font-black">營養初評門檻</h2>
           </div>
-
-          {/* Scoring System */}
-          <div className="p-8 border-b border-border flex flex-col gap-4">
-            <Scale className="w-8 h-8 text-foreground" />
-            <h2 className="text-xl font-bold uppercase tracking-widest">Scoring System</h2>
-            <p className="text-sm leading-relaxed mb-2">
-              The FACTA Score (0-100) is calculated using a proprietary rule engine that analyzes nutritional density against additive risk. 
-            </p>
-            <ul className="text-sm space-y-3 font-mono bg-card p-4 border border-border">
-              <li className="flex items-center justify-between">
-                <span className="text-primary-strong font-bold">80-100</span>
-                <span>Excellent</span>
-              </li>
-              <li className="flex items-center justify-between border-t border-border pt-3">
-                <span className="text-primary-strong opacity-80 font-bold">60-79</span>
-                <span>Good</span>
-              </li>
-              <li className="flex items-center justify-between border-t border-border pt-3">
-                <span className="text-[#F2B84B] font-bold">40-59</span>
-                <span>Consider</span>
-              </li>
-              <li className="flex items-center justify-between border-t border-border pt-3">
-                <span className="text-destructive font-bold">0-39</span>
-                <span>Poor</span>
-              </li>
-            </ul>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            目前採用食藥署 2026 年「包裝正面營養資訊（紅綠燈）」草案門檻。這是預告中的自願性指引，不是把草案誤稱為強制法規。
+          </p>
+          <div className="overflow-x-auto border border-border bg-card">
+            <table className="w-full text-xs min-w-[340px]">
+              <thead className="bg-muted text-left">
+                <tr><th className="p-3">每 100g／ml</th><th className="p-3">綠燈上限</th><th className="p-3">紅燈門檻</th></tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                <tr><td className="p-3 font-bold">固體糖</td><td className="p-3">5g</td><td className="p-3">15g</td></tr>
+                <tr><td className="p-3 font-bold">固體鈉</td><td className="p-3">120mg</td><td className="p-3">500mg</td></tr>
+                <tr><td className="p-3 font-bold">固體飽和脂肪</td><td className="p-3">1.5g</td><td className="p-3">4.5g</td></tr>
+                <tr><td className="p-3 font-bold">液體糖</td><td className="p-3">2.5g</td><td className="p-3">7.5g</td></tr>
+                <tr><td className="p-3 font-bold">液體鈉</td><td className="p-3">120mg</td><td className="p-3">250mg</td></tr>
+                <tr><td className="p-3 font-bold">液體飽和脂肪</td><td className="p-3">0.75g</td><td className="p-3">2.25g</td></tr>
+              </tbody>
+            </table>
           </div>
-
-          {/* AI vs Rule Engine */}
-          <div className="p-8 border-b border-border flex flex-col gap-4">
-            <Database className="w-8 h-8 text-foreground" />
-            <h2 className="text-xl font-bold uppercase tracking-widest">AI & Data Pipeline</h2>
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              We use Large Language Models (LLMs) strictly for data extraction (OCR) and semantic normalization (e.g., standardizing "High Fructose Corn Syrup" and "HFCS" into a single entity). 
-            </p>
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              <strong>Crucially:</strong> AI does not calculate the score. All scoring is performed by a deterministic rule engine to ensure 100% reproducibility and transparency.
-            </p>
+          <p className="text-xs text-muted-foreground leading-relaxed">綠燈加分、黃燈小幅扣分、紅燈明顯扣分；反式脂肪另依 WHO 證據加重扣分。</p>
+          <div className="flex flex-wrap gap-3 text-xs font-bold">
+            <a href={TFDA_SOURCE} target="_blank" rel="noopener noreferrer" className="underline">食藥署原始指引 →</a>
+            <a href={WHO_FAT_SOURCE} target="_blank" rel="noopener noreferrer" className="underline">WHO 脂肪指引 →</a>
           </div>
+        </section>
 
-          {/* Evidence Tiers */}
-          <div className="p-8 border-b border-border flex flex-col gap-4">
-            <AlertCircle className="w-8 h-8 text-foreground" />
-            <h2 className="text-xl font-bold uppercase tracking-widest">Evidence Tiers</h2>
-            <p className="text-sm leading-relaxed">
-              Every penalty or additive flag is backed by evidence from authoritative bodies (e.g., WHO, EFSA, FDA, TFDA). Evidence is tiered by confidence level, ensuring penalties are proportional to the scientific consensus.
-            </p>
+        <section className="p-6 border-b border-border flex flex-col gap-4">
+          <div className="flex items-center gap-3"><Database className="w-6 h-6" /><h2 className="text-lg font-black">成分與添加物怎麼算</h2></div>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            成分文字會與 FACTA 的證據資料庫對照。只有至少 80% 列出成分完成對照，才計算添加物分數；未對照成分不會被當成「安全」。有 caution／avoid 證據的成分會標記並扣分。
+          </p>
+          <div className="bg-[#F2B84B]/10 border border-[#D9A21B] p-4 flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-[#9A6700] shrink-0" />
+            <p className="text-xs leading-relaxed">過敏原沒有被標記，不代表不存在。配方會變更，有嚴重過敏者必須以手上的實體包裝為準。</p>
           </div>
+        </section>
 
-          {/* Disclaimer */}
-          <div className="p-8 bg-foreground text-background flex flex-col gap-4 mt-8">
-            <h2 className="text-sm font-bold uppercase tracking-widest">Medical Disclaimer</h2>
-            <p className="text-xs leading-relaxed opacity-80">
-              FACTA is an informational tool, not a medical device. Product formulations change without notice. Always read the physical label before consuming, especially if you have severe allergies. We do not provide dietary or medical advice.
-            </p>
+        <section className="p-6 border-b border-border flex flex-col gap-4">
+          <h2 className="text-lg font-black">你看到的是哪一種結論</h2>
+          <div className="flex flex-col gap-3">
+            {[
+              ['完整評分', '營養與成分證據皆達到計分門檻；營養占 60%、添加物占 40%。'],
+              ['營養初評', '只有營養資料足夠；可以比較營養表現，但不能當成完整安全結論。'],
+              ['成分初評', '只有成分證據足夠；缺少營養標示，不能當成完整產品結論。'],
+              ['資料不足', '缺少公平比較所需資料，不顯示好壞判定。'],
+            ].map(([title, description]) => (
+              <div key={title} className="border border-border bg-card p-4 flex items-start gap-3">
+                <CheckCircle2 className="w-4 h-4 text-primary-strong shrink-0 mt-0.5" />
+                <div><p className="text-sm font-black">{title}</p><p className="text-xs text-muted-foreground mt-1 leading-relaxed">{description}</p></div>
+              </div>
+            ))}
           </div>
+        </section>
 
-        </div>
+        <section className="p-6 border-b border-border flex flex-col gap-3">
+          <Database className="w-6 h-6" />
+          <h2 className="text-lg font-black">AI 做什麼、不做什麼</h2>
+          <p className="text-sm text-muted-foreground leading-relaxed">AI 只協助辨識照片中的文字與欄位；使用者必須確認結果。AI 不決定 FACTA 分數，分數完全由固定規則計算。</p>
+        </section>
+
+        <section className="p-6 border-b border-border flex flex-col gap-3">
+          <Newspaper className="w-6 h-6" />
+          <h2 className="text-lg font-black">最新新聞與分數分開</h2>
+          <p className="text-sm text-muted-foreground leading-relaxed">每份報告分別查詢商品、品牌與公司近 365 天消息，顯示來源、日期與影響範圍，並區分官方紀錄、獨立報導、新聞稿與廣編。品牌事件若未指向本商品，會明確註明。新聞不納入營養分數。</p>
+        </section>
+
+        <section className="m-6 p-6 bg-foreground text-background flex flex-col gap-3">
+          <h2 className="text-sm font-black uppercase tracking-widest">使用限制</h2>
+          <p className="text-xs leading-relaxed text-background/75">FACTA 是食品資訊整理與比較工具，不是醫療器材，也不提供診斷或治療建議。商品配方可能隨時變更；實際食用前請重新閱讀手上的包裝標示。</p>
+        </section>
       </div>
     </Layout>
   );

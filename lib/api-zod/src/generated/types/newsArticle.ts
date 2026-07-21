@@ -6,10 +6,18 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { NewsArticleReportType } from './newsArticleReportType';
+import type { NewsArticleScope } from './newsArticleScope';
 
 export interface NewsArticle {
   title: string;
   /** @nullable */
   url?: string | null;
-  reportType?: NewsArticleReportType;
+  /** @nullable */
+  sourceName?: string | null;
+  /** @nullable */
+  publishedAt?: string | null;
+  reportType: NewsArticleReportType;
+  scope: NewsArticleScope;
+  /** @nullable */
+  affectsProduct?: boolean | null;
 }

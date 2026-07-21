@@ -3,7 +3,7 @@ import { Link, useLocation, useParams } from 'wouter';
 import { Layout } from '@/components/layout';
 import { useGetProduct, useGetProductEvaluation, useGetAlternatives, useRecordScan, useGetUserGoals, useGetGoalFit, useGetProductNews, useGetProductSafetyCheck } from '@workspace/api-client-react';
 import { useTranslation } from '@/lib/i18n';
-import { AlertTriangle, ArrowRight, CheckCircle2, ChevronRight, Info, Link as LinkIcon, Share, TriangleAlert, XOctagon } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle2, ChevronRight, Info, Link as LinkIcon, Share, TriangleAlert, XOctagon, RefreshCw } from 'lucide-react';
 import { track } from '@/lib/analytics';
 import { startFamilyCheckCheckout } from '@/pages/familyCheck';
 import { cn } from '@/lib/utils';
@@ -127,24 +127,59 @@ function SafetyAlertSection({ productId }: { productId: number }) {
 }
 
 function NewsSection({ productId }: { productId: number }) {
-  const { t, lang } = useTranslation();
-  const { data: news, isLoading } = useGetProductNews(productId, { query: { staleTime: 5 * 60 * 1000 } as any });
+  const { lang } = useTranslation();
+  const { data: news, isLoading, isError, isFetching, refetch } = useGetProductNews(productId, { query: { staleTime: 5 * 60 * 1000 } as any });
 
   if (isLoading) {
     return (
       <div className="p-6 border-b border-border bg-card/50">
         <h3 className="text-xs font-mono tracking-widest text-muted-foreground uppercase mb-4">
-          {lang === 'zh' ? '品牌情報' : 'Brand Intelligence'}
+          {lang === 'zh' ? '最新品牌與食安消息' : 'Latest brand & safety news'}
         </h3>
         <div className="flex items-center gap-3 text-xs text-muted-foreground font-mono">
           <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          {lang === 'zh' ? 'AI 正在搜尋相關新聞…' : 'AI is searching for related news…'}
+          {lang === 'zh' ? '正在查找商品、品牌與公司層級消息…' : 'Searching product, brand and company coverage…'}
         </div>
       </div>
     );
   }
 
-  if (!news || news.sentiment === 'none') return null;
+  if (isError || !news || news.status === 'unavailable') {
+    return (
+      <div className="p-6 border-b border-border bg-card/50 flex flex-col gap-3">
+        <h3 className="text-xs font-mono tracking-widest text-muted-foreground uppercase">
+          {lang === 'zh' ? '最新品牌與食安消息' : 'Latest brand & safety news'}
+        </h3>
+        <div className="border border-border bg-background p-4">
+          <p className="text-sm font-bold">{lang === 'zh' ? '新聞查詢暫時無法使用' : 'News lookup is temporarily unavailable'}</p>
+          <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+            {lang === 'zh' ? '這不代表沒有相關消息；目前無法完成即時查核。' : 'This does not mean no news exists; the live check could not be completed.'}
+          </p>
+          <button onClick={() => void refetch()} disabled={isFetching} className="mt-3 text-xs font-bold underline flex items-center gap-1 disabled:opacity-50">
+            <RefreshCw className={cn('w-3 h-3', isFetching && 'animate-spin')} />
+            {lang === 'zh' ? '重新查詢' : 'Retry'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (news.status === 'no_results') {
+    return (
+      <div className="p-6 border-b border-border bg-card/50 flex flex-col gap-3">
+        <h3 className="text-xs font-mono tracking-widest text-muted-foreground uppercase">
+          {lang === 'zh' ? '最新品牌與食安消息' : 'Latest brand & safety news'}
+        </h3>
+        <div className="border border-border bg-background p-4">
+          <p className="text-sm font-bold">{lang === 'zh' ? `近 ${news.lookbackDays} 天未找到可驗證的相關報導` : `No verifiable coverage found in the past ${news.lookbackDays} days`}</p>
+          <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+            {lang === 'zh' ? '這不是安全保證，只代表本次搜尋沒有找到足夠可靠的結果。' : 'This is not a safety guarantee; the search did not find sufficiently reliable results.'}
+          </p>
+        </div>
+        {news.fetchedAt && <p className="text-[10px] text-muted-foreground">查核日期：{new Date(news.fetchedAt).toLocaleDateString('zh-TW')}</p>}
+      </div>
+    );
+  }
 
   const sentimentStyle =
     news.sentiment === 'negative' ? 'bg-destructive text-destructive-foreground' :
@@ -158,7 +193,7 @@ function NewsSection({ productId }: { productId: number }) {
     <div className="p-6 border-b border-border bg-card/50">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-xs font-mono tracking-widest text-muted-foreground uppercase">
-          {lang === 'zh' ? '品牌情報' : 'Brand Intelligence'}
+          {lang === 'zh' ? '最新品牌與食安消息' : 'Latest brand & safety news'}
         </h3>
         <span className={cn('px-2 py-0.5 text-[10px] font-bold tracking-wider uppercase', sentimentStyle)}>
           {sentimentLabel}
@@ -174,27 +209,46 @@ function NewsSection({ productId }: { productId: number }) {
           {news.articles.map((a, i) => {
             const rt = a.reportType ?? 'unknown';
             const rtLabel = lang === 'zh'
-              ? (rt === 'news' ? '公正報導' : rt === 'advertorial' ? '廣編/業配' : rt === 'press_release' ? '新聞稿' : '來源不明')
-              : (rt === 'news' ? 'Journalism' : rt === 'advertorial' ? 'Sponsored' : rt === 'press_release' ? 'Press release' : 'Unverified');
-            const rtStyle = rt === 'news'
+              ? (rt === 'news' ? '獨立報導' : rt === 'official_record' ? '官方紀錄' : rt === 'advertorial' ? '廣編/業配' : rt === 'press_release' ? '新聞稿' : '來源不明')
+              : (rt === 'news' ? 'Journalism' : rt === 'official_record' ? 'Official' : rt === 'advertorial' ? 'Sponsored' : rt === 'press_release' ? 'Press release' : 'Unverified');
+            const rtStyle = rt === 'news' || rt === 'official_record'
               ? 'bg-primary-strong text-white'
               : rt === 'advertorial'
               ? 'bg-[#F2B84B] text-black'
               : 'bg-muted text-muted-foreground';
-            return (
+            const scopeLabel = lang === 'zh'
+              ? (a.scope === 'product' ? '商品層級' : a.scope === 'company' ? '公司層級' : '品牌層級')
+              : a.scope;
+            const content = (
+              <>
+                <LinkIcon className="w-3 h-3 mt-0.5 shrink-0 text-muted-foreground" />
+                <span className="flex-1 min-w-0">
+                  <span className="block font-medium leading-relaxed">{a.title}</span>
+                  <span className="block text-[10px] text-muted-foreground mt-1">
+                    {[a.sourceName, a.publishedAt ? new Date(`${a.publishedAt}T00:00:00`).toLocaleDateString('zh-TW') : null, scopeLabel].filter(Boolean).join(' · ')}
+                  </span>
+                  {a.affectsProduct === false && (
+                    <span className="block text-[10px] text-muted-foreground mt-1">目前來源指向同品牌其他品項，未指向本商品。</span>
+                  )}
+                  {a.affectsProduct === true && (
+                    <span className="block text-[10px] text-destructive font-bold mt-1">來源明確指出本商品受影響。</span>
+                  )}
+                </span>
+                <span className={cn('shrink-0 px-1.5 py-0.5 text-[9px] font-bold tracking-wider uppercase', rtStyle)}>{rtLabel}</span>
+              </>
+            );
+            return a.url ? (
               <a
                 key={i}
-                href={a.url ?? undefined}
+                href={a.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className={cn('flex items-start gap-2 p-2 bg-background border border-border text-xs', a.url && 'hover:border-foreground')}
+                className="flex items-start gap-2 p-3 bg-background border border-border text-xs hover:border-foreground"
               >
-                <LinkIcon className="w-3 h-3 mt-0.5 shrink-0 text-muted-foreground" />
-                <span className="flex-1">{a.title}</span>
-                <span className={cn('shrink-0 px-1.5 py-0.5 text-[9px] font-bold tracking-wider uppercase', rtStyle)}>
-                  {rtLabel}
-                </span>
+                {content}
               </a>
+            ) : (
+              <div key={i} className="flex items-start gap-2 p-3 bg-background border border-border text-xs">{content}</div>
             );
           })}
         </div>
@@ -207,9 +261,12 @@ function NewsSection({ productId }: { productId: number }) {
         </p>
       )}
       {news.fetchedAt && (
-        <p className="text-[10px] text-muted-foreground font-mono mt-3 uppercase tracking-wider">
-          {lang === 'zh' ? 'AI 網路搜尋 · ' : 'AI web search · '}{new Date(news.fetchedAt).toLocaleDateString()}
-        </p>
+        <div className="mt-3 pt-3 border-t border-border flex flex-col gap-1 text-[10px] text-muted-foreground">
+          <p>查核日期：{new Date(news.fetchedAt).toLocaleDateString('zh-TW')} · 範圍：近 {news.lookbackDays} 天</p>
+          <p>查詢：{news.query}</p>
+          {news.status === 'stale' && <p className="font-bold text-[#9A6700]">即時搜尋失敗，目前顯示較舊快取。</p>}
+          <p>新聞不納入 FACTA 數字評分，避免把品牌事件混成商品營養分數。</p>
+        </div>
       )}
     </div>
   );
@@ -375,6 +432,18 @@ export default function Report() {
 
   const name = lang === 'zh' && product.nameZh ? product.nameZh : product.name;
   const brand = product.brandName;
+  const analysisScope = evaluation.analysisScope;
+  const hasNumericRating = analysisScope !== 'insufficient';
+  const scoreTitle = analysisScope === 'complete' ? 'FACTA 完整評分' :
+    analysisScope === 'nutrition_only' ? '營養初評' :
+    analysisScope === 'ingredients_only' ? '成分初評' : '分析狀態';
+  const scopeExplanation = analysisScope === 'complete'
+    ? '營養與成分證據皆達到目前規則的計分門檻。'
+    : analysisScope === 'nutrition_only'
+      ? '已完成營養比較；成分與過敏原證據仍未完整，這不是完整安全結論。'
+      : analysisScope === 'ingredients_only'
+        ? '已完成成分初評；缺少足夠營養標示，這不是完整產品結論。'
+        : '缺少可公平比較的每份量／營養資料，或成分證據尚未達到門檻，因此不判定好壞。';
 
   return (
     <Layout>
@@ -410,13 +479,30 @@ export default function Report() {
 
         {/* Score Section */}
         <div className="p-10 flex flex-col items-center justify-center border-b border-border relative overflow-hidden">
-          <p className="text-xs font-mono tracking-widest text-muted-foreground uppercase mb-4">{t('score')}</p>
-          <AnimatedScore score={evaluation.overallScore} grade={evaluation.scoreGrade} />
+          <p className="text-xs font-mono tracking-widest text-muted-foreground uppercase mb-4">{scoreTitle}</p>
+          {hasNumericRating ? (
+            <AnimatedScore score={evaluation.overallScore} grade={evaluation.scoreGrade} />
+          ) : (
+            <p className="text-4xl font-black tracking-tight text-muted-foreground">資料不足</p>
+          )}
           <div className="mt-4 flex flex-col items-center gap-2">
-            <GradeBadge grade={evaluation.scoreGrade} className="px-4 py-1 text-xs" />
+            {hasNumericRating && <GradeBadge grade={evaluation.scoreGrade} className="px-4 py-1 text-xs" />}
             <p className="text-center text-sm font-semibold max-w-[250px] mt-2">
               {lang === 'zh' && evaluation.verdictZh ? evaluation.verdictZh : evaluation.verdict}
             </p>
+          </div>
+        </div>
+
+        <div className={cn(
+          'mx-6 my-5 p-4 border flex items-start gap-3',
+          analysisScope === 'complete' ? 'border-primary-strong bg-primary/10' : 'border-[#D9A21B] bg-[#F2B84B]/10'
+        )}>
+          {analysisScope === 'complete'
+            ? <CheckCircle2 className="w-5 h-5 text-primary-strong shrink-0" />
+            : <AlertTriangle className="w-5 h-5 text-[#9A6700] shrink-0" />}
+          <div>
+            <p className="text-xs font-black">{scoreTitle}</p>
+            <p className="text-xs text-muted-foreground leading-relaxed mt-1">{scopeExplanation}</p>
           </div>
         </div>
 
@@ -439,11 +525,12 @@ export default function Report() {
                       <p className="text-sm font-medium">
                         {lang === 'zh' && reason.labelZh ? reason.labelZh : reason.label}
                       </p>
-                      {reason.evidenceStrength && (
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-1 border-t border-border pt-1">
-                          證據強度：{reason.evidenceStrength}
-                        </p>
-                      )}
+                      <div className="text-[10px] text-muted-foreground mt-1 border-t border-border pt-1 flex flex-wrap gap-x-3 gap-y-1">
+                        {reason.evidenceStrength && <span>證據強度：{reason.evidenceStrength}</span>}
+                        {reason.source && /^https?:\/\//.test(reason.source) ? (
+                          <a href={reason.source} target="_blank" rel="noopener noreferrer" className="underline font-bold">查看判定來源</a>
+                        ) : reason.source ? <span>來源：{reason.source}</span> : null}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -463,19 +550,21 @@ export default function Report() {
           <div className="grid grid-cols-2 divide-x border-b border-border bg-background">
             <div className="p-4 flex flex-col items-center text-center">
               <span className="text-[10px] tracking-widest text-muted-foreground uppercase mb-2">{t('additives')}</span>
-              <span className="text-2xl font-mono font-bold">{evaluation.additiveFlags?.length || 0}</span>
-              {evaluation.additiveFlags && evaluation.additiveFlags.length > 0 && (
+              <span className="text-xl font-mono font-bold">{evaluation.additiveScore == null ? '未完成' : evaluation.additiveFlags?.length || 0}</span>
+              {evaluation.additiveScore == null && <p className="text-[10px] text-muted-foreground mt-2 leading-relaxed">成分證據尚未完成足夠比例對照</p>}
+              {evaluation.additiveScore != null && evaluation.additiveFlags && evaluation.additiveFlags.length > 0 && (
                 <div className="mt-2 text-xs text-destructive flex items-center gap-1">
-                  <AlertTriangle className="w-3 h-3" /> Found
+                  <AlertTriangle className="w-3 h-3" /> 需留意
                 </div>
               )}
             </div>
             <div className="p-4 flex flex-col items-center text-center">
               <span className="text-[10px] tracking-widest text-muted-foreground uppercase mb-2">{t('allergens')}</span>
-              <span className="text-2xl font-mono font-bold">{product.allergens?.length || 0}</span>
-              {product.allergens && product.allergens.length > 0 && (
+              <span className="text-xl font-mono font-bold">{evaluation.allergenAlerts?.length ? evaluation.allergenAlerts.length : '未標記'}</span>
+              {!evaluation.allergenAlerts?.length && <p className="text-[10px] text-muted-foreground mt-2 leading-relaxed">不代表沒有過敏原，食用前仍須看實體標示</p>}
+              {evaluation.allergenAlerts && evaluation.allergenAlerts.length > 0 && (
                 <div className="mt-2 text-xs text-destructive flex items-center gap-1">
-                  <TriangleAlert className="w-3 h-3" /> Found
+                  <TriangleAlert className="w-3 h-3" /> 已標記
                 </div>
               )}
             </div>
@@ -539,10 +628,13 @@ export default function Report() {
           const attentionCount =
             (evaluation.topReasons?.filter(r => r.impact === 'negative').length || 0) +
             (evaluation.personalAlerts?.length || 0);
+          const incomplete = evaluation.analysisScope !== 'complete';
           return (
             <div className="mx-6 mt-6 bg-foreground text-background p-6 flex flex-col gap-3">
               <p className="font-black text-base leading-snug">
-                {attentionCount > 0
+                {incomplete
+                  ? '這次分析仍有資料未完成，先不要把初評當成安全保證。'
+                  : attentionCount > 0
                   ? `這次分析發現 ${attentionCount} 項需要注意的地方。`
                   : '這款商品沒有明顯需要注意的地方。'}
                 {' '}家裡其他常吃的食品呢？

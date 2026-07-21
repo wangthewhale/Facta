@@ -34,16 +34,20 @@ export default function ShareCard() {
   };
 
   if (isLoading) {
-    return <div className="h-screen bg-black flex items-center justify-center text-white">Loading...</div>;
+    return <div className="h-screen bg-black flex items-center justify-center text-white">載入分享卡片中⋯</div>;
   }
 
   if (!shareData) {
-    return <div className="h-screen bg-black flex items-center justify-center text-white">Not found</div>;
+    return <div className="h-screen bg-black flex items-center justify-center text-white">找不到這份報告</div>;
   }
 
   const name = lang === 'zh' && shareData.productNameZh ? shareData.productNameZh : shareData.productName;
   const brand = shareData.brandName;
   const verdict = lang === 'zh' && shareData.verdictZh ? shareData.verdictZh : shareData.verdict;
+  const hasNumericRating = shareData.analysisScope !== 'insufficient';
+  const scopeLabel = shareData.analysisScope === 'complete' ? '完整評分' :
+    shareData.analysisScope === 'nutrition_only' ? '營養初評' :
+    shareData.analysisScope === 'ingredients_only' ? '成分初評' : '資料不足';
 
   let scoreColor = '#F4F1E8';
   if (shareData.scoreGrade === 'Excellent' || shareData.scoreGrade === 'Good') scoreColor = '#B9F24A';
@@ -57,7 +61,7 @@ export default function ShareCard() {
           <ArrowLeft className="w-6 h-6" />
         </button>
         <button onClick={handleDownload} className="flex items-center gap-2 px-4 py-2 bg-white text-black font-bold uppercase tracking-widest text-xs">
-          <Download className="w-4 h-4" /> Save
+          <Download className="w-4 h-4" /> 儲存圖片
         </button>
       </div>
 
@@ -90,14 +94,14 @@ export default function ShareCard() {
                 className="text-[250px] leading-none font-black font-mono tracking-tighter"
                 style={{ color: scoreColor }}
               >
-                {shareData.overallScore}
+                {hasNumericRating ? shareData.overallScore : '—'}
               </div>
               <div className="pb-12">
                 <div 
                   className="px-6 py-2 text-2xl font-bold tracking-widest uppercase mb-4 inline-block"
                   style={{ backgroundColor: scoreColor, color: '#11120F' }}
                 >
-                  {shareData.scoreGrade}
+                  {scopeLabel}
                 </div>
                 <p className="text-4xl font-semibold max-w-lg leading-snug opacity-90">
                   {verdict}

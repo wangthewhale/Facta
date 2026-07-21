@@ -871,6 +871,7 @@ export const GetProductEvaluationResponse = zod.object({
   "overallScore": zod.number(),
   "nutritionScore": zod.number().nullish(),
   "additiveScore": zod.number().nullish(),
+  "analysisScope": zod.enum(['complete', 'nutrition_only', 'ingredients_only', 'insufficient']),
   "scoreGrade": zod.string(),
   "verdict": zod.string(),
   "verdictZh": zod.string().nullish(),
@@ -1001,9 +1002,6 @@ export const CreateSubmissionBody = zod.object({
   "brandName": zod.string().nullish(),
   "barcode": zod.string().nullish(),
   "retailerSlug": zod.string().nullish(),
-  "frontImageBase64": zod.string().nullish(),
-  "ingredientsImageBase64": zod.string().nullish(),
-  "nutritionImageBase64": zod.string().nullish(),
   "rawIngredientsText": zod.string().nullish(),
   "userSession": zod.string().nullish(),
   "userConsented": zod.boolean().default(createSubmissionBodyUserConsentedDefault)
@@ -1095,7 +1093,8 @@ export const FinalizeSubmissionParams = zod.object({
 export const FinalizeSubmissionResponse = zod.object({
   "productId": zod.number(),
   "overallScore": zod.number().optional(),
-  "scoreGrade": zod.string().optional()
+  "scoreGrade": zod.string().optional(),
+  "analysisScope": zod.enum(['complete', 'nutrition_only', 'ingredients_only', 'insufficient'])
 })
 
 
@@ -1160,12 +1159,19 @@ export const GetProductNewsParams = zod.object({
 
 export const GetProductNewsResponse = zod.object({
   "sentiment": zod.enum(['positive', 'negative', 'mixed', 'neutral', 'none']),
+  "status": zod.enum(['fresh', 'cached', 'stale', 'no_results', 'unavailable']),
+  "query": zod.string(),
+  "lookbackDays": zod.number(),
   "summary": zod.string().nullish(),
   "summaryZh": zod.string().nullish(),
   "articles": zod.array(zod.object({
   "title": zod.string(),
   "url": zod.string().nullish(),
-  "reportType": zod.enum(['news', 'advertorial', 'press_release', 'unknown']).optional()
+  "sourceName": zod.string().nullish(),
+  "publishedAt": zod.string().nullish(),
+  "reportType": zod.enum(['news', 'official_record', 'advertorial', 'press_release', 'unknown']),
+  "scope": zod.enum(['product', 'brand', 'company']),
+  "affectsProduct": zod.boolean().nullish()
 })),
   "fetchedAt": zod.string().nullish()
 })
@@ -1175,10 +1181,12 @@ export const GetProductNewsResponse = zod.object({
  * @summary Run OCR on uploaded image and return extracted text
  */
 export const processOcrBodyImageTypeDefault = `ingredients`;
+export const processOcrBodyImageMimeTypeDefault = `image/jpeg`;
 
 export const ProcessOcrBody = zod.object({
   "imageBase64": zod.string(),
-  "imageType": zod.string().default(processOcrBodyImageTypeDefault)
+  "imageType": zod.string().default(processOcrBodyImageTypeDefault),
+  "imageMimeType": zod.enum(['image/jpeg', 'image/png', 'image/webp']).default(processOcrBodyImageMimeTypeDefault)
 })
 
 export const ProcessOcrResponse = zod.object({
@@ -1293,6 +1301,7 @@ export const GetShareCardResponse = zod.object({
   "brandName": zod.string().nullish(),
   "imageUrl": zod.string().nullish(),
   "overallScore": zod.number(),
+  "analysisScope": zod.enum(['complete', 'nutrition_only', 'ingredients_only', 'insufficient']),
   "scoreGrade": zod.string(),
   "verdict": zod.string(),
   "verdictZh": zod.string().nullish(),
