@@ -107,6 +107,9 @@ Extract text from food product label images. Return a JSON object with:
 - rawIngredients: the ingredients list if visible (as a single string)
 - parsedNutrition: an object with numeric nutrition values if a nutrition facts panel is visible
   (servingSize, servingSizeUnit, calories, totalFat, saturatedFat, transFat, sodium, totalCarbs, dietaryFiber, totalSugars, protein — values exactly as shown per labelled serving)
+  - servingSize must use the printed metric quantity and servingSizeUnit must be exactly "g" or "ml"
+  - when both imperial and metric are printed, prefer the printed metric equivalent (for example, 20 FL OZ (590mL) becomes servingSize 590 and servingSizeUnit "ml")
+  - do not calculate a metric conversion when the package does not print one
 - confidence: a number 0-1 representing extraction confidence
 
 If the image is ${imageType === "ingredients" ? "an ingredients list" : imageType === "nutrition" ? "a nutrition facts panel" : "a product front"}.
