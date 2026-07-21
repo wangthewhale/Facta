@@ -41,21 +41,38 @@ interface CuratedBrandNews {
  * Every entry requires a directly reviewable article URL and an explicit note
  * about whether the event affects the exact product or only its brand.
  */
-const CURATED_BRAND_NEWS: CuratedBrandNews[] = [{
-  brandAliases: ["愛之味", "agv"],
-  sentiment: "negative",
-  summary: "On July 16, 2026, independent reporting said AGV recalled specified batches of Preserved Bamboo Shoots and Vegetarian Satay Sauce after an upstream oil issue. The report states that other AGV products were not affected; this is a brand-level event and does not implicate this exact product.",
-  summaryZh: "2026 年 7 月 16 日獨立報導指出，愛之味因上游問題油回收「珍保玉筍」與「素食沙茶醬」指定批號；報導同時指出其他愛之味商品未受影響。這是品牌層級事件，未指向本款商品。",
-  article: {
-    title: "用到致癌油！愛之味「2產品」急下架　批號、退貨辦法一次看",
-    url: "https://news.tvbs.com.tw/life/3259103?from=politics_extend",
-    sourceName: "TVBS 新聞網",
-    publishedAt: "2026-07-16",
-    reportType: "news",
-    scope: "brand",
-    affectsProduct: false,
+const CURATED_BRAND_NEWS: CuratedBrandNews[] = [
+  {
+    brandAliases: ["愛之味", "agv"],
+    sentiment: "negative",
+    summary: "On July 16, 2026, independent reporting said AGV recalled specified batches of Preserved Bamboo Shoots and Vegetarian Satay Sauce after an upstream oil issue. The report states that other AGV products were not affected; this is a brand-level event and does not implicate this exact product.",
+    summaryZh: "2026 年 7 月 16 日獨立報導指出，愛之味因上游問題油回收「珍保玉筍」與「素食沙茶醬」指定批號；報導同時指出其他愛之味商品未受影響。這是品牌層級事件，未指向本款商品。",
+    article: {
+      title: "用到致癌油！愛之味「2產品」急下架　批號、退貨辦法一次看",
+      url: "https://news.tvbs.com.tw/life/3259103?from=politics_extend",
+      sourceName: "TVBS 新聞網",
+      publishedAt: "2026-07-16",
+      reportType: "news",
+      scope: "brand",
+      affectsProduct: false,
+    },
   },
-}];
+  {
+    brandAliases: ["旺旺", "wantwant", "want want", "宜蘭食品"],
+    sentiment: "neutral",
+    summary: "The newest directly relevant coverage found on July 8, 2026 concerns a limited Wenchang Emperor package for Want Want Senbei. It is promotional coverage, not independent food-safety evidence, and does not report a recall or safety issue affecting this exact 112 g product.",
+    summaryZh: "目前最新且直接相關的報導發布於 2026 年 7 月 8 日，內容是旺旺仙貝推出文昌帝君限定包裝。這屬品牌宣傳內容，不是獨立食安證據；報導未指出本款 112g 商品有回收、下架或食安問題。",
+    article: {
+      title: "考生必備金榜題名零食聖品　拜文昌、吃仙貝、考運一起旺旺來",
+      url: "https://truemii.chinatimes.com/content/20260708000002-265003?ctrack=pc_main_recmd_p04",
+      sourceName: "觸潮流",
+      publishedAt: "2026-07-08",
+      reportType: "advertorial",
+      scope: "product",
+      affectsProduct: null,
+    },
+  },
+];
 
 function normalizedText(value: string): string {
   return value.toLowerCase().replace(/[\s\-_·・|｜]/g, "");
@@ -200,11 +217,12 @@ router.get("/products/:id/news", async (req, res): Promise<void> => {
 
   try {
     const searchController = new AbortController();
-    const searchTimeout = setTimeout(() => searchController.abort(), 25_000);
+    const searchTimeout = setTimeout(() => searchController.abort(), 40_000);
     let response: any;
     try {
       response = await (openai as any).responses.create({
-        model: "gpt-5.6-sol",
+        model: "gpt-5.6-terra",
+        reasoning: { effort: "low" },
         tools: [{ type: "web_search" }],
         input: `Today is ${today}. Find the newest relevant reporting from the last ${NEWS_LOOKBACK_DAYS} days for this Taiwan food product and its owner/brand.
 
