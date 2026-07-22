@@ -9,6 +9,7 @@ import { startFamilyCheckCheckout } from '@/pages/familyCheck';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getSessionId } from '@/lib/session';
+import { SaveProductButton } from '@/components/save-product-button';
 
 export function GradeBadge({ grade, className }: { grade: string, className?: string }) {
   const { t, lang } = useTranslation();
@@ -484,8 +485,8 @@ export default function Report() {
             )}
           </div>
 
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 flex-wrap min-w-0">
               <span className={cn(
                 "px-2 py-1 text-[10px] uppercase tracking-widest font-bold border",
                 product.verificationStatus === 'verified' ? "border-primary text-primary-strong" : "border-muted-foreground text-muted-foreground"
@@ -498,9 +499,18 @@ export default function Report() {
                 </a>
               )}
             </div>
-            <button onClick={() => setLocation(`/share/${productId}`)} className="flex items-center gap-1 text-xs font-bold uppercase tracking-widest">
-              <Share className="w-4 h-4" /> {t('share_card')}
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              <SaveProductButton product={product} evaluation={evaluation} />
+              <button
+                onClick={() => {
+                  track('share_started', { productId, source: 'report' });
+                  setLocation(`/share/${productId}`);
+                }}
+                className="flex items-center gap-1 px-3 py-2 border border-border bg-background text-xs font-bold focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+              >
+                <Share className="w-4 h-4" /> 分享
+              </button>
+            </div>
           </div>
           {product.barcodeSourceUrl && product.barcodeSourceUrl !== product.catalogSourceUrl && (
             <a href={product.barcodeSourceUrl} target="_blank" rel="noopener noreferrer" className="inline-block mt-3 text-[10px] font-bold underline text-muted-foreground">
@@ -681,9 +691,11 @@ export default function Report() {
           <div className="p-6 bg-card">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xs font-mono tracking-widest text-muted-foreground uppercase">{t('better_alternatives')}</h3>
-              <Link href={`/alternatives/${productId}`} className="text-[10px] uppercase font-bold tracking-widest hover:underline flex items-center">
-                查看全部 <ChevronRight className="w-3 h-3 ml-1" />
-              </Link>
+              {!altLoading && alternatives && alternatives.length > 0 && (
+                <Link href={`/alternatives/${productId}`} className="text-[10px] uppercase font-bold tracking-widest hover:underline flex items-center">
+                  查看全部 <ChevronRight className="w-3 h-3 ml-1" />
+                </Link>
+              )}
             </div>
             
             {altLoading ? (
@@ -706,8 +718,29 @@ export default function Report() {
                 ))}
               </div>
             ) : (
-              <div className="p-4 border border-border border-dashed text-center text-sm text-muted-foreground">
-                {t('no_alternatives')}
+              <div className="p-4 border border-border border-dashed flex flex-col gap-3">
+                <div>
+                  <p className="text-sm font-black text-foreground">還沒有足夠的同類驗證商品</p>
+                  <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                    FACTA 不會拿不同類別硬湊成「更健康」。先掃另一款同類食品，再把兩份報告收藏起來比較。
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <Link
+                    href="/scan"
+                    onClick={() => track('alternative_empty_cta_clicked', { productId, action: 'scan' })}
+                    className="py-3 bg-foreground text-background text-xs font-black text-center"
+                  >
+                    掃另一款
+                  </Link>
+                  <Link
+                    href="/search"
+                    onClick={() => track('alternative_empty_cta_clicked', { productId, action: 'search' })}
+                    className="py-3 border border-foreground text-xs font-black text-center"
+                  >
+                    用名稱找
+                  </Link>
+                </div>
               </div>
             )}
           </div>

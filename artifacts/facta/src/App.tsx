@@ -5,6 +5,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
 import { Route, Switch, Router as WouterRouter, useLocation } from 'wouter';
 import { I18nProvider } from '@/lib/i18n';
+import { setBaseUrl } from '@workspace/api-client-react';
 
 import Home from '@/pages/home';
 import Scan from '@/pages/scan';
@@ -20,8 +21,12 @@ import Onboarding from '@/pages/onboarding';
 import GoalDetail from '@/pages/goalDetail';
 import Search from '@/pages/search';
 import FamilyCheck from '@/pages/familyCheck';
+import Compare from '@/pages/compare';
 
 const queryClient = new QueryClient();
+
+const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL;
+if (configuredApiBaseUrl) setBaseUrl(configuredApiBaseUrl);
 
 function Router() {
   const [pathname] = useLocation();
@@ -46,6 +51,7 @@ function Router() {
       <Route path="/onboarding" component={Onboarding} />
       <Route path="/goals/:slug" component={GoalDetail} />
       <Route path="/search" component={Search} />
+      <Route path="/compare" component={Compare} />
       <Route component={NotFound} />
     </Switch>
   );

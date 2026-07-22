@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Layout } from '@/components/layout';
 import { useTranslation } from '@/lib/i18n';
 import { Link, useLocation } from 'wouter';
-import { ArrowRight, ShieldCheck, Database, Search, Target, Clock, Trash2, CheckCircle2, ChevronDown, ChevronUp, Camera, ScanLine, BookOpen, AlertCircle, Scale, Users } from 'lucide-react';
+import { ArrowRight, ShieldCheck, Database, Search, Target, Clock, Trash2, CheckCircle2, ChevronDown, ChevronUp, Camera, ScanLine, BookOpen, AlertCircle, Scale, Users, GitCompareArrows } from 'lucide-react';
 import { useGetScanHistory, useGetUserGoals, useGetGoal, useListCollections, useListMealLogs, useDeleteMealLog, useListSafetyAlerts, useGetProduct, useGetProductEvaluation } from '@workspace/api-client-react';
 import { getSessionId } from '@/lib/session';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -239,6 +239,12 @@ export default function Home() {
                 <Search className="w-5 h-5" />
               </button>
             </form>
+            <div className="flex items-center justify-between gap-3 mt-3">
+              <Link href="/search" className="text-[11px] font-bold underline">看全部已驗證商品</Link>
+              <Link href="/compare" className="text-[11px] font-bold flex items-center gap-1">
+                <GitCompareArrows className="w-3.5 h-3.5" /> 比較已收藏
+              </Link>
+            </div>
           </div>
 
           <div className="flex flex-col gap-2 p-6 pb-2">
@@ -467,6 +473,12 @@ export default function Home() {
             >
               先看真實分析
             </button>
+            <Link
+              href="/search"
+              className="w-full py-2 text-xs font-black underline flex items-center justify-center gap-2"
+            >
+              <Search className="w-4 h-4" /> 沒有條碼？用商品名稱找
+            </Link>
           </div>
 
           <ul className="flex flex-col gap-1.5 mt-4">

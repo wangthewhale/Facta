@@ -3,8 +3,9 @@ import { useLocation, useParams } from 'wouter';
 import { Layout } from '@/components/layout';
 import { useGetAlternatives, useGetProduct } from '@workspace/api-client-react';
 import { useTranslation } from '@/lib/i18n';
-import { ArrowLeft, ArrowRight, TrendingDown } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ScanLine, Search, ShieldCheck, TrendingDown } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { track } from '@/lib/analytics';
 
 export default function Alternatives() {
   const { id } = useParams<{ id: string }>();
@@ -33,7 +34,8 @@ export default function Alternatives() {
             <Skeleton className="h-4 w-48 mt-2" />
           ) : originalProduct ? (
             <p className="text-sm text-muted-foreground mt-1">
-              For: <span className="font-semibold text-foreground">{lang === 'zh' && originalProduct.nameZh ? originalProduct.nameZh : originalProduct.name}</span>
+              {lang === 'zh' ? '這款：' : 'For: '}
+              <span className="font-semibold text-foreground">{lang === 'zh' && originalProduct.nameZh ? originalProduct.nameZh : originalProduct.name}</span>
             </p>
           ) : null}
         </div>
@@ -94,8 +96,41 @@ export default function Alternatives() {
               </div>
             ))
           ) : (
-            <div className="text-center p-10 border border-dashed border-border mt-10">
-              <p className="text-muted-foreground">{t('no_alternatives')}</p>
+            <div className="p-6 border border-dashed border-border mt-4 flex flex-col gap-5">
+              <div className="w-10 h-10 bg-primary/10 text-primary-strong flex items-center justify-center">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="font-black">還沒有足夠的同類驗證商品</p>
+                <p className="text-xs text-muted-foreground leading-relaxed mt-2">
+                  這不代表沒有更好的選擇，只代表目前找不到「同類、可買到、標示已核對」的商品。FACTA 不會拿不同種類硬湊推薦。
+                </p>
+              </div>
+              <div className="grid grid-cols-1 gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    track('alternative_empty_cta_clicked', { productId, action: 'scan' });
+                    setLocation('/scan');
+                  }}
+                  className="py-4 bg-primary text-black font-black text-sm flex items-center justify-center gap-2"
+                >
+                  <ScanLine className="w-4 h-4" /> 掃另一款同類食品
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    track('alternative_empty_cta_clicked', { productId, action: 'search' });
+                    setLocation('/search');
+                  }}
+                  className="py-4 border-2 border-foreground font-black text-sm flex items-center justify-center gap-2"
+                >
+                  <Search className="w-4 h-4" /> 用商品名稱找
+                </button>
+              </div>
+              <p className="text-[10px] text-muted-foreground leading-relaxed">
+                找到候選品後，先確認包裝名稱與營養標示；兩份報告都可收藏到「紀錄」頁一起比較。
+              </p>
             </div>
           )}
         </div>

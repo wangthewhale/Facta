@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useLocation, useSearch } from 'wouter';
 import { Layout } from '@/components/layout';
 import { useSearchProducts } from '@workspace/api-client-react';
 import { useTranslation } from '@/lib/i18n';
-import { Search as SearchIcon, ArrowLeft, SlidersHorizontal, BookOpen, AlertCircle } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Search as SearchIcon, ArrowLeft, SlidersHorizontal, BookOpen, AlertCircle, ShieldCheck } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getSessionId } from '@/lib/session';
 
@@ -39,7 +38,7 @@ export default function Search() {
     session_id: sessionId
   }, {
     query: {
-      enabled: initialQ.length > 0 || !!activeGoal || !!activeMeal || !!activeRetailer
+      enabled: true
     } as any
   });
 
@@ -82,6 +81,7 @@ export default function Search() {
                 autoFocus
               />
               <button type="submit" className="absolute right-3 text-muted-foreground hover:text-foreground transition-colors">
+                <span className="sr-only">搜尋</span>
                 <SearchIcon className="w-5 h-5" />
               </button>
             </form>
@@ -92,7 +92,7 @@ export default function Search() {
             <SlidersHorizontal className="w-4 h-4 text-muted-foreground mr-1" />
             {(activeGoal || activeMeal || activeRetailer) && (
               <button onClick={clearFilters} className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground px-2 hover:text-foreground">
-                Clear
+                清除
               </button>
             )}
             
@@ -107,7 +107,7 @@ export default function Search() {
               }}
               className="text-xs bg-background border border-border px-3 py-1.5 font-medium appearance-none focus:outline-none focus:border-primary"
             >
-              <option value="">All Goals</option>
+              <option value="">所有需求</option>
               <option value="skin_health">支持皮膚健康</option>
               <option value="body_fat">降低體脂／管理體重</option>
               <option value="protein">增加蛋白質攝取</option>
@@ -124,17 +124,31 @@ export default function Search() {
               }}
               className="text-xs bg-background border border-border px-3 py-1.5 font-medium appearance-none focus:outline-none focus:border-primary"
             >
-              <option value="">All Meals</option>
-              <option value="breakfast">早餐 (Breakfast)</option>
-              <option value="lunch">午餐 (Lunch)</option>
-              <option value="dinner">晚餐 (Dinner)</option>
-              <option value="snack">點心 (Snack)</option>
+              <option value="">所有時段</option>
+              <option value="breakfast">早餐</option>
+              <option value="lunch">午餐</option>
+              <option value="dinner">晚餐</option>
+              <option value="snack">點心</option>
             </select>
           </div>
         </div>
 
         {/* Results Body */}
         <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6">
+
+          {!isLoading && data && (
+            <div className="bg-card border border-border p-4 flex items-start gap-3">
+              <ShieldCheck className="w-5 h-5 text-primary-strong shrink-0 mt-0.5" />
+              <div>
+                <h1 className="text-sm font-black">{initialQ ? `「${initialQ}」的搜尋結果` : '先看已完成核對的商品'}</h1>
+                <p className="text-xs text-muted-foreground leading-relaxed mt-1">
+                  {initialQ
+                    ? '有完整標示證據才顯示分數；通路型錄只用來辨認候選品，不會直接判好壞。'
+                    : '先從已核對商品開始，也可以輸入名稱、品牌或類別；沒有條碼時一樣能找。'}
+                </p>
+              </div>
+            </div>
+          )}
           
           {isLoading && (
             <div className="flex flex-col gap-4">
@@ -169,12 +183,12 @@ export default function Search() {
                         {lang === 'zh' && item.product.nameZh ? item.product.nameZh : item.product.name}
                       </p>
                       <div className="shrink-0 flex items-center justify-center bg-primary/10 text-primary-strong w-8 h-8 font-mono font-bold text-sm">
-                        {item.product.overallScore}
+                        {item.product.overallScore ?? '—'}
                       </div>
                     </div>
                     
                     <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mt-1 truncate">
-                      {item.product.brandName || 'Unknown Brand'}
+                      {item.product.brandName || '品牌待確認'}
                     </p>
 
                     {item.fitLevel && (
@@ -200,6 +214,18 @@ export default function Search() {
                   </div>
                 </div>
               ))}
+              {!initialQ && (
+                <button
+                  type="button"
+                  onClick={() => setLocation('/scan')}
+                  className="p-4 border-2 border-dashed border-foreground text-left hover:bg-card transition-colors"
+                >
+                  <span className="block text-sm font-black">手上的商品沒出現？直接掃它</span>
+                  <span className="block text-xs text-muted-foreground mt-1 leading-relaxed">
+                    掃不到時再拍包裝背面；你補完一款，下一位掃到同款就能少走一步。
+                  </span>
+                </button>
+              )}
             </div>
           )}
 
@@ -238,23 +264,23 @@ export default function Search() {
               ))}
               <p className="text-[10px] text-muted-foreground">
                 {lang === 'zh'
-                  ? '型錄商品來自通路公開網頁，尚未經標籤驗證，因此不顯示評分。'
+                  ? '型錄商品來自通路公開網頁，尚未經標籤驗證，因此不顯示評分。你補完一款，下一位掃到同款時就能少走一步。'
                   : 'Catalog items come from public retailer listings and are unscored until label-verified.'}
               </p>
             </div>
           )}
 
-          {!isLoading && data && data.products && data.products.length === 0 && (!data.catalogItems || data.catalogItems.length === 0) && (
+          {!isLoading && data && initialQ && data.products && data.products.length === 0 && (!data.catalogItems || data.catalogItems.length === 0) && (
             <div className="flex flex-col items-center justify-center text-center p-10 bg-card border border-border border-dashed mt-4">
               <AlertCircle className="w-8 h-8 text-muted-foreground mb-4" />
               <p className="text-sm font-semibold mb-2">
                 找不到「{initialQ}」
               </p>
               <p className="text-xs text-muted-foreground mb-6 max-w-[200px]">
-                目前資料庫中沒有完全符合的紀錄。
+                目前資料庫沒有完全符合的紀錄。拍下包裝背面，FACTA 會先給你一份可核對的初步報告。
               </p>
               <button 
-                onClick={() => setLocation('/submit')}
+                onClick={() => setLocation(`/submit?name=${encodeURIComponent(initialQ)}`)}
                 className="bg-primary text-primary-foreground px-6 py-3 text-xs font-bold uppercase tracking-widest hover:bg-primary/90 transition-colors"
               >
                 {t('photo_ingredients')}
@@ -266,7 +292,7 @@ export default function Search() {
             <div className="mt-6 flex flex-col gap-4">
               <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
                 <BookOpen className="w-4 h-4" />
-                Related Guides
+                相關指南
               </div>
               <div className="flex flex-col gap-3">
                 {data.guides.map((guide, i) => (
