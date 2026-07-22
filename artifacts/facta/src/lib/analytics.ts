@@ -31,7 +31,10 @@ export type AnalyticsEvent =
   | 'alternative_candidate_verify_clicked'
   | 'alternative_commerce_listing_clicked'
   | 'launch_challenge_started'
-  | 'launch_sample_shared';
+  | 'launch_sample_shared'
+  | 'coverage_engine_search_started'
+  | 'live_catalog_candidate_verify_clicked'
+  | 'live_catalog_listing_opened';
 
 export function track(event: AnalyticsEvent, props?: Record<string, string | number | boolean | null>) {
   try {

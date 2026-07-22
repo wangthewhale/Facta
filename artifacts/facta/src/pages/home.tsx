@@ -3,7 +3,7 @@ import { Layout } from '@/components/layout';
 import { useTranslation } from '@/lib/i18n';
 import { Link, useLocation } from 'wouter';
 import { ArrowRight, ShieldCheck, Database, Search, Target, Clock, Trash2, CheckCircle2, ChevronDown, ChevronUp, Camera, ScanLine, BookOpen, AlertCircle, Scale, Users, GitCompareArrows, Menu, X, Share2, Sparkles } from 'lucide-react';
-import { useGetScanHistory, useGetUserGoals, useGetGoal, useListCollections, useListMealLogs, useDeleteMealLog, useListSafetyAlerts, useGetProduct, useGetProductEvaluation } from '@workspace/api-client-react';
+import { useGetDashboardStats, useGetScanHistory, useGetUserGoals, useGetGoal, useListCollections, useListMealLogs, useDeleteMealLog, useListSafetyAlerts, useGetProduct, useGetProductEvaluation } from '@workspace/api-client-react';
 import { getSessionId } from '@/lib/session';
 import { Skeleton } from '@/components/ui/skeleton';
 import { track } from '@/lib/analytics';
@@ -294,6 +294,7 @@ function LandingNavigation() {
         <div className="hidden md:flex items-center gap-6 text-xs font-black">
           <a href="#live-decision-demo" className="hover:text-primary-strong transition-colors">真實示範</a>
           <a href="#how-it-works" className="hover:text-primary-strong transition-colors">怎麼使用</a>
+          <a href="#coverage-engine" className="hover:text-primary-strong transition-colors">資料覆蓋</a>
           <a href="#launch-challenge" className="hover:text-primary-strong transition-colors">Launch 挑戰</a>
           <Link href="/methodology" className="hover:text-primary-strong transition-colors">評分方法</Link>
           <Link href="/preferences" className="hover:text-primary-strong transition-colors">家庭設定</Link>
@@ -322,6 +323,7 @@ function LandingNavigation() {
         <div className="md:hidden absolute top-full inset-x-0 bg-background border-b-2 border-foreground shadow-xl p-4 grid grid-cols-2 gap-2">
           <a href="#live-decision-demo" onClick={close} className="p-3 border border-border text-sm font-black">真實示範</a>
           <a href="#how-it-works" onClick={close} className="p-3 border border-border text-sm font-black">怎麼使用</a>
+          <a href="#coverage-engine" onClick={close} className="p-3 border border-border text-sm font-black">資料覆蓋</a>
           <a href="#launch-challenge" onClick={close} className="p-3 border border-border text-sm font-black">Launch 挑戰</a>
           <Link href="/methodology" onClick={close} className="p-3 border border-border text-sm font-black">評分方法</Link>
           <Link href="/search" onClick={close} className="p-3 border border-border text-sm font-black">搜尋商品</Link>
@@ -332,8 +334,74 @@ function LandingNavigation() {
   );
 }
 
+function CoverageEngine() {
+  const [, setLocation] = useLocation();
+  const stats = useGetDashboardStats({ query: { staleTime: 5 * 60 * 1000, retry: false } as any });
+  const discoverableRecords = stats.data?.discoverableRecords ?? 52_009;
+  const verifiedProducts = stats.data?.verifiedProducts ?? 0;
+  const evidenceCandidates = stats.data?.evidenceCandidates ?? 11_016;
+
+  return (
+    <section id="coverage-engine" className="scroll-mt-20 border-2 border-foreground bg-card">
+      <div className="grid grid-cols-1 md:grid-cols-[0.9fr_1.1fr]">
+        <div className="bg-primary text-black p-6 md:p-8 flex flex-col justify-between gap-8">
+          <div>
+            <p className="text-[10px] font-black tracking-[0.2em]">FACTA COVERAGE ENGINE</p>
+            <h2 className="text-3xl md:text-4xl font-black tracking-[-0.04em] leading-[1.03] mt-3">資料庫沒有，<br />不代表答案到此為止。</h2>
+            <p className="text-sm font-bold leading-relaxed mt-4 max-w-md">先查已驗證商品，再查官方與通路候選；仍不足時，AI 即時查現售電商。找到身分後，補拍標示就能推進分析。</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => { track('coverage_engine_search_started'); setLocation('/search'); }}
+            className="min-h-14 bg-black text-white px-5 font-black text-sm flex items-center justify-center gap-2 hover:bg-black/85 transition-colors"
+          >
+            <Search className="w-5 h-5" /> 試著找一款商品
+          </button>
+        </div>
+
+        <div className="p-6 md:p-8 flex flex-col gap-6">
+          <dl className="grid grid-cols-3 gap-3">
+            <div className="border-t-2 border-foreground pt-3">
+              <dt className="text-xl md:text-3xl font-black font-mono">{discoverableRecords.toLocaleString()}+</dt>
+              <dd className="text-[10px] font-bold text-muted-foreground mt-1 leading-snug">可搜尋商品紀錄</dd>
+            </div>
+            <div className="border-t-2 border-foreground pt-3">
+              <dt className="text-xl md:text-3xl font-black font-mono">{evidenceCandidates.toLocaleString()}</dt>
+              <dd className="text-[10px] font-bold text-muted-foreground mt-1 leading-snug">已有部分標示證據</dd>
+            </div>
+            <div className="border-t-2 border-foreground pt-3">
+              <dt className="text-xl md:text-3xl font-black font-mono">{verifiedProducts.toLocaleString()}</dt>
+              <dd className="text-[10px] font-bold text-muted-foreground mt-1 leading-snug">完整核對商品</dd>
+            </div>
+          </dl>
+
+          <ol className="flex flex-col gap-3">
+            {[
+              ['1', '辨認得到', '條碼、商品名稱、官方資料與 12 個現售電商一起找。'],
+              ['2', 'AI 補齊最快缺口', '優先處理最多人找、已有包裝照片、最接近可分析的商品。'],
+              ['3', '證據通過才下結論', '網頁不決定健康好壞；營養、成分與身分核對後才顯示買／少吃／換一款。'],
+            ].map(([number, title, description]) => (
+              <li key={number} className="grid grid-cols-[2rem_1fr] gap-3 border border-border p-4">
+                <span className="w-8 h-8 bg-foreground text-background font-black flex items-center justify-center">{number}</span>
+                <div>
+                  <p className="text-sm font-black">{title}</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed mt-1">{description}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+          <p className="text-[10px] text-muted-foreground leading-relaxed">「可搜尋」不等於「已驗證」。FACTA 公開區分商品身分、初步證據與完整核對，避免用大數字冒充可靠結論。</p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function LaunchChallenge() {
   const [, setLocation] = useLocation();
+  const stats = useGetDashboardStats({ query: { staleTime: 5 * 60 * 1000, retry: false } as any });
+  const discoverableRecords = stats.data?.discoverableRecords ?? 52_009;
+  const verifiedProducts = stats.data?.verifiedProducts ?? 0;
 
   return (
     <section id="launch-challenge" className="scroll-mt-20 bg-foreground text-background overflow-hidden">
@@ -385,12 +453,12 @@ function LaunchChallenge() {
           </div>
           <dl className="grid grid-cols-1 gap-4">
             <div className="border-t-2 border-black pt-3">
-              <dt className="text-3xl font-black font-mono">52,009</dt>
-              <dd className="text-xs font-bold mt-1">筆來源候選已匯入；未驗證就不冒充推薦</dd>
+              <dt className="text-3xl font-black font-mono">{discoverableRecords.toLocaleString()}+</dt>
+              <dd className="text-xs font-bold mt-1">筆可搜尋紀錄；找不到時再由 AI 即時查現售通路</dd>
             </div>
             <div className="border-t-2 border-black pt-3">
-              <dt className="text-3xl font-black font-mono">3</dt>
-              <dd className="text-xs font-bold mt-1">個你真正需要的答案：買、少吃、換一款</dd>
+              <dt className="text-3xl font-black font-mono">{verifiedProducts.toLocaleString()}</dt>
+              <dd className="text-xs font-bold mt-1">款已完整核對；這個數字每天只升級、不灌水</dd>
             </div>
             <div className="border-t-2 border-black pt-3">
               <dt className="text-3xl font-black font-mono">0</dt>
@@ -824,6 +892,8 @@ export default function Home() {
             拿一款常買的，現在試試
           </button>
         </section>
+
+        <CoverageEngine />
 
         <LaunchChallenge />
 

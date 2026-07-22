@@ -204,7 +204,18 @@ function trustedCommerceUrl(value: unknown): string | null {
     const url = new URL(value);
     if (url.protocol !== "https:") return null;
     const trusted = TRUSTED_COMMERCE_DOMAINS.some(domain => url.hostname === domain || url.hostname.endsWith(`.${domain}`));
-    return trusted ? url.toString() : null;
+    if (!trusted) return null;
+
+    // Search-result pages are useful as a fallback link, but they are not
+    // evidence that a specific product listing currently exists. Live catalog
+    // candidates must therefore resolve to a product/detail page.
+    const host = url.hostname.toLowerCase();
+    const path = url.pathname.toLowerCase();
+    if (host.startsWith("search.") || host.startsWith("find.")) return null;
+    if (/(?:^|\/)(?:search|find)(?:\/|\.|$)/i.test(path)) return null;
+    if (/searchshop\.jsp$/i.test(path)) return null;
+
+    return url.toString();
   } catch {
     return null;
   }

@@ -12,4 +12,13 @@ export interface DashboardStats {
   totalScans: number;
   pendingReviews: number;
   scansToday?: number;
+  sourceCandidates?: number;
+  barcodeCandidates?: number;
+  evidenceCandidates?: number;
+  nutritionCandidates?: number;
+  retailerCatalogProducts?: number;
+  discoverableRecords?: number;
+  /** @nullable */
+  catalogUpdatedAt?: string | null;
+  liveCatalogSearchEnabled?: boolean;
 }

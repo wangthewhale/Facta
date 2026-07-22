@@ -454,10 +454,48 @@ export const SearchProductsResponse = zod.object({
   "sourceUrl": zod.string().nullish(),
   "catalogSourceType": zod.union([zod.literal('retailer_catalog'),zod.literal('official_traceability'),zod.literal(null)]).nullish(),
   "evidenceTier": zod.union([zod.literal('catalog_only'),zod.literal('nutrition_ready'),zod.literal('ingredients_ready'),zod.literal('review_ready'),zod.literal(null)]).nullish(),
-  "aiEnrichmentStatus": zod.string().nullish()
+  "aiEnrichmentStatus": zod.string().nullish(),
+  "matchScore": zod.number().nullish()
 })).optional(),
   "total": zod.number().optional(),
   "hasMore": zod.boolean().optional()
+})
+
+
+/**
+ * @summary Find current matching products across trusted Taiwan ecommerce sources
+ */
+export const discoverCatalogQueryQMax = 120;
+
+
+
+export const DiscoverCatalogQueryParams = zod.object({
+  "q": zod.coerce.string().min(1).max(discoverCatalogQueryQMax)
+})
+
+export const DiscoverCatalogResponse = zod.object({
+  "status": zod.enum(['complete', 'no_results', 'unavailable', 'disabled']),
+  "query": zod.string(),
+  "searchedAt": zod.string(),
+  "candidates": zod.array(zod.object({
+  "name": zod.string(),
+  "brandName": zod.string().nullish(),
+  "retailerName": zod.string(),
+  "priceNtd": zod.number().nullish(),
+  "productUrl": zod.string(),
+  "whyMatchZh": zod.string(),
+  "matchConfidence": zod.enum(['exact', 'strong', 'related']),
+  "matchScore": zod.number(),
+  "shoppingLinks": zod.array(zod.object({
+  "retailerName": zod.string(),
+  "url": zod.string()
+}))
+})),
+  "searchLinks": zod.array(zod.object({
+  "retailerName": zod.string(),
+  "url": zod.string()
+})),
+  "caveatZh": zod.string()
 })
 
 
@@ -1692,7 +1730,15 @@ export const GetDashboardStatsResponse = zod.object({
   "verifiedProducts": zod.number(),
   "totalScans": zod.number(),
   "pendingReviews": zod.number(),
-  "scansToday": zod.number().optional()
+  "scansToday": zod.number().optional(),
+  "sourceCandidates": zod.number().optional(),
+  "barcodeCandidates": zod.number().optional(),
+  "evidenceCandidates": zod.number().optional(),
+  "nutritionCandidates": zod.number().optional(),
+  "retailerCatalogProducts": zod.number().optional(),
+  "discoverableRecords": zod.number().optional(),
+  "catalogUpdatedAt": zod.string().nullish(),
+  "liveCatalogSearchEnabled": zod.boolean().optional()
 })
 
 

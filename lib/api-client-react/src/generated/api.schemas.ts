@@ -820,6 +820,15 @@ export interface DashboardStats {
   totalScans: number;
   pendingReviews: number;
   scansToday?: number;
+  sourceCandidates?: number;
+  barcodeCandidates?: number;
+  evidenceCandidates?: number;
+  nutritionCandidates?: number;
+  retailerCatalogProducts?: number;
+  discoverableRecords?: number;
+  /** @nullable */
+  catalogUpdatedAt?: string | null;
+  liveCatalogSearchEnabled?: boolean;
 }
 
 export interface GoalSummary {
@@ -1140,6 +1149,8 @@ export interface CatalogSeedItem {
   evidenceTier?: CatalogSeedItemEvidenceTier;
   /** @nullable */
   aiEnrichmentStatus?: string | null;
+  /** @nullable */
+  matchScore?: number | null;
 }
 
 export interface SearchResults {
@@ -1150,6 +1161,53 @@ export interface SearchResults {
   catalogItems?: CatalogSeedItem[];
   total?: number;
   hasMore?: boolean;
+}
+
+export interface CatalogShoppingLink {
+  retailerName: string;
+  url: string;
+}
+
+export type LiveCatalogCandidateMatchConfidence = typeof LiveCatalogCandidateMatchConfidence[keyof typeof LiveCatalogCandidateMatchConfidence];
+
+
+export const LiveCatalogCandidateMatchConfidence = {
+  exact: 'exact',
+  strong: 'strong',
+  related: 'related',
+} as const;
+
+export interface LiveCatalogCandidate {
+  name: string;
+  /** @nullable */
+  brandName?: string | null;
+  retailerName: string;
+  /** @nullable */
+  priceNtd?: number | null;
+  productUrl: string;
+  whyMatchZh: string;
+  matchConfidence: LiveCatalogCandidateMatchConfidence;
+  matchScore: number;
+  shoppingLinks: CatalogShoppingLink[];
+}
+
+export type LiveCatalogDiscoveryStatus = typeof LiveCatalogDiscoveryStatus[keyof typeof LiveCatalogDiscoveryStatus];
+
+
+export const LiveCatalogDiscoveryStatus = {
+  complete: 'complete',
+  no_results: 'no_results',
+  unavailable: 'unavailable',
+  disabled: 'disabled',
+} as const;
+
+export interface LiveCatalogDiscovery {
+  status: LiveCatalogDiscoveryStatus;
+  query: string;
+  searchedAt: string;
+  candidates: LiveCatalogCandidate[];
+  searchLinks: CatalogShoppingLink[];
+  caveatZh: string;
 }
 
 export type GuideDetailSourcesItem = {
@@ -1353,6 +1411,14 @@ retailer_slug?: string | null;
  */
 session_id?: string | null;
 limit?: number;
+};
+
+export type DiscoverCatalogParams = {
+/**
+ * @minLength 1
+ * @maxLength 120
+ */
+q: string;
 };
 
 export type ListGuidesParams = {

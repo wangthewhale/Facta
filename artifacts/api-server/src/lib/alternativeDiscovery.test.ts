@@ -66,6 +66,22 @@ describe("alternative discovery", () => {
     expect(candidates[0]?.retailerName).toBe("momo");
   });
 
+  it("rejects retailer search pages that do not prove a specific listing exists", () => {
+    const candidates = sanitizeCommerceCandidates([
+      {
+        name: "統一 PH9.0 鹼性離子水",
+        retailerName: "momo",
+        productUrl: "https://www.momoshop.com.tw/search/searchShop.jsp?keyword=PH9.0",
+      },
+      {
+        name: "悅氏礦泉水",
+        retailerName: "PChome",
+        productUrl: "https://ecshweb.pchome.com.tw/search/v3.3/?q=礦泉水",
+      },
+    ]);
+    expect(candidates).toHaveLength(0);
+  });
+
   it("builds retailer searches without claiming the item is in stock", () => {
     const links = buildShoppingLinks("高效益生菌", "MIHONG");
     expect(links).toHaveLength(3);

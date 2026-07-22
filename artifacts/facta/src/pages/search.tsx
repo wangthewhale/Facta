@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { useLocation, useSearch } from 'wouter';
 import { Layout } from '@/components/layout';
-import { useSearchProducts } from '@workspace/api-client-react';
+import { useDiscoverCatalog, useSearchProducts } from '@workspace/api-client-react';
 import { useTranslation } from '@/lib/i18n';
-import { Search as SearchIcon, ArrowLeft, SlidersHorizontal, BookOpen, AlertCircle, ShieldCheck } from 'lucide-react';
+import { Search as SearchIcon, ArrowLeft, SlidersHorizontal, BookOpen, AlertCircle, ShieldCheck, Sparkles, ExternalLink, Camera, LoaderCircle } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getSessionId } from '@/lib/session';
+import { track } from '@/lib/analytics';
 
 const fitColors: Record<string, string> = {
   great_fit: '#B9F24A',
@@ -40,6 +41,14 @@ export default function Search() {
     query: {
       enabled: true
     } as any
+  });
+
+  const liveDiscovery = useDiscoverCatalog({ q: initialQ }, {
+    query: {
+      enabled: initialQ.trim().length > 0,
+      staleTime: 6 * 60 * 60 * 1000,
+      retry: false,
+    } as any,
   });
 
   const handleSearch = (e: React.FormEvent) => {
@@ -143,7 +152,7 @@ export default function Search() {
                 <h1 className="text-sm font-black">{initialQ ? `「${initialQ}」的搜尋結果` : '先看已完成核對的商品'}</h1>
                 <p className="text-xs text-muted-foreground leading-relaxed mt-1">
                   {initialQ
-                    ? '有完整標示證據才顯示分數；通路型錄只用來辨認候選品，不會直接判好壞。'
+                    ? '先查已驗證資料與 52,009 筆來源候選；不足時，AI 會接著查現售電商，不用你自己到處找。'
                     : '先從已核對商品開始，也可以輸入名稱、品牌或類別；沒有條碼時一樣能找。'}
                 </p>
               </div>
@@ -162,6 +171,83 @@ export default function Search() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {initialQ && liveDiscovery.isLoading && (
+            <section className="bg-foreground text-background p-5 flex items-start gap-4" aria-live="polite">
+              <LoaderCircle className="w-6 h-6 text-primary animate-spin shrink-0 mt-0.5" />
+              <div>
+                <p className="text-[10px] font-black tracking-[0.18em] text-primary">FACTA LIVE CATALOG</p>
+                <h2 className="font-black text-lg mt-2">AI 正在替你查現售商品</h2>
+                <p className="text-xs text-background/65 leading-relaxed mt-2">同步找 momo、PChome、蝦皮、家樂福、全聯、Costco 等 12 個通路；只留下同一商品或同類型的直接商品頁。</p>
+              </div>
+            </section>
+          )}
+
+          {initialQ && liveDiscovery.data && liveDiscovery.data.candidates.length > 0 && (
+            <section className="flex flex-col gap-3" aria-labelledby="live-catalog-heading">
+              <div className="bg-foreground text-background p-5">
+                <div className="flex items-center gap-2 text-primary">
+                  <Sparkles className="w-5 h-5" />
+                  <p className="text-[10px] font-black tracking-[0.18em]">FACTA LIVE CATALOG</p>
+                </div>
+                <h2 id="live-catalog-heading" className="font-black text-xl mt-3">網路上找到 {liveDiscovery.data.candidates.length} 款可核對的現售商品</h2>
+                <p className="text-xs text-background/65 leading-relaxed mt-2">這些是商品身分與購買線索，不是健康推薦。你選中手上那款後，FACTA 會用包裝標示完成分析。</p>
+              </div>
+
+              {liveDiscovery.data.candidates.map((candidate) => (
+                <article key={candidate.productUrl} className="bg-card border-2 border-foreground p-4 flex flex-col gap-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-14 h-14 bg-muted shrink-0 flex items-center justify-center">
+                      <SearchIcon className="w-5 h-5 text-muted-foreground/40" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="px-2 py-1 text-[9px] font-black tracking-wide bg-primary text-black">
+                          {candidate.matchConfidence === 'exact' ? '高度符合' : '同類商品'}
+                        </span>
+                        <span className="text-[10px] font-bold text-muted-foreground">{candidate.retailerName}{candidate.priceNtd != null ? ` · NT$${candidate.priceNtd.toLocaleString()}` : ''}</span>
+                      </div>
+                      <h3 className="font-black text-sm leading-snug mt-2">{candidate.name}</h3>
+                      {candidate.brandName && <p className="text-[10px] text-muted-foreground mt-1">{candidate.brandName}</p>}
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed border-l-4 border-primary pl-3">{candidate.whyMatchZh}</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        track('live_catalog_candidate_verify_clicked', { query: initialQ, retailer: candidate.retailerName });
+                        setLocation(`/submit?name=${encodeURIComponent(candidate.name)}&brand=${encodeURIComponent(candidate.brandName ?? '')}`);
+                      }}
+                      className="min-h-12 bg-primary text-black px-4 text-xs font-black flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors"
+                    >
+                      <Camera className="w-4 h-4" /> 這是手上那款，立即分析
+                    </button>
+                    <a
+                      href={candidate.productUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => track('live_catalog_listing_opened', { query: initialQ, retailer: candidate.retailerName })}
+                      className="min-h-12 border-2 border-foreground px-4 text-xs font-black flex items-center justify-center gap-2 hover:bg-foreground hover:text-background transition-colors"
+                    >
+                      查看商品頁 <ExternalLink className="w-4 h-4" />
+                    </a>
+                  </div>
+                </article>
+              ))}
+              <p className="text-[10px] text-muted-foreground leading-relaxed">{liveDiscovery.data.caveatZh}</p>
+            </section>
+          )}
+
+          {initialQ && liveDiscovery.data && liveDiscovery.data.status !== 'complete' && (
+            <div className="bg-card border border-border p-4 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-black">即時電商搜尋暫時沒有可靠結果</p>
+                <p className="text-xs text-muted-foreground leading-relaxed mt-1">FACTA 不會用不確定的網頁硬湊商品。拍下手上包裝，仍可直接建立可核對分析。</p>
+              </div>
             </div>
           )}
 
@@ -281,7 +367,7 @@ export default function Search() {
             </div>
           )}
 
-          {!isLoading && data && initialQ && data.products && data.products.length === 0 && (!data.catalogItems || data.catalogItems.length === 0) && (
+          {!isLoading && !liveDiscovery.isLoading && data && initialQ && data.products && data.products.length === 0 && (!data.catalogItems || data.catalogItems.length === 0) && (!liveDiscovery.data?.candidates.length) && (
             <div className="flex flex-col items-center justify-center text-center p-10 bg-card border border-border border-dashed mt-4">
               <AlertCircle className="w-8 h-8 text-muted-foreground mb-4" />
               <p className="text-sm font-semibold mb-2">

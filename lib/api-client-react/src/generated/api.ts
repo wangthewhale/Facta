@@ -42,6 +42,7 @@ import type {
   DeleteDecisionOutcome200,
   DeleteDecisionOutcomeParams,
   DeleteMealLog200,
+  DiscoverCatalogParams,
   ErrorResponse,
   Evaluation,
   FinalizeResult,
@@ -60,6 +61,7 @@ import type {
   ListMealLogsParams,
   ListProductsParams,
   ListRecentProductsParams,
+  LiveCatalogDiscovery,
   MealLog,
   MealLogInput,
   OcrConfirmation,
@@ -1189,6 +1191,90 @@ export function useSearchProducts<TData = Awaited<ReturnType<typeof searchProduc
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getSearchProductsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getDiscoverCatalogUrl = (params: DiscoverCatalogParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/search/discover?${stringifiedParams}` : `/api/search/discover`
+}
+
+/**
+ * @summary Find current matching products across trusted Taiwan ecommerce sources
+ */
+export const discoverCatalog = async (params: DiscoverCatalogParams, options?: RequestInit): Promise<LiveCatalogDiscovery> => {
+
+  return customFetch<LiveCatalogDiscovery>(getDiscoverCatalogUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getDiscoverCatalogQueryKey = (params?: DiscoverCatalogParams,) => {
+    return [
+    `/api/search/discover`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getDiscoverCatalogQueryOptions = <TData = Awaited<ReturnType<typeof discoverCatalog>>, TError = ErrorType<ErrorResponse>>(params: DiscoverCatalogParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof discoverCatalog>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getDiscoverCatalogQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof discoverCatalog>>> = ({ signal }) => discoverCatalog(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof discoverCatalog>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type DiscoverCatalogQueryResult = NonNullable<Awaited<ReturnType<typeof discoverCatalog>>>
+export type DiscoverCatalogQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Find current matching products across trusted Taiwan ecommerce sources
+ */
+
+export function useDiscoverCatalog<TData = Awaited<ReturnType<typeof discoverCatalog>>, TError = ErrorType<ErrorResponse>>(
+ params: DiscoverCatalogParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof discoverCatalog>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getDiscoverCatalogQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

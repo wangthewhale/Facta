@@ -379,6 +379,30 @@ paths:
               schema:
                 $ref: "#/components/schemas/SearchResults"
 
+  /search/discover:
+    get:
+      operationId: discoverCatalog
+      tags: [products]
+      summary: Find current matching products across trusted Taiwan ecommerce sources
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 120 }
+      responses:
+        "200":
+          description: Live catalog discovery result; listings are identity evidence only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LiveCatalogDiscovery"
+        "400":
+          description: Invalid query
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   # ── Guides ────────────────────────────────────────────────────────────────
 
   /guides:
@@ -2040,6 +2064,14 @@ components:
         totalScans:       { type: integer }
         pendingReviews:   { type: integer }
         scansToday:       { type: integer }
+        sourceCandidates: { type: integer }
+        barcodeCandidates: { type: integer }
+        evidenceCandidates: { type: integer }
+        nutritionCandidates: { type: integer }
+        retailerCatalogProducts: { type: integer }
+        discoverableRecords: { type: integer }
+        catalogUpdatedAt: { type: ["string", "null"] }
+        liveCatalogSearchEnabled: { type: boolean }
 
     # ── Goals ─────────────────────────────────────────────────────────────
 
@@ -2324,6 +2356,52 @@ components:
           type: ["string", "null"]
           enum: [catalog_only, nutrition_ready, ingredients_ready, review_ready, null]
         aiEnrichmentStatus: { type: ["string", "null"] }
+        matchScore: { type: ["number", "null"] }
+
+    CatalogShoppingLink:
+      type: object
+      required: [retailerName, url]
+      properties:
+        retailerName: { type: string }
+        url: { type: string }
+
+    LiveCatalogCandidate:
+      type: object
+      required: [name, retailerName, productUrl, whyMatchZh, matchConfidence, matchScore, shoppingLinks]
+      properties:
+        name: { type: string }
+        brandName: { type: ["string", "null"] }
+        retailerName: { type: string }
+        priceNtd: { type: ["number", "null"] }
+        productUrl: { type: string }
+        whyMatchZh: { type: string }
+        matchConfidence:
+          type: string
+          enum: [exact, strong, related]
+        matchScore: { type: number }
+        shoppingLinks:
+          type: array
+          items:
+            $ref: "#/components/schemas/CatalogShoppingLink"
+
+    LiveCatalogDiscovery:
+      type: object
+      required: [status, query, searchedAt, candidates, searchLinks, caveatZh]
+      properties:
+        status:
+          type: string
+          enum: [complete, no_results, unavailable, disabled]
+        query: { type: string }
+        searchedAt: { type: string }
+        candidates:
+          type: array
+          items:
+            $ref: "#/components/schemas/LiveCatalogCandidate"
+        searchLinks:
+          type: array
+          items:
+            $ref: "#/components/schemas/CatalogShoppingLink"
+        caveatZh: { type: string }
 
     # ── Guides ────────────────────────────────────────────────────────────
 

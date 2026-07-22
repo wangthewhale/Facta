@@ -30,4 +30,6 @@ export interface CatalogSeedItem {
   evidenceTier?: CatalogSeedItemEvidenceTier;
   /** @nullable */
   aiEnrichmentStatus?: string | null;
+  /** @nullable */
+  matchScore?: number | null;
 }

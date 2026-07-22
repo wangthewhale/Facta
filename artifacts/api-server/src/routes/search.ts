@@ -12,8 +12,51 @@ import { calculateGoalFit, GOAL_RULESET_VERSION } from "../lib/goalFit.js";
 import { nutritionFactsTable } from "@workspace/db";
 import { RULESET_VERSION } from "../lib/scoring.js";
 import { resolveCatalogProduct } from "../lib/catalogEvidence.js";
+import { expandCatalogSearchTerms, scoreCatalogCandidate } from "../lib/catalogDiscovery.js";
+import { discoverLiveCatalog } from "../lib/liveCatalogDiscovery.js";
 
 const router: IRouter = Router();
+
+const LIVE_DISCOVERY_RATE_LIMIT = 24;
+const LIVE_DISCOVERY_RATE_WINDOW_MS = 10 * 60 * 1000;
+const liveDiscoveryRateBuckets = new Map<string, { count: number; resetAt: number }>();
+
+function canDiscoverCatalog(clientId: string): { allowed: boolean; retryAfterSeconds: number } {
+  const now = Date.now();
+  const current = liveDiscoveryRateBuckets.get(clientId);
+  if (!current || current.resetAt <= now) {
+    if (liveDiscoveryRateBuckets.size >= 5_000) {
+      for (const [key, bucket] of liveDiscoveryRateBuckets) {
+        if (bucket.resetAt <= now) liveDiscoveryRateBuckets.delete(key);
+      }
+      if (liveDiscoveryRateBuckets.size >= 5_000) {
+        liveDiscoveryRateBuckets.delete(liveDiscoveryRateBuckets.keys().next().value ?? "");
+      }
+    }
+    liveDiscoveryRateBuckets.set(clientId, { count: 1, resetAt: now + LIVE_DISCOVERY_RATE_WINDOW_MS });
+    return { allowed: true, retryAfterSeconds: 0 };
+  }
+  if (current.count >= LIVE_DISCOVERY_RATE_LIMIT) {
+    return { allowed: false, retryAfterSeconds: Math.ceil((current.resetAt - now) / 1000) };
+  }
+  current.count += 1;
+  return { allowed: true, retryAfterSeconds: 0 };
+}
+
+router.get("/search/discover", async (req, res): Promise<void> => {
+  const q = typeof req.query.q === "string" ? req.query.q.normalize("NFKC").trim() : "";
+  if (!q || q.length > 120) {
+    res.status(400).json({ error: "q must be between 1 and 120 characters" });
+    return;
+  }
+  const rate = canDiscoverCatalog(req.ip || "unknown");
+  if (!rate.allowed) {
+    res.setHeader("Retry-After", String(rate.retryAfterSeconds));
+    res.status(429).json({ error: "Too many live catalog searches. Please try again later." });
+    return;
+  }
+  res.json(await discoverLiveCatalog(q));
+});
 
 /** Parse natural language query into structured filters (heuristic, no AI for V1) */
 function parseNaturalLanguage(q: string) {
@@ -70,17 +113,18 @@ router.get("/search", async (req, res): Promise<void> => {
   }
 
   // Build text search — ONLY verified products are returned
-  const searchTerms = [q, ...nlFilters.keywords].filter(Boolean);
+  const searchTerms = [...new Set([
+    ...expandCatalogSearchTerms(q),
+    ...nlFilters.keywords.flatMap(expandCatalogSearchTerms),
+  ].filter(Boolean))];
   const conditions = [eq(productsTable.verificationStatus, "verified")];
 
   if (searchTerms.length > 0) {
-    const textConditions = searchTerms.map(term =>
-      or(
+    const textConditions = searchTerms.flatMap(term => [
         ilike(productsTable.name, `%${term}%`),
         ilike(productsTable.nameZh, `%${term}%`),
         ilike(productsTable.ingredientsList, `%${term}%`),
-      )
-    );
+    ]);
     conditions.push(or(...textConditions)!);
   }
 
@@ -88,6 +132,13 @@ router.get("/search", async (req, res): Promise<void> => {
     .where(and(...conditions))
     .orderBy(desc(productsTable.updatedAt))
     .limit(limit * 2); // fetch more, then rank
+  if (q.trim()) {
+    products.sort((a, b) => scoreCatalogCandidate(q, {
+      name: b.nameZh ?? b.name,
+    }) - scoreCatalogCandidate(q, {
+      name: a.nameZh ?? a.name,
+    }));
+  }
 
   // Get goal fit for each product if goal requested
   const results = await Promise.all(products.map(async (p) => {
@@ -213,8 +264,20 @@ router.get("/search", async (req, res): Promise<void> => {
         FROM facta_catalog_seed
         WHERE ${sql.join(termConds, sql` OR `)}
         ORDER BY catalog_completeness_score DESC NULLS LAST, product_name
-        LIMIT ${catalogLimit}`);
-      for (const r of (rows as any).rows ?? rows) {
+        LIMIT ${Math.min(catalogLimit * 12, 240)}`);
+      const rankedRows = [...((rows as any).rows ?? rows)]
+        .map((r: any) => ({
+          row: r,
+          matchScore: scoreCatalogCandidate(q, {
+            name: r.product_name,
+            brandName: r.brand_raw,
+            categoryName: r.category_normalized,
+          }),
+        }))
+        .filter((item: any) => item.matchScore >= 50)
+        .sort((a: any, b: any) => b.matchScore - a.matchScore)
+        .slice(0, catalogLimit);
+      for (const { row: r, matchScore } of rankedRows) {
         catalogItems.push({
           factaSeedId: r.facta_seed_id,
           productName: r.product_name,
@@ -228,6 +291,7 @@ router.get("/search", async (req, res): Promise<void> => {
           catalogSourceType: "retailer_catalog",
           evidenceTier: "catalog_only",
           aiEnrichmentStatus: null,
+          matchScore,
         });
       }
     } catch (err) {
@@ -256,8 +320,20 @@ router.get("/search", async (req, res): Promise<void> => {
             WHEN 'ingredients_ready' THEN 2
             ELSE 3
           END, product_name
-          LIMIT ${remainingLimit}`);
-        for (const r of (rows as any).rows ?? rows) {
+          LIMIT ${Math.min(Math.max(remainingLimit, 1) * 12, 240)}`);
+        const rankedRows = [...((rows as any).rows ?? rows)]
+          .map((r: any) => ({
+            row: r,
+            matchScore: scoreCatalogCandidate(q, {
+              name: r.product_name,
+              brandName: r.brand_name,
+              categoryName: r.category_name,
+            }),
+          }))
+          .filter((item: any) => item.matchScore >= 50)
+          .sort((a: any, b: any) => b.matchScore - a.matchScore)
+          .slice(0, remainingLimit);
+        for (const { row: r, matchScore } of rankedRows) {
           const imageUrls = Array.isArray(r.image_urls) ? r.image_urls : [];
           catalogItems.push({
             factaSeedId: `${r.source_key}:${r.source_record_id}`,
@@ -272,6 +348,7 @@ router.get("/search", async (req, res): Promise<void> => {
             catalogSourceType: "official_traceability",
             evidenceTier: r.evidence_tier ?? "catalog_only",
             aiEnrichmentStatus: r.ai_enrichment_status ?? null,
+            matchScore,
           });
         }
       }
