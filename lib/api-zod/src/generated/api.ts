@@ -865,6 +865,14 @@ export const GetProductEvaluationParams = zod.object({
   "productId": zod.coerce.number()
 })
 
+export const getProductEvaluationQuerySessionIdMax = 128;
+
+
+
+export const GetProductEvaluationQueryParams = zod.object({
+  "session_id": zod.coerce.string().max(getProductEvaluationQuerySessionIdMax).optional().describe('Apply the latest explicitly saved household food profile to personal alerts')
+})
+
 export const GetProductEvaluationResponse = zod.object({
   "id": zod.number(),
   "productId": zod.number(),
@@ -908,8 +916,15 @@ export const GetProductEvaluationResponse = zod.object({
   "type": zod.string(),
   "message": zod.string(),
   "messageZh": zod.string().nullish(),
-  "severity": zod.string().optional()
-})).optional()
+  "severity": zod.string().optional(),
+  "profileNames": zod.array(zod.string()).optional()
+})).optional(),
+  "personalization": zod.object({
+  "enabled": zod.boolean(),
+  "profileNames": zod.array(zod.string()),
+  "conditionCount": zod.number(),
+  "updatedAt": zod.string().nullish()
+}).optional()
 })
 
 
@@ -1211,11 +1226,50 @@ export const GetPreferencesParams = zod.object({
   "sessionId": zod.coerce.string()
 })
 
+export const getPreferencesResponseHouseholdMembersItemIdMax = 64;
+
+export const getPreferencesResponseHouseholdMembersItemNameMax = 80;
+
+export const getPreferencesResponseHouseholdMembersItemAllergensItemMax = 64;
+
+export const getPreferencesResponseHouseholdMembersItemAllergensMax = 20;
+
+export const getPreferencesResponseHouseholdMembersItemDietaryPreferencesItemMax = 64;
+
+export const getPreferencesResponseHouseholdMembersItemDietaryPreferencesMax = 20;
+
+export const getPreferencesResponseHouseholdMembersItemAvoidIngredientsItemMax = 80;
+
+export const getPreferencesResponseHouseholdMembersItemAvoidIngredientsMax = 30;
+
+export const getPreferencesResponseHouseholdMembersItemHabitsItemMax = 64;
+
+export const getPreferencesResponseHouseholdMembersItemHabitsMax = 20;
+
+export const getPreferencesResponseHouseholdMembersItemNotesMax = 500;
+
+
+
 export const GetPreferencesResponse = zod.object({
   "sessionId": zod.string(),
+  "displayName": zod.string().nullish(),
+  "email": zod.string().nullish(),
   "allergens": zod.array(zod.string()),
   "dietaryPreferences": zod.array(zod.string()),
   "avoidIngredients": zod.array(zod.string()),
+  "habits": zod.array(zod.string()),
+  "notes": zod.string().nullish(),
+  "householdMembers": zod.array(zod.object({
+  "id": zod.string().min(1).max(getPreferencesResponseHouseholdMembersItemIdMax),
+  "name": zod.string().min(1).max(getPreferencesResponseHouseholdMembersItemNameMax),
+  "relationship": zod.enum(['partner', 'child', 'parent', 'other']),
+  "allergens": zod.array(zod.string().max(getPreferencesResponseHouseholdMembersItemAllergensItemMax)).max(getPreferencesResponseHouseholdMembersItemAllergensMax),
+  "dietaryPreferences": zod.array(zod.string().max(getPreferencesResponseHouseholdMembersItemDietaryPreferencesItemMax)).max(getPreferencesResponseHouseholdMembersItemDietaryPreferencesMax),
+  "avoidIngredients": zod.array(zod.string().min(1).max(getPreferencesResponseHouseholdMembersItemAvoidIngredientsItemMax)).max(getPreferencesResponseHouseholdMembersItemAvoidIngredientsMax),
+  "habits": zod.array(zod.string().max(getPreferencesResponseHouseholdMembersItemHabitsItemMax)).max(getPreferencesResponseHouseholdMembersItemHabitsMax),
+  "notes": zod.string().max(getPreferencesResponseHouseholdMembersItemNotesMax).nullish()
+})),
+  "personalizationEnabled": zod.boolean(),
   "locale": zod.string(),
   "updatedAt": zod.string().optional()
 })
@@ -1228,23 +1282,126 @@ export const SavePreferencesParams = zod.object({
   "sessionId": zod.coerce.string()
 })
 
+export const savePreferencesBodyDisplayNameMax = 80;
+
+export const savePreferencesBodyEmailMax = 254;
+
+export const savePreferencesBodyAllergensMax = 20;
+
+export const savePreferencesBodyDietaryPreferencesMax = 20;
+
+export const savePreferencesBodyAvoidIngredientsMax = 30;
+
+export const savePreferencesBodyHabitsMax = 20;
+
+export const savePreferencesBodyNotesMax = 500;
+
+export const savePreferencesBodyHouseholdMembersItemIdMax = 64;
+
+export const savePreferencesBodyHouseholdMembersItemNameMax = 80;
+
+export const savePreferencesBodyHouseholdMembersItemAllergensItemMax = 64;
+
+export const savePreferencesBodyHouseholdMembersItemAllergensMax = 20;
+
+export const savePreferencesBodyHouseholdMembersItemDietaryPreferencesItemMax = 64;
+
+export const savePreferencesBodyHouseholdMembersItemDietaryPreferencesMax = 20;
+
+export const savePreferencesBodyHouseholdMembersItemAvoidIngredientsItemMax = 80;
+
+export const savePreferencesBodyHouseholdMembersItemAvoidIngredientsMax = 30;
+
+export const savePreferencesBodyHouseholdMembersItemHabitsItemMax = 64;
+
+export const savePreferencesBodyHouseholdMembersItemHabitsMax = 20;
+
+export const savePreferencesBodyHouseholdMembersItemNotesMax = 500;
+
+export const savePreferencesBodyHouseholdMembersMax = 6;
+
+export const savePreferencesBodyPersonalizationEnabledDefault = false;
 export const savePreferencesBodyLocaleDefault = `zh-TW`;
 
 export const SavePreferencesBody = zod.object({
-  "allergens": zod.array(zod.string()).optional(),
-  "dietaryPreferences": zod.array(zod.string()).optional(),
-  "avoidIngredients": zod.array(zod.string()).optional(),
+  "displayName": zod.string().max(savePreferencesBodyDisplayNameMax).nullish(),
+  "email": zod.string().max(savePreferencesBodyEmailMax).nullish(),
+  "allergens": zod.array(zod.string()).max(savePreferencesBodyAllergensMax).optional(),
+  "dietaryPreferences": zod.array(zod.string()).max(savePreferencesBodyDietaryPreferencesMax).optional(),
+  "avoidIngredients": zod.array(zod.string()).max(savePreferencesBodyAvoidIngredientsMax).optional(),
+  "habits": zod.array(zod.string()).max(savePreferencesBodyHabitsMax).optional(),
+  "notes": zod.string().max(savePreferencesBodyNotesMax).nullish(),
+  "householdMembers": zod.array(zod.object({
+  "id": zod.string().min(1).max(savePreferencesBodyHouseholdMembersItemIdMax),
+  "name": zod.string().min(1).max(savePreferencesBodyHouseholdMembersItemNameMax),
+  "relationship": zod.enum(['partner', 'child', 'parent', 'other']),
+  "allergens": zod.array(zod.string().max(savePreferencesBodyHouseholdMembersItemAllergensItemMax)).max(savePreferencesBodyHouseholdMembersItemAllergensMax),
+  "dietaryPreferences": zod.array(zod.string().max(savePreferencesBodyHouseholdMembersItemDietaryPreferencesItemMax)).max(savePreferencesBodyHouseholdMembersItemDietaryPreferencesMax),
+  "avoidIngredients": zod.array(zod.string().min(1).max(savePreferencesBodyHouseholdMembersItemAvoidIngredientsItemMax)).max(savePreferencesBodyHouseholdMembersItemAvoidIngredientsMax),
+  "habits": zod.array(zod.string().max(savePreferencesBodyHouseholdMembersItemHabitsItemMax)).max(savePreferencesBodyHouseholdMembersItemHabitsMax),
+  "notes": zod.string().max(savePreferencesBodyHouseholdMembersItemNotesMax).nullish()
+})).max(savePreferencesBodyHouseholdMembersMax).optional(),
+  "personalizationEnabled": zod.boolean().default(savePreferencesBodyPersonalizationEnabledDefault),
   "locale": zod.string().default(savePreferencesBodyLocaleDefault)
 })
 
+export const savePreferencesResponseHouseholdMembersItemIdMax = 64;
+
+export const savePreferencesResponseHouseholdMembersItemNameMax = 80;
+
+export const savePreferencesResponseHouseholdMembersItemAllergensItemMax = 64;
+
+export const savePreferencesResponseHouseholdMembersItemAllergensMax = 20;
+
+export const savePreferencesResponseHouseholdMembersItemDietaryPreferencesItemMax = 64;
+
+export const savePreferencesResponseHouseholdMembersItemDietaryPreferencesMax = 20;
+
+export const savePreferencesResponseHouseholdMembersItemAvoidIngredientsItemMax = 80;
+
+export const savePreferencesResponseHouseholdMembersItemAvoidIngredientsMax = 30;
+
+export const savePreferencesResponseHouseholdMembersItemHabitsItemMax = 64;
+
+export const savePreferencesResponseHouseholdMembersItemHabitsMax = 20;
+
+export const savePreferencesResponseHouseholdMembersItemNotesMax = 500;
+
+
+
 export const SavePreferencesResponse = zod.object({
   "sessionId": zod.string(),
+  "displayName": zod.string().nullish(),
+  "email": zod.string().nullish(),
   "allergens": zod.array(zod.string()),
   "dietaryPreferences": zod.array(zod.string()),
   "avoidIngredients": zod.array(zod.string()),
+  "habits": zod.array(zod.string()),
+  "notes": zod.string().nullish(),
+  "householdMembers": zod.array(zod.object({
+  "id": zod.string().min(1).max(savePreferencesResponseHouseholdMembersItemIdMax),
+  "name": zod.string().min(1).max(savePreferencesResponseHouseholdMembersItemNameMax),
+  "relationship": zod.enum(['partner', 'child', 'parent', 'other']),
+  "allergens": zod.array(zod.string().max(savePreferencesResponseHouseholdMembersItemAllergensItemMax)).max(savePreferencesResponseHouseholdMembersItemAllergensMax),
+  "dietaryPreferences": zod.array(zod.string().max(savePreferencesResponseHouseholdMembersItemDietaryPreferencesItemMax)).max(savePreferencesResponseHouseholdMembersItemDietaryPreferencesMax),
+  "avoidIngredients": zod.array(zod.string().min(1).max(savePreferencesResponseHouseholdMembersItemAvoidIngredientsItemMax)).max(savePreferencesResponseHouseholdMembersItemAvoidIngredientsMax),
+  "habits": zod.array(zod.string().max(savePreferencesResponseHouseholdMembersItemHabitsItemMax)).max(savePreferencesResponseHouseholdMembersItemHabitsMax),
+  "notes": zod.string().max(savePreferencesResponseHouseholdMembersItemNotesMax).nullish()
+})),
+  "personalizationEnabled": zod.boolean(),
   "locale": zod.string(),
   "updatedAt": zod.string().optional()
 })
+
+
+/**
+ * @summary Delete the saved food personalization profile for this browser session
+ */
+export const DeletePreferencesParams = zod.object({
+  "sessionId": zod.coerce.string()
+})
+
+export const DeletePreferencesResponse = zod.void()
 
 
 /**

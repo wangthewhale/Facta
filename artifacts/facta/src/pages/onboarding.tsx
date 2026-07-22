@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { useLocation } from 'wouter';
 import { useTranslation } from '@/lib/i18n';
-import { useListGoals, useSetUserGoals, useSaveUserProfile } from '@workspace/api-client-react';
+import { useListGoals, useSetUserGoals, useSavePreferences, useSaveUserProfile } from '@workspace/api-client-react';
 import { getSessionId } from '@/lib/session';
-import { ArrowLeft, Target, CheckCircle2, Store, WheatOff, Clock, ArrowRight } from 'lucide-react';
+import { ArrowLeft, Target, CheckCircle2, Store, Clock, ArrowRight, UserRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -22,15 +22,25 @@ export default function Onboarding() {
   const [selectedRetailers, setSelectedRetailers] = useState<string[]>([]);
   const [selectedAllergens, setSelectedAllergens] = useState<string[]>([]);
   const [selectedDiet, setSelectedDiet] = useState<string>('');
-  const [mealTiming, setMealTiming] = useState<boolean | null>(null);
+  const [displayName, setDisplayName] = useState('');
+  const [email, setEmail] = useState('');
+  const [personalizationConsent, setPersonalizationConsent] = useState(false);
 
   // Mutations
   const setGoalsMut = useSetUserGoals();
   const saveProfileMut = useSaveUserProfile();
+  const savePreferencesMut = useSavePreferences();
 
   const RETAILERS = ['7-ELEVEN', '全家', '全聯', '家樂福', 'Costco'];
-  const ALLERGENS = ['乳', '蛋', '花生', '堅果', '芝麻', '大豆', '小麥', '魚', '甲殼類'];
-  const DIETS = ['純素', '蛋奶素', '清真', '猶太潔食'];
+  const ALLERGENS = [
+    { id: 'milk', label: '乳' }, { id: 'egg', label: '蛋' }, { id: 'peanut', label: '花生' },
+    { id: 'treenut', label: '堅果' }, { id: 'sesame', label: '芝麻' }, { id: 'soy', label: '大豆' },
+    { id: 'wheat', label: '小麥／麩質' }, { id: 'fish', label: '魚' }, { id: 'shellfish', label: '甲殼類' },
+  ];
+  const DIETS = [
+    { id: 'vegan', label: '純素' }, { id: 'vegetarian', label: '蛋奶素' },
+    { id: 'halal', label: '清真' }, { id: 'kosher', label: '猶太潔食' },
+  ];
 
   const toggleGoal = (id: string) => {
     if (selectedGoals.includes(id)) {
@@ -51,8 +61,6 @@ export default function Onboarding() {
   };
 
   const handleComplete = async (timingChoice: boolean) => {
-    setMealTiming(timingChoice);
-    
     // Save goals
     if (selectedGoals.length > 0) {
       const goalsToSave = selectedGoals.map((id, index) => {
@@ -66,13 +74,32 @@ export default function Onboarding() {
       });
     }
 
+    const hasFoodProfile = Boolean(displayName.trim() || email.trim() || selectedAllergens.length || selectedDiet);
+    if (hasFoodProfile && personalizationConsent) {
+      await savePreferencesMut.mutateAsync({
+        sessionId,
+        data: {
+          displayName: displayName.trim() || null,
+          email: email.trim().toLowerCase() || null,
+          allergens: selectedAllergens,
+          dietaryPreferences: selectedDiet ? [selectedDiet] : [],
+          avoidIngredients: [],
+          habits: [],
+          notes: null,
+          householdMembers: [],
+          personalizationEnabled: true,
+          locale: lang,
+        },
+      });
+    }
+
     // Save profile / preferences
     await saveProfileMut.mutateAsync({
       sessionId,
       data: {
         onboardingCompletedAt: new Date().toISOString(),
         preferredRetailers: selectedRetailers,
-        wantsMealTiming: mealTiming === true,
+        wantsMealTiming: timingChoice,
       }
     });
 
@@ -81,6 +108,18 @@ export default function Onboarding() {
 
   const nextStep = () => setStep(s => Math.min(4, s + 1));
   const prevStep = () => setStep(s => Math.max(1, s - 1));
+  const validEmail = !email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const hasFoodProfile = Boolean(displayName.trim() || email.trim() || selectedAllergens.length || selectedDiet);
+  const canContinueProfile = validEmail && (!hasFoodProfile || personalizationConsent);
+
+  const skipFoodProfile = () => {
+    setDisplayName('');
+    setEmail('');
+    setSelectedAllergens([]);
+    setSelectedDiet('');
+    setPersonalizationConsent(false);
+    nextStep();
+  };
 
   return (
     <div className="min-h-[100dvh] bg-background text-foreground flex flex-col">
@@ -159,7 +198,7 @@ export default function Onboarding() {
                   selectedGoals.length > 0 ? "bg-primary text-primary-foreground hover:bg-primary/90" : "bg-muted text-muted-foreground cursor-not-allowed"
                 )}
               >
-                Continue <ArrowRight className="w-4 h-4" />
+                繼續 <ArrowRight className="w-4 h-4" />
               </button>
             </div>
           </div>
@@ -191,10 +230,10 @@ export default function Onboarding() {
                 onClick={nextStep}
                 className="w-full py-4 font-bold uppercase tracking-widest text-sm bg-foreground text-background hover:bg-foreground/90 transition-all flex items-center justify-center gap-2"
               >
-                Continue
+                繼續
               </button>
               <button onClick={nextStep} className="text-xs text-muted-foreground hover:text-foreground font-bold uppercase tracking-widest py-2">
-                Skip for now
+                先略過
               </button>
             </div>
           </div>
@@ -202,57 +241,97 @@ export default function Onboarding() {
 
         {step === 3 && (
           <div className="flex flex-col h-full p-6">
-            <WheatOff className="w-8 h-8 text-primary-strong mb-6" />
-            <h1 className="text-3xl font-bold leading-tight mb-2 tracking-tight">{t('allergens_dietary')}</h1>
-            <p className="text-sm text-muted-foreground mb-8">FACTA 會在分析報告中特別標示這些成分。</p>
+            <UserRound className="w-8 h-8 text-primary-strong mb-6" />
+            <h1 className="text-3xl font-bold leading-tight mb-2 tracking-tight">這份提醒先替誰看？</h1>
+            <p className="text-sm text-muted-foreground mb-6">填完後，FACTA 會把最新限制帶進每份報告。之後可在「設定」新增家人。</p>
 
             <div className="flex flex-col gap-6 mb-auto overflow-y-auto">
+              <div className="grid grid-cols-1 gap-4">
+                <label>
+                  <span className="text-xs font-bold">姓名或稱呼（選填）</span>
+                  <input
+                    value={displayName}
+                    onChange={event => setDisplayName(event.target.value.slice(0, 80))}
+                    placeholder="例如：小安"
+                    autoComplete="name"
+                    className="mt-2 w-full h-12 px-4 border border-border bg-card focus:border-foreground outline-none text-sm"
+                  />
+                </label>
+                <label>
+                  <span className="text-xs font-bold">Email（選填）</span>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={event => setEmail(event.target.value.slice(0, 254))}
+                    placeholder="name@example.com"
+                    autoComplete="email"
+                    aria-invalid={!validEmail}
+                    className={cn('mt-2 w-full h-12 px-4 border bg-card outline-none text-sm', validEmail ? 'border-border focus:border-foreground' : 'border-destructive')}
+                  />
+                  {!validEmail && <span className="block text-xs text-destructive mt-1">請輸入有效的 Email</span>}
+                </label>
+              </div>
+
               <div>
-                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">Allergens</p>
+                <p className="text-xs font-bold tracking-widest text-muted-foreground mb-3">過敏原</p>
                 <div className="flex flex-wrap gap-2">
                   {ALLERGENS.map(a => (
                     <button
-                      key={a}
-                      onClick={() => toggleAllergen(a)}
+                      key={a.id}
+                      onClick={() => toggleAllergen(a.id)}
                       className={cn(
                         "px-4 py-2 border text-sm font-medium transition-all",
-                        selectedAllergens.includes(a) ? "border-destructive bg-destructive/10 text-destructive font-bold" : "border-border bg-card hover:bg-muted"
+                        selectedAllergens.includes(a.id) ? "border-destructive bg-destructive/10 text-destructive font-bold" : "border-border bg-card hover:bg-muted"
                       )}
                     >
-                      {a}
+                      {a.label}
                     </button>
                   ))}
                 </div>
               </div>
 
               <div>
-                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">Dietary</p>
+                <p className="text-xs font-bold tracking-widest text-muted-foreground mb-3">飲食方式</p>
                 <div className="grid grid-cols-2 gap-2">
                   {DIETS.map(d => (
                     <button
-                      key={d}
-                      onClick={() => setSelectedDiet(d === selectedDiet ? '' : d)}
+                      key={d.id}
+                      onClick={() => setSelectedDiet(d.id === selectedDiet ? '' : d.id)}
                       className={cn(
                         "px-4 py-3 border text-sm font-medium transition-all text-center",
-                        selectedDiet === d ? "border-primary bg-primary text-primary-foreground font-bold" : "border-border bg-card hover:bg-muted"
+                        selectedDiet === d.id ? "border-primary bg-primary text-primary-foreground font-bold" : "border-border bg-card hover:bg-muted"
                       )}
                     >
-                      {d}
+                      {d.label}
                     </button>
                   ))}
                 </div>
               </div>
+
+              <label className={cn('border p-4 flex items-start gap-3', hasFoodProfile && !personalizationConsent ? 'border-destructive bg-destructive/5' : 'border-border bg-muted/40')}>
+                <input
+                  type="checkbox"
+                  checked={personalizationConsent}
+                  onChange={event => setPersonalizationConsent(event.target.checked)}
+                  className="mt-0.5 w-5 h-5 accent-black shrink-0"
+                />
+                <span>
+                  <span className="block text-sm font-bold">同意儲存並套用以上資料</span>
+                  <span className="block text-[10px] text-muted-foreground mt-1 leading-relaxed">可隨時在設定修改或刪除；不改變商品客觀分數。</span>
+                </span>
+              </label>
             </div>
 
             <div className="mt-8 flex flex-col gap-4 shrink-0">
               <button 
                 onClick={nextStep}
-                className="w-full py-4 font-bold uppercase tracking-widest text-sm bg-foreground text-background hover:bg-foreground/90 transition-all flex items-center justify-center gap-2"
+                disabled={!canContinueProfile}
+                className="w-full py-4 font-bold uppercase tracking-widest text-sm bg-foreground text-background hover:bg-foreground/90 transition-all flex items-center justify-center gap-2 disabled:opacity-40"
               >
-                Continue
+                繼續
               </button>
-              <button onClick={nextStep} className="text-xs text-muted-foreground hover:text-foreground font-bold uppercase tracking-widest py-2">
-                Skip for now
+              <button onClick={skipFoodProfile} className="text-xs text-muted-foreground hover:text-foreground font-bold uppercase tracking-widest py-2">
+                先略過
               </button>
             </div>
           </div>

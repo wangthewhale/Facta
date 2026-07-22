@@ -10,6 +10,7 @@ import type { AllergenAlert } from './allergenAlert';
 import type { EvaluationAnalysisScope } from './evaluationAnalysisScope';
 import type { EvaluationReason } from './evaluationReason';
 import type { PersonalAlert } from './personalAlert';
+import type { PersonalizationContext } from './personalizationContext';
 
 export interface Evaluation {
   id: number;
@@ -43,4 +44,5 @@ export interface Evaluation {
   additiveFlags?: AdditiveFlag[];
   allergenAlerts?: AllergenAlert[];
   personalAlerts?: PersonalAlert[];
+  personalization?: PersonalizationContext;
 }

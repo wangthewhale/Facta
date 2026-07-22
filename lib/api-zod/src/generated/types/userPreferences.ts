@@ -5,12 +5,22 @@
  * FACTA — Independent product intelligence API
  * OpenAPI spec version: 0.1.0
  */
+import type { HouseholdMember } from './householdMember';
 
 export interface UserPreferences {
   sessionId: string;
+  /** @nullable */
+  displayName?: string | null;
+  /** @nullable */
+  email?: string | null;
   allergens: string[];
   dietaryPreferences: string[];
   avoidIngredients: string[];
+  habits: string[];
+  /** @nullable */
+  notes?: string | null;
+  householdMembers: HouseholdMember[];
+  personalizationEnabled: boolean;
   locale: string;
   updatedAt?: string;
 }

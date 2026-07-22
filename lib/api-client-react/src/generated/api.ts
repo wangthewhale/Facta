@@ -39,6 +39,7 @@ import type {
   ErrorResponse,
   Evaluation,
   FinalizeResult,
+  GetProductEvaluationParams,
   GetScanHistoryParams,
   GoalDetail,
   GoalFitResult,
@@ -2167,20 +2168,29 @@ export function useGetProduct<TData = Awaited<ReturnType<typeof getProduct>>, TE
 
 
 
-export const getGetProductEvaluationUrl = (productId: number,) => {
+export const getGetProductEvaluationUrl = (productId: number,
+    params?: GetProductEvaluationParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/evaluations/product/${productId}`
+  return stringifiedParams.length > 0 ? `/api/evaluations/product/${productId}?${stringifiedParams}` : `/api/evaluations/product/${productId}`
 }
 
 /**
  * @summary Get latest FACTA Report for a product
  */
-export const getProductEvaluation = async (productId: number, options?: RequestInit): Promise<Evaluation> => {
+export const getProductEvaluation = async (productId: number,
+    params?: GetProductEvaluationParams, options?: RequestInit): Promise<Evaluation> => {
 
-  return customFetch<Evaluation>(getGetProductEvaluationUrl(productId),
+  return customFetch<Evaluation>(getGetProductEvaluationUrl(productId,params),
   {
     ...options,
     method: 'GET'
@@ -2193,23 +2203,25 @@ export const getProductEvaluation = async (productId: number, options?: RequestI
 
 
 
-export const getGetProductEvaluationQueryKey = (productId: number,) => {
+export const getGetProductEvaluationQueryKey = (productId: number,
+    params?: GetProductEvaluationParams,) => {
     return [
-    `/api/evaluations/product/${productId}`
+    `/api/evaluations/product/${productId}`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getGetProductEvaluationQueryOptions = <TData = Awaited<ReturnType<typeof getProductEvaluation>>, TError = ErrorType<ErrorResponse>>(productId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProductEvaluation>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetProductEvaluationQueryOptions = <TData = Awaited<ReturnType<typeof getProductEvaluation>>, TError = ErrorType<ErrorResponse>>(productId: number,
+    params?: GetProductEvaluationParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProductEvaluation>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetProductEvaluationQueryKey(productId);
+  const queryKey =  queryOptions?.queryKey ?? getGetProductEvaluationQueryKey(productId,params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getProductEvaluation>>> = ({ signal }) => getProductEvaluation(productId, { signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getProductEvaluation>>> = ({ signal }) => getProductEvaluation(productId,params, { signal, ...requestOptions });
 
 
 
@@ -2227,11 +2239,12 @@ export type GetProductEvaluationQueryError = ErrorType<ErrorResponse>
  */
 
 export function useGetProductEvaluation<TData = Awaited<ReturnType<typeof getProductEvaluation>>, TError = ErrorType<ErrorResponse>>(
- productId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProductEvaluation>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ productId: number,
+    params?: GetProductEvaluationParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProductEvaluation>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getGetProductEvaluationQueryOptions(productId,options)
+  const queryOptions = getGetProductEvaluationQueryOptions(productId,params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -3216,6 +3229,77 @@ export const useSavePreferences = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getSavePreferencesMutationOptions(options));
+    }
+
+export const getDeletePreferencesUrl = (sessionId: string,) => {
+
+
+
+
+  return `/api/preferences/${sessionId}`
+}
+
+/**
+ * @summary Delete the saved food personalization profile for this browser session
+ */
+export const deletePreferences = async (sessionId: string, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeletePreferencesUrl(sessionId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeletePreferencesMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePreferences>>, TError,{sessionId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deletePreferences>>, TError,{sessionId: string}, TContext> => {
+
+const mutationKey = ['deletePreferences'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deletePreferences>>, {sessionId: string}> = (props) => {
+          const {sessionId} = props ?? {};
+
+          return  deletePreferences(sessionId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeletePreferencesMutationResult = NonNullable<Awaited<ReturnType<typeof deletePreferences>>>
+
+    export type DeletePreferencesMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete the saved food personalization profile for this browser session
+ */
+export const useDeletePreferences = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePreferences>>, TError,{sessionId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deletePreferences>>,
+        TError,
+        {sessionId: string},
+        TContext
+      > => {
+      return useMutation(getDeletePreferencesMutationOptions(options));
     }
 
 export const getListRetailersUrl = () => {

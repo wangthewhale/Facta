@@ -6,11 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface PersonalAlert {
-  type: string;
-  message: string;
+export interface PersonalizationContext {
+  enabled: boolean;
+  profileNames: string[];
+  conditionCount: number;
   /** @nullable */
-  messageZh?: string | null;
-  severity?: string;
-  profileNames?: string[];
+  updatedAt?: string | null;
 }

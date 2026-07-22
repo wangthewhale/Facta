@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Layout } from '@/components/layout';
 import { useTranslation } from '@/lib/i18n';
 import { Link, useLocation } from 'wouter';
-import { ArrowRight, ShieldCheck, Database, Search, Target, Clock, Trash2, CheckCircle2, ChevronDown, ChevronUp, Camera, ScanLine, BookOpen, AlertCircle, Scale } from 'lucide-react';
+import { ArrowRight, ShieldCheck, Database, Search, Target, Clock, Trash2, CheckCircle2, ChevronDown, ChevronUp, Camera, ScanLine, BookOpen, AlertCircle, Scale, Users } from 'lucide-react';
 import { useGetScanHistory, useGetUserGoals, useGetGoal, useListCollections, useListMealLogs, useDeleteMealLog, useListSafetyAlerts, useGetProduct, useGetProductEvaluation } from '@workspace/api-client-react';
 import { getSessionId } from '@/lib/session';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -48,11 +48,10 @@ function SafetyAlertNotice() {
     </div>
   );
 }
-
 function ProductExampleCard({ productId, label, intent }: { productId: number; label: string; intent: 'better' | 'worse' }) {
   const [, setLocation] = useLocation();
   const productQuery = useGetProduct(productId, { query: { staleTime: 10 * 60 * 1000 } as any });
-  const evaluationQuery = useGetProductEvaluation(productId, { query: { staleTime: 10 * 60 * 1000 } as any });
+  const evaluationQuery = useGetProductEvaluation(productId, undefined, { query: { staleTime: 10 * 60 * 1000 } as any });
 
   if (productQuery.isLoading || evaluationQuery.isLoading) {
     return <Skeleton className="h-64 w-full" />;
@@ -430,17 +429,18 @@ export default function Home() {
             <span className="text-[10px] font-black px-2 py-1 bg-primary text-black tracking-widest">食品真相掃描</span>
           </div>
 
-          <p className="text-xs font-black tracking-widest text-primary-strong mt-4">包裝只給你 3 秒，真正該擔心的常藏在背面</p>
-          <h2 className="text-[28px] font-black leading-[1.25]">
-            別讓「看起來健康」騙過你。<br />掃一下，再決定要不要買。
+          <p className="text-xs font-black tracking-widest text-primary-strong mt-4">你每天買的食品，風險常藏在包裝背面</p>
+          <h2 className="text-[32px] font-black leading-[1.12] tracking-[-0.035em]" aria-label="買之前，先看懂這一款。">
+            <span className="block">買之前，</span>
+            <span className="block">先看懂這一款。</span>
           </h2>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            先掃條碼確認是哪一款；資料不夠，再拍背面的營養與成分標示。FACTA 會拆穿容易誤判的「每份」，直接指出糖、鈉、飽和脂肪哪一項最需要小心，並查同商品與品牌的近期食安消息。
+            掃條碼，看糖、鈉、飽和脂肪與成分；資料不足，再拍包裝背面補齊。品牌近期食安消息，也一起查。
           </p>
 
           <div className="grid grid-cols-1 gap-2 mt-2" aria-label="適合使用 FACTA 的情境">
             {[
-              '怕買到寫著高纖、無添加，糖或鈉卻更高的商品',
+              '包裝寫高纖、無添加，糖或鈉卻未必比較低',
               '家人常吃同一款，想知道長期最該留意什麼',
               '品牌剛上新聞，不確定手上這一款有沒有被波及',
             ].map((scenario, index) => (
@@ -456,7 +456,7 @@ export default function Home() {
               onClick={() => { track('hero_free_analysis_clicked'); setLocation('/scan'); }}
               className="w-full py-4 bg-foreground text-background font-black tracking-widest text-base flex items-center justify-center gap-3 hover:bg-foreground/90 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
             >
-              <ScanLine className="w-5 h-5" /> 先掃條碼，再決定要不要買
+              <ScanLine className="w-5 h-5" /> 掃一下，看看這款
             </button>
             <button
               onClick={() => {
@@ -465,7 +465,7 @@ export default function Home() {
               }}
               className="w-full py-3.5 border-2 border-foreground font-bold tracking-widest text-sm hover:bg-muted transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
             >
-              先看一份真實分析
+              先看真實分析
             </button>
           </div>
 
@@ -476,6 +476,18 @@ export default function Home() {
               </li>
             ))}
           </ul>
+
+          <Link
+            href="/preferences"
+            className="mt-2 p-4 bg-primary/10 border border-primary flex items-start gap-3 hover:bg-primary/20 transition-colors"
+          >
+            <Users className="w-5 h-5 text-primary-strong shrink-0 mt-0.5" />
+            <span>
+              <span className="block text-sm font-black text-primary-strong">替自己和家人記住飲食限制</span>
+              <span className="block text-xs text-muted-foreground mt-1 leading-relaxed">過敏原、想避開的成分與日常習慣，下一份報告直接套用。</span>
+            </span>
+            <ArrowRight className="w-4 h-4 text-primary-strong shrink-0 ml-auto mt-0.5" />
+          </Link>
         </header>
 
         {/* 2. Why this is needed */}

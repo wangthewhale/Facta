@@ -1,4 +1,3 @@
 export * from "./generated/api";
-export * from "./generated/types";
-export * from './generated/api';
-export * from './generated/types';
+// Runtime validation schemas are the public surface of this package. Response
+// and client data types are exported by @workspace/api-client-react.

@@ -3,7 +3,7 @@ import { Link, useLocation, useParams } from 'wouter';
 import { Layout } from '@/components/layout';
 import { useGetProduct, useGetProductEvaluation, useGetAlternatives, useRecordScan, useGetUserGoals, useGetGoalFit, useGetProductNews, useGetProductSafetyCheck } from '@workspace/api-client-react';
 import { useTranslation } from '@/lib/i18n';
-import { AlertTriangle, ArrowRight, CheckCircle2, ChevronRight, Droplets, Info, Link as LinkIcon, Share, TriangleAlert, XOctagon, RefreshCw } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle2, ChevronRight, Droplets, Info, Link as LinkIcon, Share, TriangleAlert, XOctagon, RefreshCw, Users } from 'lucide-react';
 import { track } from '@/lib/analytics';
 import { startFamilyCheckCheckout } from '@/pages/familyCheck';
 import { cn } from '@/lib/utils';
@@ -35,7 +35,6 @@ export function GradeBadge({ grade, className }: { grade: string, className?: st
     </span>
   );
 }
-
 function AnimatedScore({ score, grade }: { score: number, grade: string }) {
   const [displayScore, setDisplayScore] = useState(0);
 
@@ -396,7 +395,7 @@ export default function Report() {
     query: { enabled: !!productId } as any
   });
   
-  const { data: evaluation, isLoading: evalLoading } = useGetProductEvaluation(productId, {
+  const { data: evaluation, isLoading: evalLoading } = useGetProductEvaluation(productId, { session_id: sessionId }, {
     query: { enabled: !!productId } as any
   });
 
@@ -631,6 +630,34 @@ export default function Report() {
               )}
             </div>
           </div>
+          )}
+
+          {/* Household personalization context */}
+          {evaluation.personalization?.enabled ? (
+            <div className="p-5 border-b border-border bg-primary/10 flex items-start gap-3">
+              <Users className="w-5 h-5 text-primary-strong shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-black text-primary-strong">這份報告已套用家庭食品檔案</h3>
+                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                  {evaluation.personalization.profileNames.join('、')}
+                  {' · '}{evaluation.personalization.conditionCount} 項明確條件
+                  {evaluation.personalization.updatedAt
+                    ? ` · ${new Date(evaluation.personalization.updatedAt).toLocaleDateString('zh-TW')} 更新`
+                    : ''}
+                </p>
+                <p className="text-[10px] text-muted-foreground mt-1">個人提醒依最新設定產生；商品客觀分數不變。</p>
+              </div>
+              <Link href="/preferences" className="text-xs font-black underline shrink-0">更新</Link>
+            </div>
+          ) : (
+            <Link href="/preferences" className="p-5 border-b border-border bg-muted/40 flex items-center gap-3 hover:bg-muted transition-colors">
+              <Users className="w-5 h-5 text-muted-foreground shrink-0" />
+              <span className="flex-1">
+                <span className="block text-sm font-black">這款適合你或家人嗎？</span>
+                <span className="block text-xs text-muted-foreground mt-1">設定過敏原、飲食限制與習慣，報告會另外標出衝突。</span>
+              </span>
+              <ChevronRight className="w-4 h-4 shrink-0" />
+            </Link>
           )}
 
           {/* Personal Alerts */}

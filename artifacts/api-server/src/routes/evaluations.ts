@@ -5,10 +5,12 @@ import {
   productEvaluationsTable, productsTable, brandsTable,
   nutritionFactsTable, productIngredientsTable, ingredientsTable,
   productAllergensTable, allergensTable, barcodesTable,
+  userPreferencesTable,
 } from "@workspace/db";
-import { GetProductEvaluationParams, GetShareCardParams } from "@workspace/api-zod";
+import { GetProductEvaluationParams, GetProductEvaluationQueryParams, GetShareCardParams } from "@workspace/api-zod";
 import { calculateScore, resolveAnalysisScope, RULESET_VERSION } from "../lib/scoring.js";
 import { resolveCatalogProduct } from "../lib/catalogEvidence.js";
+import { buildPersonalization } from "../lib/personalization.js";
 
 const router: IRouter = Router();
 
@@ -163,6 +165,8 @@ function calculateCompleteness(product: any, nutrition: any, ingredients: Array<
 router.get("/evaluations/product/:productId", async (req, res): Promise<void> => {
   const params = GetProductEvaluationParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  const query = GetProductEvaluationQueryParams.safeParse(req.query);
+  if (!query.success) { res.status(400).json({ error: query.error.message }); return; }
 
   const evaluation = await getOrComputeEvaluation(params.data.productId);
   if (!evaluation) { res.status(404).json({ error: "Product not found" }); return; }
@@ -178,6 +182,25 @@ router.get("/evaluations/product/:productId", async (req, res): Promise<void> =>
     .from(productAllergensTable)
     .leftJoin(allergensTable, eq(productAllergensTable.allergenId, allergensTable.id))
     .where(eq(productAllergensTable.productId, params.data.productId));
+
+  const allergenAlerts = catalogProduct?.evidence?.allergens
+    ?? (catalogProduct?.verificationStatus === "catalog_unverified" ? [] : allergenRows.map(r => ({
+      name: r.al?.name ?? "Unknown",
+      nameZh: r.al?.nameZh ?? null,
+      severity: r.al?.severity ?? "moderate",
+      source: r.pa.sourceType,
+    })));
+  const [preferences] = query.data.session_id
+    ? await db.select().from(userPreferencesTable).where(eq(userPreferencesTable.sessionId, query.data.session_id)).limit(1)
+    : [undefined];
+  const topReasons = (evaluation.topReasons as any[]) ?? [];
+  const additiveFlags = (evaluation.additiveFlags as any[]) ?? [];
+  const personal = buildPersonalization(preferences, {
+    allergens: allergenAlerts,
+    ingredientNames: responseIngredients.map(item => item.name),
+    negativeReasons: topReasons.filter(reason => reason.impact === "negative"),
+    additiveFlags,
+  });
 
   res.json({
     id: evaluation.id,
@@ -201,15 +224,11 @@ router.get("/evaluations/product/:productId", async (req, res): Promise<void> =>
     evidenceConfidence: evaluation.evidenceConfidence,
     rulesetVersion: evaluation.rulesetVersion,
     evaluatedAt: evaluation.evaluatedAt.toISOString(),
-    topReasons: (evaluation.topReasons as any[]) ?? [],
-    additiveFlags: (evaluation.additiveFlags as any[]) ?? [],
-    allergenAlerts: catalogProduct?.evidence?.allergens ?? (catalogProduct?.verificationStatus === "catalog_unverified" ? [] : allergenRows.map(r => ({
-      name: r.al?.name ?? "Unknown",
-      nameZh: r.al?.nameZh ?? null,
-      severity: r.al?.severity ?? "moderate",
-      source: r.pa.sourceType,
-    }))),
-    personalAlerts: [],
+    topReasons,
+    additiveFlags,
+    allergenAlerts,
+    personalAlerts: personal.personalAlerts,
+    personalization: personal.personalization,
   });
 });
 

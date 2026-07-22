@@ -306,6 +306,15 @@ export interface PersonalAlert {
   /** @nullable */
   messageZh?: string | null;
   severity?: string;
+  profileNames?: string[];
+}
+
+export interface PersonalizationContext {
+  enabled: boolean;
+  profileNames: string[];
+  conditionCount: number;
+  /** @nullable */
+  updatedAt?: string | null;
 }
 
 export type EvaluationAnalysisScope = typeof EvaluationAnalysisScope[keyof typeof EvaluationAnalysisScope];
@@ -351,6 +360,7 @@ export interface Evaluation {
   additiveFlags?: AdditiveFlag[];
   allergenAlerts?: AllergenAlert[];
   personalAlerts?: PersonalAlert[];
+  personalization?: PersonalizationContext;
 }
 
 export interface AlternativeProduct {
@@ -482,18 +492,100 @@ export interface Submission {
   updatedAt?: string;
 }
 
+export type HouseholdMemberRelationship = typeof HouseholdMemberRelationship[keyof typeof HouseholdMemberRelationship];
+
+
+export const HouseholdMemberRelationship = {
+  partner: 'partner',
+  child: 'child',
+  parent: 'parent',
+  other: 'other',
+} as const;
+
+export interface HouseholdMember {
+  /**
+     * @minLength 1
+     * @maxLength 64
+     */
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  name: string;
+  relationship: HouseholdMemberRelationship;
+  /**
+     * @maxItems 20
+     * @items.maxLength 64
+     */
+  allergens: string[];
+  /**
+     * @maxItems 20
+     * @items.maxLength 64
+     */
+  dietaryPreferences: string[];
+  /**
+     * @maxItems 30
+     * @items.minLength 1
+     * @items.maxLength 80
+     */
+  avoidIngredients: string[];
+  /**
+     * @maxItems 20
+     * @items.maxLength 64
+     */
+  habits: string[];
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  notes?: string | null;
+}
+
 export interface UserPreferencesInput {
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  displayName?: string | null;
+  /**
+     * @maxLength 254
+     * @nullable
+     */
+  email?: string | null;
+  /** @maxItems 20 */
   allergens?: string[];
+  /** @maxItems 20 */
   dietaryPreferences?: string[];
+  /** @maxItems 30 */
   avoidIngredients?: string[];
+  /** @maxItems 20 */
+  habits?: string[];
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  notes?: string | null;
+  /** @maxItems 6 */
+  householdMembers?: HouseholdMember[];
+  personalizationEnabled?: boolean;
   locale?: string;
 }
 
 export interface UserPreferences {
   sessionId: string;
+  /** @nullable */
+  displayName?: string | null;
+  /** @nullable */
+  email?: string | null;
   allergens: string[];
   dietaryPreferences: string[];
   avoidIngredients: string[];
+  habits: string[];
+  /** @nullable */
+  notes?: string | null;
+  householdMembers: HouseholdMember[];
+  personalizationEnabled: boolean;
   locale: string;
   updatedAt?: string;
 }
@@ -979,6 +1071,14 @@ category?: string;
 retailer_id?: number | null;
 limit?: number;
 offset?: number;
+};
+
+export type GetProductEvaluationParams = {
+/**
+ * Apply the latest explicitly saved household food profile to personal alerts
+ * @maxLength 128
+ */
+session_id?: string;
 };
 
 export type GetScanHistoryParams = {

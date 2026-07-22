@@ -679,6 +679,11 @@ paths:
           in: path
           required: true
           schema: { type: integer }
+        - name: session_id
+          in: query
+          required: false
+          description: Apply the latest explicitly saved household food profile to personal alerts
+          schema: { type: string, maxLength: 128 }
       responses:
         "200":
           description: FACTA Report
@@ -965,6 +970,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UserPreferences"
+    delete:
+      operationId: deletePreferences
+      tags: [preferences]
+      summary: Delete the saved food personalization profile for this browser session
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Personalization profile deleted
 
   # ── Retailers & Reference Data ────────────────────────────────────────────
 
@@ -1437,6 +1454,20 @@ components:
         message:    { type: string }
         messageZh:  { type: ["string", "null"] }
         severity:   { type: string }
+        profileNames:
+          type: array
+          items: { type: string }
+
+    PersonalizationContext:
+      type: object
+      required: [enabled, profileNames, conditionCount]
+      properties:
+        enabled:        { type: boolean }
+        profileNames:
+          type: array
+          items: { type: string }
+        conditionCount: { type: integer }
+        updatedAt:      { type: ["string", "null"] }
 
     Evaluation:
       type: object
@@ -1478,6 +1509,8 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PersonalAlert"
+        personalization:
+          $ref: "#/components/schemas/PersonalizationContext"
 
     # ── Alternatives ──────────────────────────────────────────────────────
 
@@ -1594,25 +1627,70 @@ components:
 
     # ── User Preferences ──────────────────────────────────────────────────
 
+    HouseholdMember:
+      type: object
+      required: [id, name, relationship, allergens, dietaryPreferences, avoidIngredients, habits]
+      properties:
+        id:                   { type: string, minLength: 1, maxLength: 64 }
+        name:                 { type: string, minLength: 1, maxLength: 80 }
+        relationship:
+          type: string
+          enum: [partner, child, parent, other]
+        allergens:
+          type: array
+          maxItems: 20
+          items: { type: string, maxLength: 64 }
+        dietaryPreferences:
+          type: array
+          maxItems: 20
+          items: { type: string, maxLength: 64 }
+        avoidIngredients:
+          type: array
+          maxItems: 30
+          items: { type: string, minLength: 1, maxLength: 80 }
+        habits:
+          type: array
+          maxItems: 20
+          items: { type: string, maxLength: 64 }
+        notes: { type: ["string", "null"], maxLength: 500 }
+
     UserPreferencesInput:
       type: object
       properties:
+        displayName: { type: ["string", "null"], maxLength: 80 }
+        email: { type: ["string", "null"], maxLength: 254 }
         allergens:
           type: array
+          maxItems: 20
           items: { type: string }
         dietaryPreferences:
           type: array
+          maxItems: 20
           items: { type: string }
         avoidIngredients:
           type: array
+          maxItems: 30
           items: { type: string }
+        habits:
+          type: array
+          maxItems: 20
+          items: { type: string }
+        notes: { type: ["string", "null"], maxLength: 500 }
+        householdMembers:
+          type: array
+          maxItems: 6
+          items:
+            $ref: "#/components/schemas/HouseholdMember"
+        personalizationEnabled: { type: boolean, default: false }
         locale: { type: string, default: "zh-TW" }
 
     UserPreferences:
       type: object
-      required: [sessionId, allergens, dietaryPreferences, avoidIngredients, locale]
+      required: [sessionId, allergens, dietaryPreferences, avoidIngredients, habits, householdMembers, personalizationEnabled, locale]
       properties:
         sessionId:          { type: string }
+        displayName:        { type: ["string", "null"] }
+        email:              { type: ["string", "null"] }
         allergens:
           type: array
           items: { type: string }
@@ -1622,6 +1700,15 @@ components:
         avoidIngredients:
           type: array
           items: { type: string }
+        habits:
+          type: array
+          items: { type: string }
+        notes:              { type: ["string", "null"] }
+        householdMembers:
+          type: array
+          items:
+            $ref: "#/components/schemas/HouseholdMember"
+        personalizationEnabled: { type: boolean }
         locale:             { type: string }
         updatedAt:          { type: string }
 
