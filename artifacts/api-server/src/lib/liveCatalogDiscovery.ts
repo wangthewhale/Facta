@@ -19,6 +19,19 @@ export interface LiveCatalogDiscoveryResult {
 
 const cache = new Map<string, { expiresAt: number; value: LiveCatalogDiscoveryResult }>();
 const inFlight = new Map<string, Promise<LiveCatalogDiscoveryResult>>();
+const LIVE_CATALOG_TIMEOUT_MS = 45_000;
+const TRANSIENT_FAILURE_CACHE_MS = 2 * 60 * 1000;
+
+function logDiscoveryFailure(error: unknown, query: string): void {
+  const detail = error && typeof error === "object" ? error as Record<string, unknown> : {};
+  console.warn("[FACTA] live catalog discovery unavailable", {
+    query,
+    name: typeof detail.name === "string" ? detail.name : undefined,
+    status: typeof detail.status === "number" ? detail.status : undefined,
+    code: typeof detail.code === "string" ? detail.code : undefined,
+    message: error instanceof Error ? error.message : "Unknown error",
+  });
+}
 
 function jsonObjectFromText(value: string): Record<string, unknown> {
   const start = value.indexOf("{");
@@ -60,7 +73,7 @@ export async function discoverLiveCatalog(query: string): Promise<LiveCatalogDis
   const familyTerms = expandCatalogSearchTerms(normalized);
   const discovery = (async () => {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 18_000);
+    const timeout = setTimeout(() => controller.abort(), LIVE_CATALOG_TIMEOUT_MS);
     try {
       const response = await (openai as any).responses.create({
         model: "gpt-5.6-terra",
@@ -104,9 +117,10 @@ Return ONLY this JSON object:
       if (cache.size >= 300) cache.delete(cache.keys().next().value ?? "");
       cache.set(cacheKey, { expiresAt: Date.now() + 6 * 60 * 60 * 1000, value });
       return value;
-    } catch {
+    } catch (error) {
+      logDiscoveryFailure(error, normalized);
       const value = result({ status: "unavailable", query: normalized, candidates: [] });
-      cache.set(cacheKey, { expiresAt: Date.now() + 10 * 60 * 1000, value });
+      cache.set(cacheKey, { expiresAt: Date.now() + TRANSIENT_FAILURE_CACHE_MS, value });
       return value;
     } finally {
       clearTimeout(timeout);

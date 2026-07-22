@@ -58,6 +58,8 @@ const commerceCache = new Map<string, {
   status: "complete" | "no_results" | "unavailable" | "disabled";
   candidates: CommerceCandidate[];
 }>();
+const ALTERNATIVE_DISCOVERY_TIMEOUT_MS = 45_000;
+const TRANSIENT_DISCOVERY_FAILURE_CACHE_MS = 2 * 60 * 1000;
 
 function numeric(value: string | number | null | undefined): number | null {
   if (value == null || value === "") return null;
@@ -368,7 +370,7 @@ async function discoverCommerceCandidates(input: {
   if (cached && cached.expiresAt > Date.now()) return cached;
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 25_000);
+  const timeout = setTimeout(() => controller.abort(), ALTERNATIVE_DISCOVERY_TIMEOUT_MS);
   try {
     const response = await (openai as any).responses.create({
       model: "gpt-5.6-terra",
@@ -410,9 +412,17 @@ Return ONLY this JSON object:
     if (commerceCache.size >= 200) commerceCache.delete(commerceCache.keys().next().value ?? "");
     commerceCache.set(cacheKey, value);
     return value;
-  } catch {
+  } catch (error) {
+    const detail = error && typeof error === "object" ? error as Record<string, unknown> : {};
+    console.warn("[FACTA] alternative commerce discovery unavailable", {
+      query,
+      name: typeof detail.name === "string" ? detail.name : undefined,
+      status: typeof detail.status === "number" ? detail.status : undefined,
+      code: typeof detail.code === "string" ? detail.code : undefined,
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
     const value = {
-      expiresAt: Date.now() + 15 * 60 * 1000,
+      expiresAt: Date.now() + TRANSIENT_DISCOVERY_FAILURE_CACHE_MS,
       status: "unavailable" as const,
       candidates: [],
     };
