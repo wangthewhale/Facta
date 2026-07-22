@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Layout } from '@/components/layout';
 import { useTranslation } from '@/lib/i18n';
 import { Link, useLocation } from 'wouter';
-import { ArrowRight, ShieldCheck, Database, Search, Target, Clock, Trash2, CheckCircle2, ChevronDown, ChevronUp, Camera, ScanLine, BookOpen, AlertCircle, Scale, Users, GitCompareArrows } from 'lucide-react';
+import { ArrowRight, ShieldCheck, Database, Search, Target, Clock, Trash2, CheckCircle2, ChevronDown, ChevronUp, Camera, ScanLine, BookOpen, AlertCircle, Scale, Users, GitCompareArrows, Menu, X, Share2, Sparkles } from 'lucide-react';
 import { useGetScanHistory, useGetUserGoals, useGetGoal, useListCollections, useListMealLogs, useDeleteMealLog, useListSafetyAlerts, useGetProduct, useGetProductEvaluation } from '@workspace/api-client-react';
 import { getSessionId } from '@/lib/session';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -273,6 +273,132 @@ function ProductComparison() {
         <ProductExampleCard productId={WORSE_SAMPLE_PRODUCT_ID} />
       </div>
       <Link href="/methodology" className="text-xs font-bold underline">看完整判定規則與門檻 →</Link>
+    </section>
+  );
+}
+
+function LandingNavigation() {
+  const [open, setOpen] = useState(false);
+  const [, setLocation] = useLocation();
+
+  const close = () => setOpen(false);
+
+  return (
+    <nav className="sticky top-0 z-50 bg-background/95 backdrop-blur-md border-b border-border" aria-label="首頁導覽">
+      <div className="h-16 px-5 sm:px-6 md:px-10 lg:px-14 flex items-center justify-between gap-4">
+        <a href="#top" onClick={close} className="flex items-center gap-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
+          <span className="text-xl font-black tracking-tighter">FACTA</span>
+          <span className="hidden sm:inline text-[9px] font-black px-2 py-1 bg-primary text-black tracking-widest">食品決策助手</span>
+        </a>
+
+        <div className="hidden md:flex items-center gap-6 text-xs font-black">
+          <a href="#live-decision-demo" className="hover:text-primary-strong transition-colors">真實示範</a>
+          <a href="#how-it-works" className="hover:text-primary-strong transition-colors">怎麼使用</a>
+          <a href="#launch-challenge" className="hover:text-primary-strong transition-colors">Launch 挑戰</a>
+          <Link href="/methodology" className="hover:text-primary-strong transition-colors">評分方法</Link>
+          <Link href="/preferences" className="hover:text-primary-strong transition-colors">家庭設定</Link>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => { track('hero_free_analysis_clicked', { source: 'landing_nav' }); setLocation('/scan'); }}
+            className="min-h-10 px-4 bg-foreground text-background text-xs font-black flex items-center gap-2 hover:bg-foreground/90 transition-colors"
+          >
+            <ScanLine className="w-4 h-4" /> <span className="hidden sm:inline">現在掃一款</span><span className="sm:hidden">掃描</span>
+          </button>
+          <button
+            type="button"
+            aria-label={open ? '關閉選單' : '開啟選單'}
+            aria-expanded={open}
+            onClick={() => setOpen(value => !value)}
+            className="md:hidden w-10 h-10 border border-foreground flex items-center justify-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+          >
+            {open ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
+        </div>
+      </div>
+
+      {open && (
+        <div className="md:hidden absolute top-full inset-x-0 bg-background border-b-2 border-foreground shadow-xl p-4 grid grid-cols-2 gap-2">
+          <a href="#live-decision-demo" onClick={close} className="p-3 border border-border text-sm font-black">真實示範</a>
+          <a href="#how-it-works" onClick={close} className="p-3 border border-border text-sm font-black">怎麼使用</a>
+          <a href="#launch-challenge" onClick={close} className="p-3 border border-border text-sm font-black">Launch 挑戰</a>
+          <Link href="/methodology" onClick={close} className="p-3 border border-border text-sm font-black">評分方法</Link>
+          <Link href="/search" onClick={close} className="p-3 border border-border text-sm font-black">搜尋商品</Link>
+          <Link href="/preferences" onClick={close} className="p-3 border border-border text-sm font-black">家庭設定</Link>
+        </div>
+      )}
+    </nav>
+  );
+}
+
+function LaunchChallenge() {
+  const [, setLocation] = useLocation();
+
+  return (
+    <section id="launch-challenge" className="scroll-mt-20 bg-foreground text-background overflow-hidden">
+      <div className="grid grid-cols-1 md:grid-cols-[1.1fr_0.9fr]">
+        <div className="p-6 md:p-8 flex flex-col gap-5">
+          <span className="self-start bg-primary text-black px-2 py-1 text-[10px] font-black tracking-[0.18em]">FACTA LAUNCH CHALLENGE</span>
+          <div>
+            <p className="text-xs font-black text-primary tracking-[0.15em]">SCAN IT BEFORE YOU BUY IT</p>
+            <h2 className="text-3xl md:text-4xl font-black tracking-[-0.04em] leading-[1.05] mt-3">你家最會演的，<br />可能是那包「看起來很健康」的食品。</h2>
+            <p className="text-sm text-background/70 leading-relaxed mt-4 max-w-xl">掃一款最常買的商品，讓 FACTA 把包裝話術翻成一個行動。把最意外的結果分享出去，再指定一位朋友掃他家的那一包。</p>
+          </div>
+
+          <ol className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {[
+              ['01', '掃你最常買的一款'],
+              ['02', '拿到買／少吃／換一款'],
+              ['03', '分享卡片，點名下一位'],
+            ].map(([number, label]) => (
+              <li key={number} className="border border-background/25 p-3">
+                <span className="font-mono text-[10px] text-primary">{number}</span>
+                <p className="text-xs font-black leading-relaxed mt-2">{label}</p>
+              </li>
+            ))}
+          </ol>
+
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button
+              type="button"
+              onClick={() => { track('launch_challenge_started'); setLocation('/scan?source=launch_challenge'); }}
+              className="min-h-14 px-5 bg-primary text-black font-black text-sm flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors"
+            >
+              <Sparkles className="w-5 h-5" /> 掃出我家最會演的一包
+            </button>
+            <button
+              type="button"
+              onClick={() => { track('launch_sample_shared', { productId: WORSE_SAMPLE_PRODUCT_ID }); setLocation(`/share/${WORSE_SAMPLE_PRODUCT_ID}`); }}
+              className="min-h-14 px-5 border-2 border-background font-black text-sm flex items-center justify-center gap-2 hover:bg-background hover:text-foreground transition-colors"
+            >
+              <Share2 className="w-5 h-5" /> 看可分享的真實卡片
+            </button>
+          </div>
+          <p className="text-[10px] text-background/50">建議標籤：#掃一下再買　#FACTAChallenge</p>
+        </div>
+
+        <div className="bg-primary text-black p-6 md:p-8 flex flex-col justify-between gap-8">
+          <div>
+            <p className="text-[10px] font-black tracking-[0.2em]">LAUNCH PROOF, NOT HYPE</p>
+            <h3 className="text-2xl font-black leading-tight mt-3">首頁不放假數字。只放你今天真的能用的能力。</h3>
+          </div>
+          <dl className="grid grid-cols-1 gap-4">
+            <div className="border-t-2 border-black pt-3">
+              <dt className="text-3xl font-black font-mono">52,009</dt>
+              <dd className="text-xs font-bold mt-1">筆來源候選已匯入；未驗證就不冒充推薦</dd>
+            </div>
+            <div className="border-t-2 border-black pt-3">
+              <dt className="text-3xl font-black font-mono">3</dt>
+              <dd className="text-xs font-bold mt-1">個你真正需要的答案：買、少吃、換一款</dd>
+            </div>
+            <div className="border-t-2 border-black pt-3">
+              <dt className="text-3xl font-black font-mono">0</dt>
+              <dd className="text-xs font-bold mt-1">品牌可以付費改動的分數</dd>
+            </div>
+          </dl>
+        </div>
+      </div>
     </section>
   );
 }
@@ -555,18 +681,15 @@ export default function Home() {
   // --- NEW USER VIEW ---
   return (
     <Layout surface="landing">
-      <div className="px-5 sm:px-6 md:px-10 lg:px-14 pt-8 md:pt-10 pb-8 flex flex-col gap-12 md:gap-16 bg-background min-h-full">
+      <div id="top" className="bg-background min-h-full">
+        <LandingNavigation />
+        <div className="px-5 sm:px-6 md:px-10 lg:px-14 pt-7 md:pt-9 pb-8 flex flex-col gap-12 md:gap-16">
 
         {/* 1. Hero */}
         <header className="flex flex-col gap-8">
-          <div className="flex justify-between items-center gap-4">
-            <div className="flex items-center gap-3">
-              <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-foreground">FACTA</h1>
-              <span className="text-[10px] font-black px-2 py-1 bg-primary text-black tracking-widest">食品決策助手</span>
-            </div>
-            <Link href="/methodology" className="hidden md:inline-flex text-xs font-black underline underline-offset-4">
-              評分方法
-            </Link>
+          <div className="self-start flex items-center border border-foreground text-[10px] font-black tracking-[0.16em]">
+            <span className="bg-foreground text-background px-2.5 py-1.5">LAUNCH WEEK</span>
+            <a href="#launch-challenge" className="px-2.5 py-1.5 hover:bg-primary transition-colors">掃出你家最會演的一包 →</a>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-[1.05fr_0.95fr] gap-8 md:gap-12 items-center">
@@ -674,7 +797,7 @@ export default function Home() {
         </p>
 
         {/* 4. How it works */}
-        <section className="flex flex-col gap-4">
+        <section id="how-it-works" className="flex flex-col gap-4 scroll-mt-20">
           <div>
             <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">如何開始</p>
             <h2 className="text-2xl font-black mt-2">第一次不用研究，照這三步就好</h2>
@@ -701,6 +824,8 @@ export default function Home() {
             拿一款常買的，現在試試
           </button>
         </section>
+
+        <LaunchChallenge />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
           {/* 5. How FACTA scores */}
@@ -756,6 +881,7 @@ export default function Home() {
           <p>FACTA 提供的是食品資訊整理與比較，不是醫療診斷或治療建議。若有特殊健康狀況，請諮詢醫師或營養師。</p>
         </footer>
 
+        </div>
       </div>
     </Layout>
   );

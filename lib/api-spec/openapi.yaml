@@ -807,6 +807,30 @@ paths:
                 items:
                   $ref: "#/components/schemas/AlternativeProduct"
 
+  /alternatives/{productId}/discover:
+    get:
+      operationId: discoverAlternatives
+      tags: [alternatives]
+      summary: Automatically discover verified alternatives and same-category web candidates
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Source-backed alternative discovery result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlternativeDiscoveryResponse"
+        "404":
+          description: Product not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   # ── Scan history ─────────────────────────────────────────────────────────
 
   /scan/history:
@@ -1655,6 +1679,117 @@ components:
         whyBetterZh:       { type: ["string", "null"] }
         priceDifferenceNtd: { type: ["number", "null"] }
         sameRetailer:      { type: boolean }
+
+    AlternativeShoppingLink:
+      type: object
+      required: [retailerName, url]
+      properties:
+        retailerName: { type: string }
+        url: { type: string }
+
+    CatalogAlternativeCandidate:
+      type: object
+      required:
+        - candidateId
+        - name
+        - sourceName
+        - sourceUrl
+        - evidenceTier
+        - verificationStatus
+        - comparisonStatus
+        - preliminaryBetter
+        - whyCandidateZh
+        - shoppingLinks
+      properties:
+        candidateId: { type: string }
+        name: { type: string }
+        brandName: { type: ["string", "null"] }
+        imageUrl: { type: ["string", "null"] }
+        categoryName: { type: ["string", "null"] }
+        packageSpec: { type: ["string", "null"] }
+        retailerName: { type: ["string", "null"] }
+        priceNtd: { type: ["number", "null"] }
+        sourceName: { type: string }
+        sourceUrl: { type: string }
+        evidenceTier:
+          type: string
+          enum: [catalog_only, nutrition_ready, ingredients_ready, review_ready]
+        verificationStatus:
+          type: string
+          enum: [needs_label_check]
+        comparisonStatus:
+          type: string
+          enum: [nutrition_prefilter, identity_only]
+        preliminaryNutritionScore: { type: ["integer", "null"] }
+        scoreDelta: { type: ["integer", "null"] }
+        preliminaryBetter: { type: boolean }
+        whyCandidateZh:
+          type: array
+          items: { type: string }
+        shoppingLinks:
+          type: array
+          items:
+            $ref: "#/components/schemas/AlternativeShoppingLink"
+
+    CommerceAlternativeCandidate:
+      type: object
+      required:
+        - name
+        - retailerName
+        - productUrl
+        - whyMatchZh
+        - verificationStatus
+        - shoppingLinks
+      properties:
+        name: { type: string }
+        brandName: { type: ["string", "null"] }
+        retailerName: { type: string }
+        priceNtd: { type: ["number", "null"] }
+        productUrl: { type: string }
+        whyMatchZh: { type: string }
+        verificationStatus:
+          type: string
+          enum: [listing_only]
+        shoppingLinks:
+          type: array
+          items:
+            $ref: "#/components/schemas/AlternativeShoppingLink"
+
+    AlternativeDiscoveryResponse:
+      type: object
+      required:
+        - status
+        - query
+        - searchedAt
+        - catalogCount
+        - webSearchStatus
+        - verifiedAlternatives
+        - catalogCandidates
+        - commerceCandidates
+        - caveatZh
+      properties:
+        status:
+          type: string
+          enum: [verified_found, candidates_found, no_candidates]
+        query: { type: string }
+        searchedAt: { type: string }
+        catalogCount: { type: integer }
+        webSearchStatus:
+          type: string
+          enum: [complete, no_results, unavailable, disabled]
+        verifiedAlternatives:
+          type: array
+          items:
+            $ref: "#/components/schemas/AlternativeProduct"
+        catalogCandidates:
+          type: array
+          items:
+            $ref: "#/components/schemas/CatalogAlternativeCandidate"
+        commerceCandidates:
+          type: array
+          items:
+            $ref: "#/components/schemas/CommerceAlternativeCandidate"
+        caveatZh: { type: string }
 
     # ── Scan Events ───────────────────────────────────────────────────────
 

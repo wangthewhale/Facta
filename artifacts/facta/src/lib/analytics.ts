@@ -24,7 +24,14 @@ export type AnalyticsEvent =
   | 'decision_outcome_selected'
   | 'decision_outcome_saved'
   | 'decision_outcome_failed'
-  | 'alternative_empty_cta_clicked';
+  | 'alternative_empty_cta_clicked'
+  | 'alternative_discovery_retried'
+  | 'verified_alternative_opened'
+  | 'alternative_retailer_search_clicked'
+  | 'alternative_candidate_verify_clicked'
+  | 'alternative_commerce_listing_clicked'
+  | 'launch_challenge_started'
+  | 'launch_sample_shared';
 
 export function track(event: AnalyticsEvent, props?: Record<string, string | number | boolean | null>) {
   try {

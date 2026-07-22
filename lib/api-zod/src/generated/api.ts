@@ -1081,6 +1081,81 @@ export const GetAlternativesResponse = zod.array(GetAlternativesResponseItem)
 
 
 /**
+ * @summary Automatically discover verified alternatives and same-category web candidates
+ */
+export const DiscoverAlternativesParams = zod.object({
+  "productId": zod.coerce.number()
+})
+
+export const DiscoverAlternativesResponse = zod.object({
+  "status": zod.enum(['verified_found', 'candidates_found', 'no_candidates']),
+  "query": zod.string(),
+  "searchedAt": zod.string(),
+  "catalogCount": zod.number(),
+  "webSearchStatus": zod.enum(['complete', 'no_results', 'unavailable', 'disabled']),
+  "verifiedAlternatives": zod.array(zod.object({
+  "product": zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "nameZh": zod.string().nullish(),
+  "brandName": zod.string().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "categorySlug": zod.string().nullish(),
+  "categoryName": zod.string().nullish(),
+  "verificationStatus": zod.string(),
+  "overallScore": zod.number().nullish(),
+  "scoreGrade": zod.string().nullish(),
+  "barcode": zod.string().nullish(),
+  "retailerName": zod.string().nullish(),
+  "priceNtd": zod.number().nullish()
+}),
+  "scoreImprovement": zod.number().nullish(),
+  "whyBetter": zod.string(),
+  "whyBetterZh": zod.string().nullish(),
+  "priceDifferenceNtd": zod.number().nullish(),
+  "sameRetailer": zod.boolean().optional()
+})),
+  "catalogCandidates": zod.array(zod.object({
+  "candidateId": zod.string(),
+  "name": zod.string(),
+  "brandName": zod.string().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "categoryName": zod.string().nullish(),
+  "packageSpec": zod.string().nullish(),
+  "retailerName": zod.string().nullish(),
+  "priceNtd": zod.number().nullish(),
+  "sourceName": zod.string(),
+  "sourceUrl": zod.string(),
+  "evidenceTier": zod.enum(['catalog_only', 'nutrition_ready', 'ingredients_ready', 'review_ready']),
+  "verificationStatus": zod.enum(['needs_label_check']),
+  "comparisonStatus": zod.enum(['nutrition_prefilter', 'identity_only']),
+  "preliminaryNutritionScore": zod.number().nullish(),
+  "scoreDelta": zod.number().nullish(),
+  "preliminaryBetter": zod.boolean(),
+  "whyCandidateZh": zod.array(zod.string()),
+  "shoppingLinks": zod.array(zod.object({
+  "retailerName": zod.string(),
+  "url": zod.string()
+}))
+})),
+  "commerceCandidates": zod.array(zod.object({
+  "name": zod.string(),
+  "brandName": zod.string().nullish(),
+  "retailerName": zod.string(),
+  "priceNtd": zod.number().nullish(),
+  "productUrl": zod.string(),
+  "whyMatchZh": zod.string(),
+  "verificationStatus": zod.enum(['listing_only']),
+  "shoppingLinks": zod.array(zod.object({
+  "retailerName": zod.string(),
+  "url": zod.string()
+}))
+})),
+  "caveatZh": zod.string()
+})
+
+
+/**
  * @summary Get recent scan history for session
  */
 export const getScanHistoryQueryLimitDefault = 20;

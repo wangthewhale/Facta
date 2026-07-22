@@ -432,6 +432,116 @@ export interface AlternativeProduct {
   sameRetailer?: boolean;
 }
 
+export interface AlternativeShoppingLink {
+  retailerName: string;
+  url: string;
+}
+
+export type CatalogAlternativeCandidateEvidenceTier = typeof CatalogAlternativeCandidateEvidenceTier[keyof typeof CatalogAlternativeCandidateEvidenceTier];
+
+
+export const CatalogAlternativeCandidateEvidenceTier = {
+  catalog_only: 'catalog_only',
+  nutrition_ready: 'nutrition_ready',
+  ingredients_ready: 'ingredients_ready',
+  review_ready: 'review_ready',
+} as const;
+
+export type CatalogAlternativeCandidateVerificationStatus = typeof CatalogAlternativeCandidateVerificationStatus[keyof typeof CatalogAlternativeCandidateVerificationStatus];
+
+
+export const CatalogAlternativeCandidateVerificationStatus = {
+  needs_label_check: 'needs_label_check',
+} as const;
+
+export type CatalogAlternativeCandidateComparisonStatus = typeof CatalogAlternativeCandidateComparisonStatus[keyof typeof CatalogAlternativeCandidateComparisonStatus];
+
+
+export const CatalogAlternativeCandidateComparisonStatus = {
+  nutrition_prefilter: 'nutrition_prefilter',
+  identity_only: 'identity_only',
+} as const;
+
+export interface CatalogAlternativeCandidate {
+  candidateId: string;
+  name: string;
+  /** @nullable */
+  brandName?: string | null;
+  /** @nullable */
+  imageUrl?: string | null;
+  /** @nullable */
+  categoryName?: string | null;
+  /** @nullable */
+  packageSpec?: string | null;
+  /** @nullable */
+  retailerName?: string | null;
+  /** @nullable */
+  priceNtd?: number | null;
+  sourceName: string;
+  sourceUrl: string;
+  evidenceTier: CatalogAlternativeCandidateEvidenceTier;
+  verificationStatus: CatalogAlternativeCandidateVerificationStatus;
+  comparisonStatus: CatalogAlternativeCandidateComparisonStatus;
+  /** @nullable */
+  preliminaryNutritionScore?: number | null;
+  /** @nullable */
+  scoreDelta?: number | null;
+  preliminaryBetter: boolean;
+  whyCandidateZh: string[];
+  shoppingLinks: AlternativeShoppingLink[];
+}
+
+export type CommerceAlternativeCandidateVerificationStatus = typeof CommerceAlternativeCandidateVerificationStatus[keyof typeof CommerceAlternativeCandidateVerificationStatus];
+
+
+export const CommerceAlternativeCandidateVerificationStatus = {
+  listing_only: 'listing_only',
+} as const;
+
+export interface CommerceAlternativeCandidate {
+  name: string;
+  /** @nullable */
+  brandName?: string | null;
+  retailerName: string;
+  /** @nullable */
+  priceNtd?: number | null;
+  productUrl: string;
+  whyMatchZh: string;
+  verificationStatus: CommerceAlternativeCandidateVerificationStatus;
+  shoppingLinks: AlternativeShoppingLink[];
+}
+
+export type AlternativeDiscoveryResponseStatus = typeof AlternativeDiscoveryResponseStatus[keyof typeof AlternativeDiscoveryResponseStatus];
+
+
+export const AlternativeDiscoveryResponseStatus = {
+  verified_found: 'verified_found',
+  candidates_found: 'candidates_found',
+  no_candidates: 'no_candidates',
+} as const;
+
+export type AlternativeDiscoveryResponseWebSearchStatus = typeof AlternativeDiscoveryResponseWebSearchStatus[keyof typeof AlternativeDiscoveryResponseWebSearchStatus];
+
+
+export const AlternativeDiscoveryResponseWebSearchStatus = {
+  complete: 'complete',
+  no_results: 'no_results',
+  unavailable: 'unavailable',
+  disabled: 'disabled',
+} as const;
+
+export interface AlternativeDiscoveryResponse {
+  status: AlternativeDiscoveryResponseStatus;
+  query: string;
+  searchedAt: string;
+  catalogCount: number;
+  webSearchStatus: AlternativeDiscoveryResponseWebSearchStatus;
+  verifiedAlternatives: AlternativeProduct[];
+  catalogCandidates: CatalogAlternativeCandidate[];
+  commerceCandidates: CommerceAlternativeCandidate[];
+  caveatZh: string;
+}
+
 export interface ScanEvent {
   id: number;
   eventType: string;

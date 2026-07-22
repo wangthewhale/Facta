@@ -28,6 +28,7 @@ import type {
   AdminMealContextInput,
   AdminPublishGoalRuleset201,
   AdminUpdateMealContext200,
+  AlternativeDiscoveryResponse,
   AlternativeProduct,
   BarcodeNotFoundResponse,
   Category,
@@ -2563,6 +2564,83 @@ export function useGetAlternatives<TData = Awaited<ReturnType<typeof getAlternat
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetAlternativesQueryOptions(productId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getDiscoverAlternativesUrl = (productId: number,) => {
+
+
+
+
+  return `/api/alternatives/${productId}/discover`
+}
+
+/**
+ * @summary Automatically discover verified alternatives and same-category web candidates
+ */
+export const discoverAlternatives = async (productId: number, options?: RequestInit): Promise<AlternativeDiscoveryResponse> => {
+
+  return customFetch<AlternativeDiscoveryResponse>(getDiscoverAlternativesUrl(productId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getDiscoverAlternativesQueryKey = (productId: number,) => {
+    return [
+    `/api/alternatives/${productId}/discover`
+    ] as const;
+    }
+
+
+export const getDiscoverAlternativesQueryOptions = <TData = Awaited<ReturnType<typeof discoverAlternatives>>, TError = ErrorType<ErrorResponse>>(productId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof discoverAlternatives>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getDiscoverAlternativesQueryKey(productId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof discoverAlternatives>>> = ({ signal }) => discoverAlternatives(productId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: productId !== null && productId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof discoverAlternatives>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type DiscoverAlternativesQueryResult = NonNullable<Awaited<ReturnType<typeof discoverAlternatives>>>
+export type DiscoverAlternativesQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Automatically discover verified alternatives and same-category web candidates
+ */
+
+export function useDiscoverAlternatives<TData = Awaited<ReturnType<typeof discoverAlternatives>>, TError = ErrorType<ErrorResponse>>(
+ productId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof discoverAlternatives>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getDiscoverAlternativesQueryOptions(productId,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
