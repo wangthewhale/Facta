@@ -691,16 +691,17 @@ export default function Report() {
           const attentionCount =
             (evaluation.topReasons?.filter(r => r.impact === 'negative').length || 0) +
             (evaluation.personalAlerts?.length || 0);
-          const incomplete = evaluation.analysisScope !== 'complete';
+          const incomplete = !hasCompletedEvidence;
           return (
             <div className="mx-6 mt-6 bg-foreground text-background p-6 flex flex-col gap-3">
               <p className="font-black text-base leading-snug">
-                {incomplete
-                  ? '這次分析仍有資料未完成，先不要把初評當成安全保證。'
-                  : attentionCount > 0
-                  ? `這次分析發現 ${attentionCount} 項需要注意的地方。`
-                  : '這款商品沒有明顯需要注意的地方。'}
-                {' '}家裡其他常吃的食品呢？
+                {isWaterAnalysis
+                  ? '這瓶水的配方單純；真正容易藏糖、鈉的，可能是家裡其他常喝的飲料與常吃食品。'
+                  : `${incomplete
+                    ? '這次分析仍有資料未完成，先不要把初評當成安全保證。'
+                    : attentionCount > 0
+                    ? `這次分析發現 ${attentionCount} 項需要注意的地方。`
+                    : '這款商品沒有明顯需要注意的地方。'} 家裡其他常吃的食品呢？`}
               </p>
               <p className="text-xs text-background/75 leading-relaxed">
                 FACTA 家庭食品健檢：一次檢查 10 項常吃食品，找出需要注意的成分與更適合的替代品，24 小時內完成。
