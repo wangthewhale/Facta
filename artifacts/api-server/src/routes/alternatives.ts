@@ -21,6 +21,7 @@ import {
   compareCandidateNutrition,
   extractDiscoveryTerms,
   nutritionInputFromRaw,
+  sanitizeCommerceBrand,
   sanitizeCommerceCandidates,
   type CommerceCandidate,
 } from "../lib/alternativeDiscovery.js";
@@ -238,14 +239,15 @@ async function discoverCatalogCandidates(
     `);
     const retailerRows = ((retailerResult as any).rows ?? retailerResult) as Array<Record<string, any>>;
     for (const row of retailerRows) {
-      const shoppingLinks = buildShoppingLinks(row.product_name, row.brand_raw);
+      const brandName = sanitizeCommerceBrand(row.brand_raw);
+      const shoppingLinks = buildShoppingLinks(row.product_name, brandName);
       const sourceUrl = typeof row.source_url === "string" && /^https?:\/\//i.test(row.source_url)
         ? row.source_url
         : shoppingLinks[0]!.url;
       candidates.push({
         candidateId: `retailer:${row.facta_seed_id}`,
         name: row.product_name,
-        brandName: row.brand_raw ?? null,
+        brandName,
         imageUrl: row.image_url ?? null,
         categoryName: row.category_normalized ?? null,
         packageSpec: row.spec_raw ?? null,
@@ -288,6 +290,7 @@ async function discoverCatalogCandidates(
     `);
     const rows = ((result as any).rows ?? result) as Array<Record<string, any>>;
     for (const row of rows) {
+      const brandName = sanitizeCommerceBrand(row.brand_name);
       const candidateNutrition = nutritionInputFromRaw(row.nutrition_raw);
       const comparison = compareCandidateNutrition(originalNutrition, candidateNutrition);
       const imageUrls = Array.isArray(row.image_urls)
@@ -305,7 +308,7 @@ async function discoverCatalogCandidates(
       candidates.push({
         candidateId: `${row.source_key}:${row.source_record_id}`,
         name: row.product_name,
-        brandName: row.brand_name ?? null,
+        brandName,
         imageUrl: imageUrls[0] ?? null,
         categoryName: row.category_name ?? null,
         packageSpec: row.package_spec ?? null,
@@ -315,7 +318,7 @@ async function discoverCatalogCandidates(
         verificationStatus: "needs_label_check",
         ...comparison,
         whyCandidateZh,
-        shoppingLinks: buildShoppingLinks(row.product_name, row.brand_name),
+        shoppingLinks: buildShoppingLinks(row.product_name, brandName),
         sourcePriority: 0,
       });
     }

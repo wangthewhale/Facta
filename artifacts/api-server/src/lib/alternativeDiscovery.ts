@@ -49,7 +49,7 @@ const LEADING_PACK_SIZE_PATTERN = /^[\s\[\]【】()（）]*(?:\d+(?:\.\d+)?\s*(?
  * Search models occasionally echo that value into brandName. Keep uncertain
  * brands empty instead of carrying a clearly wrong value into label review.
  */
-function sanitizeCommerceBrand(value: unknown): string | null {
+export function sanitizeCommerceBrand(value: unknown): string | null {
   if (typeof value !== "string" || !value.trim()) return null;
   const normalized = normalizeText(value).slice(0, 100);
   const withoutPackSize = normalized.replace(LEADING_PACK_SIZE_PATTERN, "").trim();

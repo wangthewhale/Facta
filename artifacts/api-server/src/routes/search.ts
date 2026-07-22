@@ -14,6 +14,7 @@ import { RULESET_VERSION } from "../lib/scoring.js";
 import { resolveCatalogProduct } from "../lib/catalogEvidence.js";
 import { expandCatalogSearchTerms, scoreCatalogCandidate } from "../lib/catalogDiscovery.js";
 import { discoverLiveCatalog } from "../lib/liveCatalogDiscovery.js";
+import { sanitizeCommerceBrand } from "../lib/alternativeDiscovery.js";
 
 const router: IRouter = Router();
 
@@ -267,10 +268,10 @@ router.get("/search", async (req, res): Promise<void> => {
         LIMIT ${Math.min(catalogLimit * 12, 240)}`);
       const rankedRows = [...((rows as any).rows ?? rows)]
         .map((r: any) => ({
-          row: r,
+          row: { ...r, brand_raw: sanitizeCommerceBrand(r.brand_raw) },
           matchScore: scoreCatalogCandidate(q, {
             name: r.product_name,
-            brandName: r.brand_raw,
+            brandName: sanitizeCommerceBrand(r.brand_raw),
             categoryName: r.category_normalized,
           }),
         }))
@@ -323,10 +324,10 @@ router.get("/search", async (req, res): Promise<void> => {
           LIMIT ${Math.min(Math.max(remainingLimit, 1) * 12, 240)}`);
         const rankedRows = [...((rows as any).rows ?? rows)]
           .map((r: any) => ({
-            row: r,
+            row: { ...r, brand_name: sanitizeCommerceBrand(r.brand_name) },
             matchScore: scoreCatalogCandidate(q, {
               name: r.product_name,
-              brandName: r.brand_name,
+              brandName: sanitizeCommerceBrand(r.brand_name),
               categoryName: r.category_name,
             }),
           }))
