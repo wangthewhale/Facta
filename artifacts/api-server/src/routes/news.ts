@@ -34,6 +34,37 @@ interface CuratedBrandNews {
   article: NewsArticle;
 }
 
+interface CuratedProductNews {
+  barcodes: string[];
+  sentiment: "negative" | "mixed" | "neutral";
+  summary: string;
+  summaryZh: string;
+  article: NewsArticle;
+}
+
+/**
+ * Exact-product fallbacks keep a first report useful when live search is slow.
+ * They are keyed by barcode so product-line reporting cannot leak onto another
+ * item from the same brand. Live search resumes after the normal cache TTL.
+ */
+const CURATED_PRODUCT_NEWS: CuratedProductNews[] = [
+  {
+    barcodes: ["4710088637574"],
+    sentiment: "neutral",
+    summary: "The newest directly relevant independent report found for the PH9.0 alkaline-ionized-water line was published by CNA on August 28, 2025. It covers the product line's bottled-water market promotion, not a recall, safety incident, or enforcement action; it does not identify the exact 800ml barcode as affected by a safety issue.",
+    summaryZh: "目前可直接核對、與 PH9.0 鹼性離子水產品線相關的最新獨立報導，是中央社 2025 年 8 月 28 日的瓶裝水市場／推廣消息。這不是回收、食安或裁罰紀錄，報導也未指出此一 800ml 條碼商品涉及安全問題。",
+    article: {
+      title: "統一攻110億瓶裝水市場　衝鹼性水買氣快閃寧夏夜市",
+      url: "https://www.cna.com.tw/news/afe/202508280209.aspx",
+      sourceName: "中央通訊社",
+      publishedAt: "2025-08-28",
+      reportType: "news",
+      scope: "brand",
+      affectsProduct: null,
+    },
+  },
+];
+
 /**
  * Small, source-verified registry for high-impact current events that must not
  * disappear when the live search provider is slow. Entries remain explicitly
@@ -84,6 +115,11 @@ function curatedNewsForBrand(brandNames: string[]): CuratedBrandNews | null {
     const normalizedAlias = normalizedText(alias);
     return normalizedBrands.some(brand => brand.includes(normalizedAlias) || normalizedAlias.includes(brand));
   })) ?? null;
+}
+
+function curatedNewsForProduct(barcode: string | null | undefined): CuratedProductNews | null {
+  if (!barcode) return null;
+  return CURATED_PRODUCT_NEWS.find(item => item.barcodes.includes(barcode)) ?? null;
 }
 
 function validPublishedDate(value: unknown): string | null {
@@ -194,7 +230,7 @@ router.get("/products/:id/news", async (req, res): Promise<void> => {
 
   const [cached] = await db.select().from(productNewsTable)
     .where(eq(productNewsTable.productId, product.id));
-  const curated = curatedNewsForBrand(brandNames);
+  const curated = curatedNewsForProduct(catalogProduct.barcode) ?? curatedNewsForBrand(brandNames);
   const cachedArticles = sanitizeArticles(cached?.articles);
 
   // A newly verified high-impact event takes precedence over an older cache.
