@@ -42,6 +42,20 @@ function normalizeText(value: string): string {
   return value.normalize("NFKC").replace(/\s+/g, " ").trim();
 }
 
+const LEADING_PACK_SIZE_PATTERN = /^[\s\[\]【】()（）]*(?:\d+(?:\.\d+)?\s*(?:罐|瓶|包|入|組|箱|盒|袋|件|枚|顆|片|毫升|公克|公斤|ml|g|kg|l)\s*(?:[x×*\/／]\s*(?:\d+\s*)?(?:罐|瓶|包|入|組|箱|盒|袋|件|枚|顆|片))?)[\s\[\]【】()（）:：\-–—]*/i;
+
+/**
+ * Commerce titles often begin with merchandising text such as 「24罐/箱」.
+ * Search models occasionally echo that value into brandName. Keep uncertain
+ * brands empty instead of carrying a clearly wrong value into label review.
+ */
+function sanitizeCommerceBrand(value: unknown): string | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const normalized = normalizeText(value).slice(0, 100);
+  const withoutPackSize = normalized.replace(LEADING_PACK_SIZE_PATTERN, "").trim();
+  return withoutPackSize || null;
+}
+
 /**
  * Derive a small, explainable set of same-product-family terms. These terms
  * drive deterministic database search; AI is reserved for live commerce
@@ -236,8 +250,7 @@ export function sanitizeCommerceCandidates(value: unknown): CommerceCandidate[] 
     seen.add(productUrl);
     results.push({
       name,
-      brandName: typeof item.brandName === "string" && item.brandName.trim()
-        ? normalizeText(item.brandName).slice(0, 100) : null,
+      brandName: sanitizeCommerceBrand(item.brandName),
       retailerName,
       priceNtd: finiteNumber(item.priceNtd),
       productUrl,

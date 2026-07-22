@@ -82,6 +82,26 @@ describe("alternative discovery", () => {
     expect(candidates).toHaveLength(0);
   });
 
+  it("drops pack-size merchandising text mistakenly returned as a brand", () => {
+    const candidates = sanitizeCommerceCandidates([
+      {
+        name: "[24罐/箱]史努比xHIGH UP日系彈珠氣泡水 330ml",
+        brandName: "24罐/箱",
+        retailerName: "7-ELEVEN",
+        productUrl: "https://www.books.com.tw/products/N001234567",
+      },
+      {
+        name: "統一 PH9.0 鹼性離子水 800ml",
+        brandName: "統一",
+        retailerName: "momo",
+        productUrl: "https://www.momoshop.com.tw/goods/GoodsDetail.jsp?i_code=123",
+      },
+    ]);
+
+    expect(candidates[0]?.brandName).toBeNull();
+    expect(candidates[1]?.brandName).toBe("統一");
+  });
+
   it("builds retailer searches without claiming the item is in stock", () => {
     const links = buildShoppingLinks("高效益生菌", "MIHONG");
     expect(links).toHaveLength(3);
