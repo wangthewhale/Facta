@@ -7,10 +7,14 @@
  * treated as evidence that a product is safe.
  */
 
-// v2.1 invalidates legacy cached scores after source-backed catalog evidence
-// replaced the original demo nutrition rows.
-export const RULESET_VERSION = "2.1.0";
+// v2.2 adds a dedicated evidence path for plain packaged water. Taiwan permits
+// drinking/mineral water without nutrition claims to omit nutrition labels, so
+// the generic "two critical nutrients" rule must not misclassify it as missing.
+export const RULESET_VERSION = "2.2.0";
 export const TFDA_FOP_GUIDE_URL = "https://www.fda.gov.tw/tc/newsContent.aspx?cid=4&id=31511";
+export const TFDA_WATER_LABEL_EXEMPTION_URL = "https://www.fda.gov.tw/TC/siteContent.aspx?sid=12343";
+export const WHO_DRINKING_WATER_PH_URL = "https://www.who.int/publications/m/item/chemical-fact-sheets--ph";
+export const WHO_DRINKING_WATER_QUALITY_URL = "https://www.who.int/publications/i/item/9789240121225";
 
 type FoodForm = "solid" | "liquid";
 type TrafficLight = "green" | "yellow" | "red";
@@ -40,6 +44,7 @@ export interface IngredientInput {
 interface ScoringInput {
   nutrition?: NutritionInput | null;
   ingredients?: IngredientInput[];
+  productName?: string | null;
   dataCompleteness: number;
 }
 
@@ -59,7 +64,7 @@ export interface AdditiveFlag {
   evidenceStrength: string;
 }
 
-export type AnalysisScope = "complete" | "nutrition_only" | "ingredients_only" | "insufficient";
+export type AnalysisScope = "complete" | "nutrition_only" | "ingredients_only" | "water" | "insufficient";
 
 export interface ScoringResult {
   overallScore: number;
@@ -81,6 +86,43 @@ interface NormalizedNutrition {
   foodForm: FoodForm;
   basis: "per_100g" | "per_100ml";
   values: Omit<NutritionInput, "servingSize" | "servingSizeUnit">;
+}
+
+const WATER_PRODUCT_NAME_PATTERN = /(飲用水|礦泉水|純水|純淨水|天然水|離子水|鹼性水|海洋深層水|深層海水|氣泡水|sparkling\s*water|mineral\s*water|alkaline\s*water)/i;
+const WATER_DISQUALIFIER_PATTERN = /(砂糖|蔗糖|果糖|糖漿|葡萄糖|蜂蜜|果汁|香料|甜味|咖啡|茶|乳|奶|酒精|維生素|防腐劑|色素)/i;
+const PLAIN_WATER_INGREDIENTS = new Set([
+  "水", "飲用水", "純水", "純淨水", "天然水", "礦泉水", "逆滲透水", "ro水",
+  "海水", "深層海水", "海洋深層水", "電解水", "離子水", "鹼性離子水",
+  "二氧化碳", "碳酸水", "海洋礦物質", "礦物質", "海水濃縮礦物質液",
+  "氯化鈉", "氯化鉀", "氯化鈣", "氯化鎂", "硫酸鎂", "碳酸氫鈉",
+]);
+
+function normalizeWaterIngredient(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[（(][^）)]*[）)]/g, "")
+    .replace(/[\s·・._-]/g, "")
+    .trim();
+}
+
+/** A water-like name alone is not enough: every confirmed ingredient must be water, carbonation, or a whitelisted mineral salt. */
+export function isPlainWaterProduct(input: Pick<ScoringInput, "productName" | "ingredients">): boolean {
+  const productName = input.productName?.trim() ?? "";
+  const ingredients = (input.ingredients ?? []).map(item => normalizeWaterIngredient(item.name)).filter(Boolean);
+  if (!WATER_PRODUCT_NAME_PATTERN.test(productName) || ingredients.length === 0) return false;
+  if (ingredients.some(name => WATER_DISQUALIFIER_PATTERN.test(name))) return false;
+  return ingredients.every(name => PLAIN_WATER_INGREDIENTS.has(name));
+}
+
+export function resolveAnalysisScope(
+  scores: { nutritionScore?: number | null; additiveScore?: number | null },
+  context?: Pick<ScoringInput, "productName" | "ingredients">,
+): AnalysisScope {
+  if (context && isPlainWaterProduct(context)) return "water";
+  if (scores.nutritionScore != null && scores.additiveScore != null) return "complete";
+  if (scores.nutritionScore != null) return "nutrition_only";
+  if (scores.additiveScore != null) return "ingredients_only";
+  return "insufficient";
 }
 
 const TFDA_THRESHOLDS = {
@@ -323,6 +365,81 @@ function gradeFromScore(score: number): "Excellent" | "Good" | "Consider" | "Poo
   return "Poor";
 }
 
+function scorePlainWater(input: ScoringInput): ScoringResult {
+  const hasAlkalineClaim = /(鹼性|p\s*h\s*9|alkaline)/i.test(input.productName ?? "");
+  const normalized = input.nutrition ? normalizeNutritionPer100(input.nutrition) : null;
+  const sodium = normalized?.values.sodium;
+  const reasons: ScoringReason[] = [
+    {
+      label: "The confirmed ingredient list contains only water sources or mineral components; no sugar, sweetener or flavouring is listed.",
+      labelZh: "已確認的成分僅見水類來源或礦物成分，未見糖、甜味劑或香料。",
+      impact: "positive",
+      evidenceStrength: "medium",
+      source: "使用者確認的包裝成分",
+    },
+    {
+      label: "Taiwan permits drinking and mineral water without nutrition claims to omit a nutrition label.",
+      labelZh: "依食藥署規定，未作營養宣稱的飲用水與礦泉水可免營養標示；沒有營養表不應被判成資料不足。",
+      impact: "neutral",
+      evidenceStrength: "high",
+      source: TFDA_WATER_LABEL_EXEMPTION_URL,
+    },
+  ];
+
+  if (hasAlkalineClaim) {
+    reasons.push({
+      label: "WHO does not set a health-based guideline value for drinking-water pH, so pH 9 alone is not evidence of an added health benefit.",
+      labelZh: "pH 代表酸鹼值；WHO 未為飲用水 pH 訂定健康基準值，因此 pH 9 本身不能證明有額外保健功效。",
+      impact: "neutral",
+      evidenceStrength: "high",
+      source: WHO_DRINKING_WATER_PH_URL,
+    });
+  }
+
+  reasons.push(sodium != null && normalized ? {
+    label: `The label provides sodium at ${formatValue(sodium)} mg per 100 ml for comparison with other water products.`,
+    labelZh: `包裝提供的鈉換算為每 100 ml ${formatValue(sodium)} mg，可用來和其他飲用水比較。`,
+    impact: "neutral",
+    evidenceStrength: "high",
+    source: "使用者確認的包裝營養標示",
+  } : {
+    label: "No sodium or mineral quantity is stated, so this report cannot compare the mineral profile with other water products.",
+    labelZh: "包裝未提供鈉或礦物質含量，因此這份報告不能比較不同飲用水的礦物組成。",
+    impact: "neutral",
+    evidenceStrength: "high",
+    source: "使用者確認的包裝標示",
+  });
+
+  reasons.push({
+    label: "A package photo cannot verify microbiological, heavy-metal or process safety; those require official testing and current safety records.",
+    labelZh: "包裝照片無法驗證微生物、重金屬或製程安全，仍需搭配官方抽驗與近期食安紀錄。",
+    impact: "neutral",
+    evidenceStrength: "high",
+    source: WHO_DRINKING_WATER_QUALITY_URL,
+  });
+
+  return {
+    // Storage compatibility only; the water UI deliberately hides this internal score.
+    overallScore: 85,
+    nutritionScore: null,
+    additiveScore: null,
+    scoreGrade: "Excellent",
+    verdict: hasAlkalineClaim
+      ? "Plain unsweetened water suitable for everyday hydration; the alkaline claim is not treated as an added health benefit."
+      : "Plain unsweetened water suitable for everyday hydration; package evidence does not replace official water-quality testing.",
+    verdictZh: hasAlkalineClaim
+      ? "成分未見糖或調味添加，可作為日常補水選擇；鹼性／pH 宣稱不會被當成額外健康加分。"
+      : "成分未見糖或調味添加，可作為日常補水選擇；包裝資訊仍不能代替官方水質檢驗。",
+    topReasons: reasons,
+    additiveFlags: [],
+    evidenceConfidence: "medium",
+    analysisScope: "water",
+    nutritionBasis: normalized?.basis ?? null,
+    ingredientCoverage: 1,
+    rulesetVersion: RULESET_VERSION,
+  };
+}
+
 function verdictFromGrade(grade: string, scope: AnalysisScope): { verdict: string; verdictZh: string } {
   if (scope === "insufficient") {
     return {
@@ -353,13 +470,15 @@ function verdictFromGrade(grade: string, scope: AnalysisScope): { verdict: strin
 }
 
 export function calculateScore(input: ScoringInput): ScoringResult {
+  if (isPlainWaterProduct(input)) return scorePlainWater(input);
+
   const nutrition = input.nutrition ? scoreNutrition(input.nutrition) : { score: null, reasons: [], basis: null };
   const additives = scoreAdditives(input.ingredients ?? []);
 
-  const analysisScope: AnalysisScope =
-    nutrition.score !== null && additives.score !== null ? "complete" :
-    nutrition.score !== null ? "nutrition_only" :
-    additives.score !== null ? "ingredients_only" : "insufficient";
+  const analysisScope = resolveAnalysisScope({
+    nutritionScore: nutrition.score,
+    additiveScore: additives.score,
+  });
 
   const overallScore =
     nutrition.score !== null && additives.score !== null ? Math.round(nutrition.score * 0.6 + additives.score * 0.4) :

@@ -24,6 +24,25 @@ type NutritionDraft = {
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const SUPPORTED_MIME_TYPES: SupportedMime[] = ['image/jpeg', 'image/png', 'image/webp'];
+const WATER_PRODUCT_NAME_PATTERN = /(飲用水|礦泉水|純水|純淨水|天然水|離子水|鹼性水|海洋深層水|深層海水|氣泡水|sparkling\s*water|mineral\s*water|alkaline\s*water)/i;
+const WATER_DISQUALIFIER_PATTERN = /(砂糖|蔗糖|果糖|糖漿|葡萄糖|蜂蜜|果汁|香料|甜味|咖啡|茶|乳|奶|酒精|維生素|防腐劑|色素)/i;
+const PLAIN_WATER_INGREDIENTS = new Set([
+  '水', '飲用水', '純水', '純淨水', '天然水', '礦泉水', '逆滲透水', 'ro水',
+  '海水', '深層海水', '海洋深層水', '電解水', '離子水', '鹼性離子水',
+  '二氧化碳', '碳酸水', '海洋礦物質', '礦物質', '海水濃縮礦物質液',
+  '氯化鈉', '氯化鉀', '氯化鈣', '氯化鎂', '硫酸鎂', '碳酸氫鈉',
+]);
+
+function normalizeWaterIngredient(value: string): string {
+  return value.toLowerCase().replace(/[（(][^）)]*[）)]/g, '').replace(/[\s·・._-]/g, '').trim();
+}
+
+function isPlainWaterDraft(productName: string, ingredientsText: string): boolean {
+  const ingredients = ingredientsText.split(/[、,，;；\n]/).map(normalizeWaterIngredient).filter(Boolean);
+  if (!WATER_PRODUCT_NAME_PATTERN.test(productName) || ingredients.length === 0) return false;
+  if (ingredients.some(name => WATER_DISQUALIFIER_PATTERN.test(name))) return false;
+  return ingredients.every(name => PLAIN_WATER_INGREDIENTS.has(name));
+}
 
 function normalizeNutritionDraft(value: unknown): NutritionDraft | null {
   if (!value || typeof value !== 'object') return null;
@@ -182,6 +201,7 @@ export default function Submit() {
     .filter(key => typeof parsedNutrition?.[key as keyof NutritionDraft] === 'number').length;
   const nutritionReady = !!parsedNutrition?.servingSize &&
     ['g', 'ml'].includes(parsedNutrition.servingSizeUnit || '') && criticalNutritionCount >= 2;
+  const isPlainWater = isPlainWaterDraft(productName, extractedText);
 
   /** After the user reviews the auto-recognized data, create + finalize in one go. */
   const handleGenerateReport = async () => {
@@ -284,9 +304,13 @@ export default function Submit() {
         {step === 'confirm' && (
           <div className="flex flex-col gap-6 flex-1 mt-2">
             <div>
-              <h1 className="text-2xl font-black">最後對一次，別讓小數點害你判錯</h1>
+              <h1 className="text-2xl font-black">
+                {isPlainWater ? '這是飲用水，不用硬找營養標示' : '最後對一次，別讓小數點害你判錯'}
+              </h1>
               <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-                請直接對照手上的包裝。每份量、g／ml、糖、鈉和飽和脂肪會影響換算；資料不夠時，報告不會硬給完整分數。
+                {isPlainWater
+                  ? '請確認商品名稱與成分確實只有水類來源。FACTA 會改用飲用水規則，分析配方、pH 宣稱與近期食安消息，不會因依法免標營養表就判成資料不足。'
+                  : '請直接對照手上的包裝。每份量、g／ml、糖、鈉和飽和脂肪會影響換算；資料不夠時，報告不會硬給完整分數。'}
               </p>
             </div>
 
@@ -339,6 +363,20 @@ export default function Submit() {
               />
             </div>
 
+            {isPlainWater ? (
+              <section className="flex items-start gap-3 border-2 border-primary-strong bg-primary/10 p-4">
+                <CheckCircle className="w-5 h-5 text-primary-strong shrink-0 mt-0.5" />
+                <div>
+                  <h2 className="text-xs font-black uppercase tracking-widest">已切換為飲用水分析</h2>
+                  <p className="text-xs leading-relaxed mt-2">
+                    飲用水與礦泉水在未作營養宣稱時，依法可免營養標示。這款將直接分析是否有糖或調味添加、pH 宣稱的意義，以及可查到的品牌與食安紀錄。
+                  </p>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed mt-2">
+                    若瓶身另有鈉或礦物質數值，也可以保留；沒有則不會阻擋報告。
+                  </p>
+                </div>
+              </section>
+            ) : (
             <section className="flex flex-col gap-3 border-2 border-border bg-card p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -395,6 +433,7 @@ export default function Submit() {
                 </div>
               )}
             </section>
+            )}
 
             <label className="flex items-start gap-3 border border-border bg-muted/50 p-4 cursor-pointer">
               <input type="checkbox" checked={consented} onChange={e => setConsented(e.target.checked)} className="mt-0.5 w-4 h-4 accent-black" />
@@ -416,7 +455,9 @@ export default function Submit() {
               )}
               {!consented && <p className="text-[11px] text-muted-foreground text-center">請先確認並同意保存你送出的文字與數值。</p>}
               <p className="text-[10px] text-muted-foreground text-center leading-relaxed">
-                新商品會先標示為「待驗證」；資料不足時不會顯示完整評分。
+                {isPlainWater
+                  ? '新商品會先標示為「待驗證」；飲用水會顯示專用分析，不用補不存在的營養數字。'
+                  : '新商品會先標示為「待驗證」；資料不足時不會顯示完整評分。'}
               </p>
             </div>
           </div>

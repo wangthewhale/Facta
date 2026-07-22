@@ -10,7 +10,7 @@ import {
   CreateSubmissionBody, ProcessOcrBody, FinalizeSubmissionParams,
 } from "@workspace/api-zod";
 import { openai } from "@workspace/integrations-openai-ai-server";
-import { calculateScore } from "../lib/scoring.js";
+import { calculateScore, resolveAnalysisScope } from "../lib/scoring.js";
 
 const router: IRouter = Router();
 
@@ -234,10 +234,10 @@ router.post("/submissions/:id/finalize", async (req, res): Promise<void> => {
             productId: submission.resolvedProductId,
             overallScore: evalRow?.overallScore,
             scoreGrade: evalRow?.scoreGrade,
-            analysisScope:
-              evalRow?.nutritionScore != null && evalRow?.additiveScore != null ? "complete" :
-              evalRow?.nutritionScore != null ? "nutrition_only" :
-              evalRow?.additiveScore != null ? "ingredients_only" : "insufficient",
+            analysisScope: resolveAnalysisScope(
+              { nutritionScore: evalRow?.nutritionScore, additiveScore: evalRow?.additiveScore },
+              { productName: submission.productName, ingredients: splitSubmissionIngredients(submission.extractedIngredients ?? "") },
+            ),
           },
         };
       }
@@ -311,6 +311,7 @@ router.post("/submissions/:id/finalize", async (req, res): Promise<void> => {
 
       // Score immediately (deterministic, no I/O)
       const result = calculateScore({
+        productName: submission.productName,
         nutrition: hasNutrition && nutrition ? {
           servingSize: nutrition.servingSize ?? null,
           servingSizeUnit: typeof nutrition.servingSizeUnit === "string" ? nutrition.servingSizeUnit : null,

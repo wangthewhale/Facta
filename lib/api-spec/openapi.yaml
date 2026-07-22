@@ -1209,7 +1209,7 @@ components:
         scoreGrade: { type: string }
         analysisScope:
           type: string
-          enum: [complete, nutrition_only, ingredients_only, insufficient]
+          enum: [complete, nutrition_only, ingredients_only, water, insufficient]
 
     SafetyAlert:
       type: object
@@ -1453,7 +1453,7 @@ components:
         additiveScore:       { type: ["integer", "null"] }
         analysisScope:
           type: string
-          enum: [complete, nutrition_only, ingredients_only, insufficient]
+          enum: [complete, nutrition_only, ingredients_only, water, insufficient]
         scoreGrade:          { type: string }
         verdict:             { type: string }
         verdictZh:           { type: ["string", "null"] }
@@ -1661,7 +1661,7 @@ components:
         overallScore:      { type: integer }
         analysisScope:
           type: string
-          enum: [complete, nutrition_only, ingredients_only, insufficient]
+          enum: [complete, nutrition_only, ingredients_only, water, insufficient]
         scoreGrade:        { type: string }
         verdict:           { type: string }
         verdictZh:         { type: ["string", "null"] }

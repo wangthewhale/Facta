@@ -65,6 +65,34 @@ describe("source-backed catalog evidence", () => {
     ).toBe(36);
   });
 
+  it("resolves the scanned PH9.0 water to the exact official brand, image and barcode", () => {
+    const product = resolveCatalogProduct(
+      {
+        ...legacyBase,
+        id: 11,
+        name: "統一PH9.0鹼性離子水",
+        nameZh: "統一PH9.0鹼性離子水",
+        ingredientsList: "水、海水",
+        imageUrl: null,
+        verificationStatus: "provisional",
+      },
+      "4710088637574",
+      { name: "統一企業（股）公司" },
+    );
+
+    expect(product.nameZh).toBe("統一PH9.0鹼性離子水 800ml");
+    expect(product.brandName).toBe("統一");
+    expect(product.barcode).toBe("4710088637574");
+    expect(product.imageUrl).toContain("20140402195619_58489.jpg");
+    expect(product.verificationStatus).toBe("verified");
+    expect(calculateScore({
+      productName: product.nameZh,
+      nutrition: product.evidence!.nutrition,
+      ingredients: product.evidence!.ingredientsList.split("、").map(name => ({ name })),
+      dataCompleteness: 0.3,
+    }).analysisScope).toBe("water");
+  });
+
   it("downgrades unsupported legacy demo rows and removes generic imagery", () => {
     const product = resolveCatalogProduct(
       {
@@ -87,6 +115,9 @@ describe("source-backed catalog evidence", () => {
     expect(isValidGtin("4710144201206")).toBe(true);
     expect(isValidGtin("4710918001290")).toBe(false);
     expect(isValidGtin("4710088033427")).toBe(false);
+    expect(getTrustedProductEvidenceByBarcode("4710088637574")?.productId).toBe(
+      11,
+    );
     expect(getTrustedProductEvidenceByBarcode("4710144201206")?.productId).toBe(
       4,
     );

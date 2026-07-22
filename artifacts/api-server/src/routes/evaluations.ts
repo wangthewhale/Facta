@@ -7,7 +7,7 @@ import {
   productAllergensTable, allergensTable, barcodesTable,
 } from "@workspace/db";
 import { GetProductEvaluationParams, GetShareCardParams } from "@workspace/api-zod";
-import { calculateScore, RULESET_VERSION } from "../lib/scoring.js";
+import { calculateScore, resolveAnalysisScope, RULESET_VERSION } from "../lib/scoring.js";
 import { resolveCatalogProduct } from "../lib/catalogEvidence.js";
 
 const router: IRouter = Router();
@@ -51,7 +51,9 @@ async function getOrComputeEvaluation(productId: number) {
       ? await mapRawIngredients(product.ingredientsList)
       : [];
 
-  const resolvedNutrition = catalogProduct.evidence?.nutrition ?? (canUseDatabaseEvidence && nutrition ? {
+  const resolvedNutrition = catalogProduct.evidence
+    ? catalogProduct.evidence.nutrition
+    : canUseDatabaseEvidence && nutrition ? {
     servingSize: parseNullableNumber(nutrition.servingSize),
     servingSizeUnit: nutrition.servingSizeUnit,
     calories: parseNullableNumber(nutrition.calories),
@@ -63,7 +65,7 @@ async function getOrComputeEvaluation(productId: number) {
     dietaryFiber: parseNullableNumber(nutrition.dietaryFiber),
     totalSugars: parseNullableNumber(nutrition.totalSugars),
     protein: parseNullableNumber(nutrition.protein),
-  } : null);
+    } : null;
 
   const evidenceProduct = {
     ...product,
@@ -73,6 +75,7 @@ async function getOrComputeEvaluation(productId: number) {
   const dataCompleteness = calculateCompleteness(evidenceProduct, resolvedNutrition, ingredients);
 
   const result = calculateScore({
+    productName: catalogProduct.nameZh ?? catalogProduct.name,
     nutrition: resolvedNutrition,
     ingredients,
     dataCompleteness,
@@ -168,6 +171,7 @@ router.get("/evaluations/product/:productId", async (req, res): Promise<void> =>
   const [brand] = product?.brandId ? await db.select().from(brandsTable).where(eq(brandsTable.id, product.brandId)) : [null];
   const [barcode] = product ? await db.select().from(barcodesTable).where(eq(barcodesTable.productId, product.id)).limit(1) : [null];
   const catalogProduct = product ? resolveCatalogProduct(product, barcode?.barcode, brand) : null;
+  const responseIngredients = splitRawIngredients(catalogProduct?.ingredientsList ?? product?.ingredientsList ?? null).map(name => ({ name }));
 
   const allergenRows = await db
     .select({ pa: productAllergensTable, al: allergensTable })
@@ -185,10 +189,10 @@ router.get("/evaluations/product/:productId", async (req, res): Promise<void> =>
     overallScore: evaluation.overallScore,
     nutritionScore: evaluation.nutritionScore,
     additiveScore: evaluation.additiveScore,
-    analysisScope:
-      evaluation.nutritionScore != null && evaluation.additiveScore != null ? "complete" :
-      evaluation.nutritionScore != null ? "nutrition_only" :
-      evaluation.additiveScore != null ? "ingredients_only" : "insufficient",
+    analysisScope: resolveAnalysisScope(
+      { nutritionScore: evaluation.nutritionScore, additiveScore: evaluation.additiveScore },
+      { productName: catalogProduct?.nameZh ?? catalogProduct?.name ?? product?.nameZh ?? product?.name, ingredients: responseIngredients },
+    ),
     scoreGrade: evaluation.scoreGrade,
     verdict: evaluation.verdict,
     verdictZh: evaluation.verdictZh,
@@ -220,6 +224,7 @@ router.get("/share-cards/:productId", async (req, res): Promise<void> => {
   const [brand] = product?.brandId ? await db.select().from(brandsTable).where(eq(brandsTable.id, product.brandId)) : [null];
   const [barcode] = product ? await db.select().from(barcodesTable).where(eq(barcodesTable.productId, product.id)).limit(1) : [null];
   const catalogProduct = product ? resolveCatalogProduct(product, barcode?.barcode, brand) : null;
+  const responseIngredients = splitRawIngredients(catalogProduct?.ingredientsList ?? product?.ingredientsList ?? null).map(name => ({ name }));
 
   const { alternativeProductLinksTable, productsTable: pt } = await import("@workspace/db");
   const [altLink] = await db.select()
@@ -237,10 +242,10 @@ router.get("/share-cards/:productId", async (req, res): Promise<void> => {
     brandName: catalogProduct?.brandName ?? null,
     imageUrl: catalogProduct?.imageUrl ?? null,
     overallScore: evaluation.overallScore,
-    analysisScope:
-      evaluation.nutritionScore != null && evaluation.additiveScore != null ? "complete" :
-      evaluation.nutritionScore != null ? "nutrition_only" :
-      evaluation.additiveScore != null ? "ingredients_only" : "insufficient",
+    analysisScope: resolveAnalysisScope(
+      { nutritionScore: evaluation.nutritionScore, additiveScore: evaluation.additiveScore },
+      { productName: catalogProduct?.nameZh ?? catalogProduct?.name ?? product?.nameZh ?? product?.name, ingredients: responseIngredients },
+    ),
     scoreGrade: evaluation.scoreGrade,
     verdict: evaluation.verdict,
     verdictZh: evaluation.verdictZh,

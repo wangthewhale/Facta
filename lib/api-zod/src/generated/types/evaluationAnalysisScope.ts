@@ -13,5 +13,6 @@ export const EvaluationAnalysisScope = {
   complete: 'complete',
   nutrition_only: 'nutrition_only',
   ingredients_only: 'ingredients_only',
+  water: 'water',
   insufficient: 'insufficient',
 } as const;

@@ -3,7 +3,7 @@ import { Link, useLocation, useParams } from 'wouter';
 import { Layout } from '@/components/layout';
 import { useGetProduct, useGetProductEvaluation, useGetAlternatives, useRecordScan, useGetUserGoals, useGetGoalFit, useGetProductNews, useGetProductSafetyCheck } from '@workspace/api-client-react';
 import { useTranslation } from '@/lib/i18n';
-import { AlertTriangle, ArrowRight, CheckCircle2, ChevronRight, Info, Link as LinkIcon, Share, TriangleAlert, XOctagon, RefreshCw } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle2, ChevronRight, Droplets, Info, Link as LinkIcon, Share, TriangleAlert, XOctagon, RefreshCw } from 'lucide-react';
 import { track } from '@/lib/analytics';
 import { startFamilyCheckCheckout } from '@/pages/familyCheck';
 import { cn } from '@/lib/utils';
@@ -451,16 +451,21 @@ export default function Report() {
   const name = lang === 'zh' && product.nameZh ? product.nameZh : product.name;
   const brand = product.brandName;
   const analysisScope = evaluation.analysisScope;
-  const hasNumericRating = analysisScope !== 'insufficient';
+  const isWaterAnalysis = analysisScope === 'water';
+  const hasNumericRating = analysisScope !== 'insufficient' && !isWaterAnalysis;
+  const hasCompletedEvidence = analysisScope === 'complete' || isWaterAnalysis;
   const scoreTitle = analysisScope === 'complete' ? 'FACTA 完整評分' :
     analysisScope === 'nutrition_only' ? '營養初評' :
-    analysisScope === 'ingredients_only' ? '成分初評' : '分析狀態';
+    analysisScope === 'ingredients_only' ? '成分初評' :
+    isWaterAnalysis ? '飲用水分析' : '分析狀態';
   const scopeExplanation = analysisScope === 'complete'
     ? '營養與成分證據皆達到目前規則的計分門檻。'
     : analysisScope === 'nutrition_only'
       ? '已完成營養比較；成分與過敏原證據仍未完整，這不是完整安全結論。'
       : analysisScope === 'ingredients_only'
         ? '已完成成分初評；缺少足夠營養標示，這不是完整產品結論。'
+        : isWaterAnalysis
+          ? '飲用水依法可能免營養標示；FACTA 改看配方是否單純、pH 宣稱的界線，以及官方抽驗與近期消息。'
         : '缺少可公平比較的每份量／營養資料，或成分證據尚未達到門檻，因此不判定好壞。';
 
   return (
@@ -508,7 +513,13 @@ export default function Report() {
         {/* Score Section */}
         <div className="p-10 flex flex-col items-center justify-center border-b border-border relative overflow-hidden">
           <p className="text-xs font-mono tracking-widest text-muted-foreground uppercase mb-4">{scoreTitle}</p>
-          {hasNumericRating ? (
+          {isWaterAnalysis ? (
+            <div className="flex flex-col items-center text-center gap-3">
+              <Droplets className="w-12 h-12 text-primary-strong" aria-hidden="true" />
+              <p className="text-3xl font-black tracking-tight text-primary-strong">適合日常補水</p>
+              <p className="text-xs font-bold text-muted-foreground">配方單純，但不把 pH 宣稱當成保健功效</p>
+            </div>
+          ) : hasNumericRating ? (
             <AnimatedScore score={evaluation.overallScore} grade={evaluation.scoreGrade} />
           ) : (
             <p className="text-4xl font-black tracking-tight text-muted-foreground">資料不足</p>
@@ -523,9 +534,9 @@ export default function Report() {
 
         <div className={cn(
           'mx-6 my-5 p-4 border flex items-start gap-3',
-          analysisScope === 'complete' ? 'border-primary-strong bg-primary/10' : 'border-[#D9A21B] bg-[#F2B84B]/10'
+          hasCompletedEvidence ? 'border-primary-strong bg-primary/10' : 'border-[#D9A21B] bg-[#F2B84B]/10'
         )}>
-          {analysisScope === 'complete'
+          {hasCompletedEvidence
             ? <CheckCircle2 className="w-5 h-5 text-primary-strong shrink-0" />
             : <AlertTriangle className="w-5 h-5 text-[#9A6700] shrink-0" />}
           <div>
@@ -569,12 +580,35 @@ export default function Report() {
           {/* Goal Fit */}
           <SafetyAlertSection productId={productId} />
 
-          <GoalFitSection productId={productId} activeGoals={activeGoals} />
+          {isWaterAnalysis ? (
+            <section className="p-6 border-b border-border bg-background">
+              <h3 className="text-xs font-mono tracking-widest text-muted-foreground uppercase mb-3">和你的目標有什麼關係</h3>
+              <p className="text-sm font-semibold leading-relaxed">
+                用無糖飲用水取代含糖飲料，可以少喝進額外的糖；但只喝這瓶水不會直接帶來減脂、增肌或其他療效。
+              </p>
+            </section>
+          ) : (
+            <GoalFitSection productId={productId} activeGoals={activeGoals} />
+          )}
 
           {/* Brand News Intelligence */}
           <NewsSection productId={productId} />
 
           {/* Additives & Allergens */}
+          {isWaterAnalysis ? (
+            <div className="grid grid-cols-2 divide-x border-b border-border bg-background">
+              <div className="p-4 flex flex-col items-center text-center">
+                <span className="text-[10px] tracking-widest text-muted-foreground uppercase mb-2">配方</span>
+                <span className="text-xl font-mono font-bold text-primary-strong">單純</span>
+                <p className="text-[10px] text-muted-foreground mt-2 leading-relaxed">成分僅見水類來源，未見糖、甜味劑或香料</p>
+              </div>
+              <div className="p-4 flex flex-col items-center text-center">
+                <span className="text-[10px] tracking-widest text-muted-foreground uppercase mb-2">營養標示</span>
+                <span className="text-xl font-mono font-bold">可免</span>
+                <p className="text-[10px] text-muted-foreground mt-2 leading-relaxed">無營養宣稱的飲用水依法可免標示</p>
+              </div>
+            </div>
+          ) : (
           <div className="grid grid-cols-2 divide-x border-b border-border bg-background">
             <div className="p-4 flex flex-col items-center text-center">
               <span className="text-[10px] tracking-widest text-muted-foreground uppercase mb-2">{t('additives')}</span>
@@ -597,6 +631,7 @@ export default function Report() {
               )}
             </div>
           </div>
+          )}
 
           {/* Personal Alerts */}
           {evaluation.personalAlerts && evaluation.personalAlerts.length > 0 && (

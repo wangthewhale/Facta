@@ -45,7 +45,7 @@ export interface TrustedProductEvidence {
   barcodeSourceUrl: string;
   imageSourceUrl: string;
   ingredientsList: string;
-  nutrition: NutritionInput;
+  nutrition: NutritionInput | null;
   allergens: CatalogAllergen[];
 }
 
@@ -60,14 +60,34 @@ export interface ResolvedCatalogProduct {
   evidence: TrustedProductEvidence | null;
 }
 
-export const CATALOG_EVIDENCE_VERSION = "2026-07-21";
+export const CATALOG_EVIDENCE_VERSION = "2026-07-22";
 export const CATALOG_EVIDENCE_UPDATED_AT = new Date(
-  "2026-07-21T23:05:00+08:00",
+  "2026-07-22T09:59:00+08:00",
 );
 
 const LEGACY_SEED_PRODUCT_IDS = new Set([1, 2, 3, 4, 5, 6]);
 
 const TRUSTED_PRODUCT_EVIDENCE: TrustedProductEvidence[] = [
+  {
+    productId: 11,
+    expectedLegacyNames: [
+      "統一PH9.0鹼性離子水",
+      "統一PH9.0鹼性離子水 800ml",
+    ],
+    name: "Uni-President PH9.0 Alkaline Ionized Water 800ml",
+    nameZh: "統一PH9.0鹼性離子水 800ml",
+    brandName: "Uni-President",
+    brandNameZh: "統一",
+    netWeight: "800ml",
+    barcode: "4710088637574",
+    imageUrl: "https://www.pecos.com.tw/tmp/image/20140402/20140402195619_58489.jpg",
+    productSourceUrl: "https://www.pecos.com.tw/brands-%E7%B5%B1%E4%B8%80PH9.0.html",
+    barcodeSourceUrl: "https://shop.pxgo.com.tw/hourArrive/goods/251137-06130059-4710088637574",
+    imageSourceUrl: "https://www.pecos.com.tw/tmp/image/20140402/20140402195619_58489.jpg",
+    ingredientsList: "水、海水濃縮礦物質液",
+    nutrition: null,
+    allergens: [],
+  },
   {
     productId: 6,
     expectedLegacyNames: ["AGV Double Fiber Barley Tea", "愛之味雙纖麥仔茶"],

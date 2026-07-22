@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
 import { db } from "@workspace/db";
-import { productsTable, brandsTable, productNewsTable } from "@workspace/db";
+import { productsTable, brandsTable, barcodesTable, productNewsTable } from "@workspace/db";
 import { GetProductNewsParams } from "@workspace/api-zod";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { CATALOG_EVIDENCE_UPDATED_AT, resolveCatalogProduct } from "../lib/catalogEvidence.js";
@@ -162,9 +162,13 @@ router.get("/products/:id/news", async (req, res): Promise<void> => {
   const [brand] = product.brandId
     ? await db.select().from(brandsTable).where(eq(brandsTable.id, product.brandId))
     : [null];
+  const [barcode] = await db.select().from(barcodesTable)
+    .where(eq(barcodesTable.productId, product.id)).limit(1);
 
-  const catalogProduct = resolveCatalogProduct(product, null, brand);
-  if (catalogProduct.verificationStatus !== "verified") {
+  const catalogProduct = resolveCatalogProduct(product, barcode?.barcode, brand);
+  const hasUserConfirmedIdentity = product.verificationStatus === "provisional" &&
+    !!barcode?.barcode && !!brand?.name?.trim() && !!product.name.trim();
+  if (catalogProduct.verificationStatus !== "verified" && !hasUserConfirmedIdentity) {
     res.json({
       sentiment: "none",
       status: "identity_unverified",
@@ -231,6 +235,7 @@ router.get("/products/:id/news", async (req, res): Promise<void> => {
 
 Exact product names: ${productNames.map(name => `"${name}"`).join(", ") || `"${productLabel}"`}
 Brand/company names: ${brandNames.map(name => `"${name}"`).join(", ") || `"${brandLabel}"`}
+Confirmed package barcode: ${catalogProduct.barcode || "not available"}
 
 Run separate searches for: (1) the exact product name; (2) the brand/company plus 食安, 回收, 下架, 違規, 污染, 裁罰, 認證, 檢驗; (3) the newest general brand news. Include relevant brand/company incidents even when the exact product is not named, but never imply that the exact product is affected unless a source explicitly says so. Prefer TFDA or other official records and independent journalism. Verify the publication date and original URL. Deduplicate rewritten versions of the same event.
 

@@ -208,6 +208,44 @@ describe("Invariant: insufficient data is never safe", () => {
   });
 });
 
+describe("Plain packaged water", () => {
+  it("analyzes Uni-President PH9.0 water without requiring a nutrition panel", () => {
+    const result = calculateScore({
+      productName: "統一PH9.0鹼性離子水",
+      nutrition: null,
+      ingredients: [
+        { name: "水", riskLevel: "unknown" },
+        { name: "海水", riskLevel: "unknown" },
+      ],
+      dataCompleteness: 0.3,
+    });
+
+    expect(result.analysisScope).toBe("water");
+    expect(result.nutritionScore).toBeNull();
+    expect(result.additiveScore).toBeNull();
+    expect(result.evidenceConfidence).toBe("medium");
+    expect(result.verdictZh).toContain("日常補水");
+    expect(result.topReasons.some(reason => reason.labelZh.includes("可免營養標示"))).toBe(true);
+    expect(result.topReasons.some(reason => reason.labelZh.includes("pH 9"))).toBe(true);
+  });
+
+  it("does not let sweetened or flavoured water bypass nutrition requirements", () => {
+    const result = calculateScore({
+      productName: "清甜風味水",
+      nutrition: null,
+      ingredients: [
+        { name: "水", riskLevel: "unknown" },
+        { name: "果糖", riskLevel: "unknown" },
+        { name: "香料", riskLevel: "unknown" },
+      ],
+      dataCompleteness: 0.3,
+    });
+
+    expect(result.analysisScope).toBe("insufficient");
+    expect(result.verdictZh).toContain("資料不足");
+  });
+});
+
 // ─── Edge cases ───────────────────────────────────────────────────────────────
 
 describe("Edge cases", () => {

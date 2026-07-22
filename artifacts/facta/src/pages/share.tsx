@@ -44,15 +44,18 @@ export default function ShareCard() {
   const name = lang === 'zh' && shareData.productNameZh ? shareData.productNameZh : shareData.productName;
   const brand = shareData.brandName;
   const verdict = lang === 'zh' && shareData.verdictZh ? shareData.verdictZh : shareData.verdict;
-  const hasNumericRating = shareData.analysisScope !== 'insufficient';
+  const isWaterAnalysis = shareData.analysisScope === 'water';
+  const hasNumericRating = shareData.analysisScope !== 'insufficient' && !isWaterAnalysis;
   const scopeLabel = shareData.analysisScope === 'complete' ? '完整評分' :
     shareData.analysisScope === 'nutrition_only' ? '營養初評' :
-    shareData.analysisScope === 'ingredients_only' ? '成分初評' : '資料不足';
+    shareData.analysisScope === 'ingredients_only' ? '成分初評' :
+    isWaterAnalysis ? '飲用水分析' : '資料不足';
 
   let scoreColor = '#F4F1E8';
   if (shareData.scoreGrade === 'Excellent' || shareData.scoreGrade === 'Good') scoreColor = '#B9F24A';
   if (shareData.scoreGrade === 'Consider') scoreColor = '#F2B84B';
   if (shareData.scoreGrade === 'Poor') scoreColor = '#E45145';
+  if (isWaterAnalysis) scoreColor = '#B9F24A';
 
   return (
     <div className="min-h-screen bg-neutral-900 text-white flex flex-col items-center pb-20">
@@ -91,10 +94,10 @@ export default function ShareCard() {
             {/* Score Block */}
             <div className="flex items-end gap-12 mb-16">
               <div 
-                className="text-[250px] leading-none font-black font-mono tracking-tighter"
+                className={`${isWaterAnalysis ? 'text-[170px]' : 'text-[250px]'} leading-none font-black font-mono tracking-tighter`}
                 style={{ color: scoreColor }}
               >
-                {hasNumericRating ? shareData.overallScore : '—'}
+                {isWaterAnalysis ? '補水' : hasNumericRating ? shareData.overallScore : '—'}
               </div>
               <div className="pb-12">
                 <div 

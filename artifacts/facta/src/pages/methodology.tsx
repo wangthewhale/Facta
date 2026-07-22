@@ -1,16 +1,18 @@
 import React from 'react';
 import { Layout } from '@/components/layout';
-import { ShieldCheck, Scale, Database, AlertCircle, Newspaper, CheckCircle2 } from 'lucide-react';
+import { ShieldCheck, Scale, Database, AlertCircle, Newspaper, CheckCircle2, Droplets } from 'lucide-react';
 
 const TFDA_SOURCE = 'https://www.fda.gov.tw/tc/newsContent.aspx?cid=4&id=31511';
 const WHO_FAT_SOURCE = 'https://www.who.int/publications/i/item/9789240073630';
+const TFDA_WATER_EXEMPTION_SOURCE = 'https://www.fda.gov.tw/TC/siteContent.aspx?sid=12343';
+const WHO_WATER_PH_SOURCE = 'https://www.who.int/publications/m/item/chemical-fact-sheets--ph';
 
 export default function Methodology() {
   return (
     <Layout>
       <div className="flex flex-col min-h-full bg-background text-foreground pb-20">
         <header className="p-6 bg-card border-b border-border sticky top-0 z-10">
-          <p className="text-[10px] font-black tracking-widest text-primary-strong">RULESET 2.0.0</p>
+          <p className="text-[10px] font-black tracking-widest text-primary-strong">RULESET 2.2.0</p>
           <h1 className="text-2xl font-black mt-1">FACTA 如何判定好壞</h1>
           <p className="text-sm text-muted-foreground mt-2 leading-relaxed">同一份標示、同一版本規則，會得到同一結果。資料不足時不硬給完整分數。</p>
         </header>
@@ -21,6 +23,23 @@ export default function Methodology() {
           <p className="text-sm leading-relaxed text-muted-foreground">
             包裝通常標示「每一份」，但不同商品份量不一。FACTA 必須先取得每份量與 g／ml 單位，才能換算成每 100g（固體）或每 100ml（液體）。糖、鈉、飽和脂肪至少要有兩項，否則顯示「資料不足」。
           </p>
+        </section>
+
+        <section className="p-6 border-b border-border bg-sky-50 flex flex-col gap-4">
+          <div className="flex items-center gap-3">
+            <Droplets className="w-6 h-6 text-sky-700" />
+            <h2 className="text-lg font-black">飲用水不硬套一般食品規則</h2>
+          </div>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            未作營養宣稱的飲用水與礦泉水，依食藥署規定可免營養標示。當商品名稱與使用者確認的成分都符合單純飲用水時，FACTA 會改看是否含糖、甜味劑或香料、鈉與礦物質是否有標示、pH 宣稱代表什麼，以及官方抽驗與近期消息，不會要求使用者填寫包裝上不存在的數字。
+          </p>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            pH 是酸鹼值資訊。WHO 未為飲用水 pH 訂定健康基準值，因此 FACTA 不會把「pH 9」直接當成額外保健功效或水質安全證明。
+          </p>
+          <div className="flex flex-wrap gap-3 text-xs font-bold">
+            <a href={TFDA_WATER_EXEMPTION_SOURCE} target="_blank" rel="noopener noreferrer" className="underline">食藥署免營養標示規定 →</a>
+            <a href={WHO_WATER_PH_SOURCE} target="_blank" rel="noopener noreferrer" className="underline">WHO 飲用水 pH 資料 →</a>
+          </div>
         </section>
 
         <section className="p-6 border-b border-border flex flex-col gap-4">
@@ -69,6 +88,7 @@ export default function Methodology() {
           <div className="flex flex-col gap-3">
             {[
               ['完整評分', '營養與成分證據皆達到計分門檻；營養占 60%、添加物占 40%。'],
+              ['飲用水分析', '成分符合單純飲用水；不因營養標示豁免判成資料不足，也不把 pH 宣稱當成療效。'],
               ['營養初評', '只有營養資料足夠；可以比較營養表現，但不能當成完整安全結論。'],
               ['成分初評', '只有成分證據足夠；缺少營養標示，不能當成完整產品結論。'],
               ['資料不足', '缺少公平比較所需資料，不顯示好壞判定。'],

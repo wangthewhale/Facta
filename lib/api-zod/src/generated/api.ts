@@ -875,7 +875,7 @@ export const GetProductEvaluationResponse = zod.object({
   "overallScore": zod.number(),
   "nutritionScore": zod.number().nullish(),
   "additiveScore": zod.number().nullish(),
-  "analysisScope": zod.enum(['complete', 'nutrition_only', 'ingredients_only', 'insufficient']),
+  "analysisScope": zod.enum(['complete', 'nutrition_only', 'ingredients_only', 'water', 'insufficient']),
   "scoreGrade": zod.string(),
   "verdict": zod.string(),
   "verdictZh": zod.string().nullish(),
@@ -1098,7 +1098,7 @@ export const FinalizeSubmissionResponse = zod.object({
   "productId": zod.number(),
   "overallScore": zod.number().optional(),
   "scoreGrade": zod.string().optional(),
-  "analysisScope": zod.enum(['complete', 'nutrition_only', 'ingredients_only', 'insufficient'])
+  "analysisScope": zod.enum(['complete', 'nutrition_only', 'ingredients_only', 'water', 'insufficient'])
 })
 
 
@@ -1305,7 +1305,7 @@ export const GetShareCardResponse = zod.object({
   "brandName": zod.string().nullish(),
   "imageUrl": zod.string().nullish(),
   "overallScore": zod.number(),
-  "analysisScope": zod.enum(['complete', 'nutrition_only', 'ingredients_only', 'insufficient']),
+  "analysisScope": zod.enum(['complete', 'nutrition_only', 'ingredients_only', 'water', 'insufficient']),
   "scoreGrade": zod.string(),
   "verdict": zod.string(),
   "verdictZh": zod.string().nullish(),
