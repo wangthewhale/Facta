@@ -401,6 +401,10 @@ export default function Report() {
     query: { enabled: !!productId } as any
   });
 
+  const { data: decisionNews, isLoading: decisionNewsLoading } = useGetProductNews(productId, {
+    query: { enabled: !!productId, staleTime: 5 * 60 * 1000 } as any
+  });
+
   const { data: alternatives, isLoading: altLoading } = useGetAlternatives(productId, {
     query: { enabled: !!productId } as any
   });
@@ -453,7 +457,10 @@ export default function Report() {
   const brand = product.brandName;
   const analysisScope = evaluation.analysisScope;
   const isWaterAnalysis = analysisScope === 'water';
-  const hasNumericRating = analysisScope !== 'insufficient' && !isWaterAnalysis;
+  // A partial ingredient score is useful for the action engine, but presenting
+  // it as a consumer-facing product number would look like a complete nutrition
+  // rating. Keep the number for complete/nutrition comparisons only.
+  const hasNumericRating = analysisScope === 'complete' || analysisScope === 'nutrition_only';
   const hasCompletedEvidence = analysisScope === 'complete' || isWaterAnalysis;
   const scoreTitle = analysisScope === 'complete' ? 'FACTA 完整評分' :
     analysisScope === 'nutrition_only' ? '營養初評' :
@@ -510,7 +517,21 @@ export default function Report() {
       isPersonalized: false,
     };
   })();
-  const action = (evaluation as any).actionRecommendation ?? fallbackAction;
+  const exactAffectedNews = decisionNews?.articles?.find(article =>
+    article.affectsProduct === true && (article.reportType === 'official_record' || article.reportType === 'news')
+  );
+  const brandConcernDoesNotNameProduct = !exactAffectedNews &&
+    (decisionNews?.sentiment === 'negative' || decisionNews?.sentiment === 'mixed') &&
+    decisionNews.articles.some(article => article.affectsProduct === false);
+  const evidenceAction = (evaluation as any).actionRecommendation ?? fallbackAction;
+  const action = exactAffectedNews ? {
+    code: 'swap',
+    label: 'Do not choose this batch',
+    labelZh: '先別吃',
+    reason: 'A current official record or independent report explicitly identifies this product. Follow the linked notice before consuming it.',
+    reasonZh: '近期官方紀錄或獨立報導明確指向本商品；先不要食用，請依下方公告確認批號、退貨或回收方式。',
+    isPersonalized: false,
+  } : evidenceAction;
   const firstAlternative = alternatives?.[0];
   const alternativeName = firstAlternative
     ? (lang === 'zh' && firstAlternative.product.nameZh ? firstAlternative.product.nameZh : firstAlternative.product.name)
@@ -520,12 +541,16 @@ export default function Report() {
     name,
     ...(brand ? { brand } : {}),
   }).toString();
-  const actionHref = action.code === 'complete_data'
+  const actionHref = exactAffectedNews
+    ? '#facta-news'
+    : action.code === 'complete_data'
     ? `/submit?${submissionQuery}`
     : (action.code === 'swap' || action.code === 'limit')
       ? (firstAlternative ? `/report/${firstAlternative.product.id}` : `/alternatives/${productId}`)
       : '/scan';
-  const actionCta = action.code === 'complete_data'
+  const actionCta = exactAffectedNews
+    ? '查看本商品食安證據'
+    : action.code === 'complete_data'
     ? '拍包裝背面補資料'
     : action.code === 'swap'
       ? (alternativeName ? `改看 ${alternativeName}` : '找同類更好的選擇')
@@ -617,6 +642,22 @@ export default function Report() {
           <p className="mt-5 text-sm font-bold leading-relaxed max-w-md">
             {lang === 'zh' ? action.reasonZh : action.reason}
           </p>
+          <div className="mt-4 border border-current/35 bg-background/10 p-3 text-xs leading-relaxed">
+            <p className="font-black tracking-wide">AI 食安查核</p>
+            <p className="mt-1 font-semibold">
+              {decisionNewsLoading
+                ? '正在查近 365 天的商品、品牌與官方食安消息…'
+                : exactAffectedNews
+                  ? `來源明確指向本商品：${exactAffectedNews.title}`
+                  : brandConcernDoesNotNameProduct
+                    ? '找到品牌／業者層級食安事件，但目前官方清單與報導未列這個商品條碼；FACTA 不會把同品牌事件誤套到這一款。'
+                    : decisionNews?.status === 'no_results'
+                      ? '近 365 天未找到可驗證的相關報導；這不等於安全保證。'
+                      : decisionNews?.status === 'unavailable'
+                        ? '即時查核目前無法完成；這不代表沒有相關消息。'
+                        : decisionNews?.summaryZh || '尚未找到明確指向本商品的食安事件。'}
+            </p>
+          </div>
           {action.code === 'swap' && alternativeName && (
             <p className="mt-3 pt-3 border-t border-current/30 text-xs font-black">
               同類替代：{alternativeName}
@@ -651,6 +692,12 @@ export default function Report() {
               <Droplets className="w-12 h-12 text-primary-strong" aria-hidden="true" />
               <p className="text-3xl font-black tracking-tight text-primary-strong">適合日常補水</p>
               <p className="text-xs font-bold text-muted-foreground">配方單純，但不把 pH 宣稱當成保健功效</p>
+            </div>
+          ) : analysisScope === 'ingredients_only' ? (
+            <div className="flex flex-col items-center text-center gap-3">
+              <Utensils className="w-12 h-12 text-[#9A6700]" aria-hidden="true" />
+              <p className="text-3xl font-black tracking-tight">可判斷食用頻率</p>
+              <p className="text-xs font-bold text-muted-foreground">成分證據已達門檻；缺少完整營養標示，所以不顯示容易誤解的總分</p>
             </div>
           ) : hasNumericRating ? (
             <AnimatedScore score={evaluation.overallScore} grade={evaluation.scoreGrade} />
@@ -725,7 +772,9 @@ export default function Report() {
           )}
 
           {/* Brand News Intelligence */}
-          <NewsSection productId={productId} />
+          <div id="facta-news" className="scroll-mt-4">
+            <NewsSection productId={productId} />
+          </div>
 
           {/* Additives & Allergens */}
           {isWaterAnalysis ? (

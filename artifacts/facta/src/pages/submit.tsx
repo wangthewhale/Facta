@@ -310,7 +310,7 @@ export default function Submit() {
               <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
                 {isPlainWater
                   ? '請確認商品名稱與成分確實只有水類來源。FACTA 會改用飲用水規則，分析配方、pH 宣稱與近期食安消息，不會因依法免標營養表就判成資料不足。'
-                  : '請直接對照手上的包裝。每份量、g／ml、糖、鈉和飽和脂肪會影響換算；資料不夠時，報告不會硬給完整分數。'}
+                  : '請直接對照手上的包裝。即使沒有完整營養表，FACTA 仍會先比對成分、過敏原與近期食安消息，給你「少吃、換一款或先補資料」的下一步；只是缺少糖、鈉與飽和脂肪時，不會冒充完整營養分數。'}
               </p>
             </div>
 
@@ -429,7 +429,7 @@ export default function Submit() {
               {!nutritionReady && (
                 <div className="flex items-start gap-2 bg-[#F2B84B]/10 border border-[#D9A21B] p-3">
                   <AlertTriangle className="w-4 h-4 text-[#9A6700] shrink-0" />
-                  <p className="text-[11px] leading-relaxed">至少需要每份量、g／ml 單位，以及糖／鈉／飽和脂肪中的兩項，否則報告會明確顯示「資料不足」。</p>
+                  <p className="text-[11px] leading-relaxed">缺少每份量或糖／鈉／飽和脂肪時，FACTA 仍會先做成分與食安初評；只有「完整營養比較」會保留，並告訴你補哪一面最有價值。</p>
                 </div>
               )}
             </section>
@@ -457,7 +457,7 @@ export default function Submit() {
               <p className="text-[10px] text-muted-foreground text-center leading-relaxed">
                 {isPlainWater
                   ? '新商品會先標示為「待驗證」；飲用水會顯示專用分析，不用補不存在的營養數字。'
-                  : '新商品會先標示為「待驗證」；資料不足時不會顯示完整評分。'}
+                  : '新商品會先標示為「待驗證」；成分證據足夠時會先給行動建議，營養標示補齊後再升級完整評分。'}
               </p>
             </div>
           </div>

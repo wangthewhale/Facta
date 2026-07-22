@@ -11,6 +11,12 @@ import { GetProductEvaluationParams, GetProductEvaluationQueryParams, GetShareCa
 import { calculateScore, recommendProductAction, resolveAnalysisScope, RULESET_VERSION } from "../lib/scoring.js";
 import { resolveCatalogProduct } from "../lib/catalogEvidence.js";
 import { buildPersonalization } from "../lib/personalization.js";
+import {
+  extractDeclaredAllergens,
+  mapIngredientEvidence,
+  mapIngredientList,
+  splitIngredientList,
+} from "../lib/ingredientEvidence.js";
 
 const router: IRouter = Router();
 
@@ -39,19 +45,14 @@ async function getOrComputeEvaluation(productId: number) {
 
   const canUseDatabaseEvidence = catalogProduct.verificationStatus !== "catalog_unverified";
   const trustedIngredientList = catalogProduct.evidence?.ingredientsList ?? null;
+  const ingredientReferences = await db.select().from(ingredientsTable);
   const ingredients = trustedIngredientList
-    ? await mapRawIngredients(trustedIngredientList)
-    : canUseDatabaseEvidence && ingredientRows.length > 0
-    ? ingredientRows.map(r => ({
-        name: r.pi.rawName,
-        riskLevel: r.ing?.riskLevel ?? null,
-        isAdditive: r.ing?.isAdditive ?? null,
-        evidenceStrength: r.ing?.evidenceStrength ?? null,
-        riskReason: r.ing?.riskReason ?? null,
-      }))
-    : canUseDatabaseEvidence
-      ? await mapRawIngredients(product.ingredientsList)
-      : [];
+    ? mapIngredientList(trustedIngredientList, ingredientReferences)
+    : canUseDatabaseEvidence && product.ingredientsList
+      ? mapIngredientList(product.ingredientsList, ingredientReferences)
+      : canUseDatabaseEvidence && ingredientRows.length > 0
+        ? ingredientRows.map(r => mapIngredientEvidence(r.pi.rawName, ingredientReferences))
+        : [];
 
   const resolvedNutrition = catalogProduct.evidence
     ? catalogProduct.evidence.nutrition
@@ -110,42 +111,6 @@ function parseNullableNumber(value: string | number | null | undefined): number 
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function normalizeIngredientName(value: string): string {
-  return value.toLowerCase().replace(/[\s()（）\[\]【】.。:：]/g, "");
-}
-
-function splitRawIngredients(raw: string | null): string[] {
-  if (!raw) return [];
-  return raw
-    .split(/[、,，;；\n]/)
-    .map(value => value.trim())
-    .filter(value => value.length > 0)
-    .slice(0, 100);
-}
-
-async function mapRawIngredients(raw: string | null) {
-  const tokens = splitRawIngredients(raw);
-  if (tokens.length === 0) return [];
-
-  const references = await db.select().from(ingredientsTable);
-  const byName = new Map<string, typeof ingredientsTable.$inferSelect>();
-  for (const reference of references) {
-    byName.set(normalizeIngredientName(reference.name), reference);
-    if (reference.nameZh) byName.set(normalizeIngredientName(reference.nameZh), reference);
-  }
-
-  return tokens.map(name => {
-    const reference = byName.get(normalizeIngredientName(name));
-    return {
-      name,
-      riskLevel: reference?.riskLevel ?? "unknown",
-      isAdditive: reference?.isAdditive ?? null,
-      evidenceStrength: reference?.evidenceStrength ?? null,
-      riskReason: reference?.riskReason ?? null,
-    };
-  });
-}
-
 function calculateCompleteness(product: any, nutrition: any, ingredients: Array<{ riskLevel?: string | null }>): number {
   let score = 0;
   if (product.ingredientsList) score += 2;
@@ -175,7 +140,8 @@ router.get("/evaluations/product/:productId", async (req, res): Promise<void> =>
   const [brand] = product?.brandId ? await db.select().from(brandsTable).where(eq(brandsTable.id, product.brandId)) : [null];
   const [barcode] = product ? await db.select().from(barcodesTable).where(eq(barcodesTable.productId, product.id)).limit(1) : [null];
   const catalogProduct = product ? resolveCatalogProduct(product, barcode?.barcode, brand) : null;
-  const responseIngredients = splitRawIngredients(catalogProduct?.ingredientsList ?? product?.ingredientsList ?? null).map(name => ({ name }));
+  const rawIngredientList = catalogProduct?.ingredientsList ?? product?.ingredientsList ?? null;
+  const responseIngredients = splitIngredientList(rawIngredientList).map(name => ({ name }));
 
   const allergenRows = await db
     .select({ pa: productAllergensTable, al: allergensTable })
@@ -183,13 +149,17 @@ router.get("/evaluations/product/:productId", async (req, res): Promise<void> =>
     .leftJoin(allergensTable, eq(productAllergensTable.allergenId, allergensTable.id))
     .where(eq(productAllergensTable.productId, params.data.productId));
 
-  const allergenAlerts = catalogProduct?.evidence?.allergens
-    ?? (catalogProduct?.verificationStatus === "catalog_unverified" ? [] : allergenRows.map(r => ({
+  const databaseAllergens = allergenRows.map(r => ({
       name: r.al?.name ?? "Unknown",
       nameZh: r.al?.nameZh ?? null,
       severity: r.al?.severity ?? "moderate",
       source: r.pa.sourceType,
-    })));
+    }));
+  const declaredAllergens = extractDeclaredAllergens(rawIngredientList);
+  const allergenAlerts = catalogProduct?.evidence?.allergens
+    ?? (catalogProduct?.verificationStatus === "catalog_unverified"
+      ? []
+      : declaredAllergens.length > 0 ? declaredAllergens : databaseAllergens);
   const [preferences] = query.data.session_id
     ? await db.select().from(userPreferencesTable).where(eq(userPreferencesTable.sessionId, query.data.session_id)).limit(1)
     : [undefined];
@@ -263,7 +233,7 @@ router.get("/share-cards/:productId", async (req, res): Promise<void> => {
   const [brand] = product?.brandId ? await db.select().from(brandsTable).where(eq(brandsTable.id, product.brandId)) : [null];
   const [barcode] = product ? await db.select().from(barcodesTable).where(eq(barcodesTable.productId, product.id)).limit(1) : [null];
   const catalogProduct = product ? resolveCatalogProduct(product, barcode?.barcode, brand) : null;
-  const responseIngredients = splitRawIngredients(catalogProduct?.ingredientsList ?? product?.ingredientsList ?? null).map(name => ({ name }));
+  const responseIngredients = splitIngredientList(catalogProduct?.ingredientsList ?? product?.ingredientsList ?? null).map(name => ({ name }));
 
   const { alternativeProductLinksTable, productsTable: pt } = await import("@workspace/db");
   const [altLink] = await db.select()

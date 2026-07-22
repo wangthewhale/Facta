@@ -7,10 +7,10 @@
  * treated as evidence that a product is safe.
  */
 
-// v2.2 adds a dedicated evidence path for plain packaged water. Taiwan permits
-// drinking/mineral water without nutrition claims to omit nutrition labels, so
-// the generic "two critical nutrients" rule must not misclassify it as missing.
-export const RULESET_VERSION = "2.2.0";
+// v2.3 keeps the dedicated water path and adds source-backed ingredient-only
+// decisions. A confirmed ingredient label can now support a frequency action
+// even when the package omits the nutrient values needed for a full score.
+export const RULESET_VERSION = "2.3.0";
 export const TFDA_FOP_GUIDE_URL = "https://www.fda.gov.tw/tc/newsContent.aspx?cid=4&id=31511";
 export const TFDA_WATER_LABEL_EXEMPTION_URL = "https://www.fda.gov.tw/TC/siteContent.aspx?sid=12343";
 export const WHO_DRINKING_WATER_PH_URL = "https://www.who.int/publications/m/item/chemical-fact-sheets--ph";
@@ -39,6 +39,8 @@ export interface IngredientInput {
   isAdditive?: string | null;
   evidenceStrength?: string | null;
   riskReason?: string | null;
+  riskReasonZh?: string | null;
+  source?: string | null;
 }
 
 interface ScoringInput {
@@ -83,6 +85,10 @@ interface ProductActionInput {
   evidenceConfidence: "high" | "medium" | "low" | string | null;
   topReasons?: ScoringReason[] | null;
   additiveFlags?: AdditiveFlag[] | null;
+}
+
+function withoutTerminalPunctuation(value: string): string {
+  return value.replace(/[.!?。！？]+$/u, "").trim();
 }
 
 /**
@@ -141,10 +147,10 @@ export function recommendProductAction(input: ProductActionInput): ProductAction
       label: "Have less often",
       labelZh: "少吃",
       reason: firstConcern
-        ? `${firstConcern}. Treat this as an occasional rather than everyday choice.`
+        ? `Keep this as an occasional choice, not an everyday one. ${withoutTerminalPunctuation(firstConcern)}.`
         : "The current evidence does not support making this an everyday choice.",
       reasonZh: firstConcernZh
-        ? `${firstConcernZh}。這項證據已足以建議降低頻率，不要當作每天常吃的選擇。`
+        ? `這款先偶爾吃，不要當每天的選擇。${withoutTerminalPunctuation(firstConcernZh)}。`
         : "目前證據不支持把這款當作每天常吃的選擇，建議降低頻率。",
       isPersonalized: false,
     };
@@ -408,8 +414,17 @@ function scoreAdditives(ingredients: IngredientInput[]): {
 
   const reviewed = ingredients.filter(i => ["safe", "caution", "avoid"].includes(i.riskLevel ?? ""));
   const coverage = reviewed.length / ingredients.length;
-  const avoidIngredients = reviewed.filter(i => i.riskLevel === "avoid");
-  const cautionIngredients = reviewed.filter(i => i.riskLevel === "caution");
+  const distinctSignals = (items: IngredientInput[]): IngredientInput[] => {
+    const seen = new Set<string>();
+    return items.filter(item => {
+      const key = `${item.riskLevel}|${item.riskReasonZh ?? item.riskReason ?? item.name}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  };
+  const avoidIngredients = distinctSignals(reviewed.filter(i => i.riskLevel === "avoid"));
+  const cautionIngredients = distinctSignals(reviewed.filter(i => i.riskLevel === "caution"));
   const flags: AdditiveFlag[] = [];
   const reasons: ScoringReason[] = [];
 
@@ -417,7 +432,7 @@ function scoreAdditives(ingredients: IngredientInput[]): {
     flags.push({
       name: ingredient.name,
       riskLevel: "avoid",
-      reason: ingredient.riskReason ?? "Flagged by regulatory evidence",
+      reason: ingredient.riskReasonZh ?? ingredient.riskReason ?? "Flagged by regulatory evidence",
       evidenceStrength: ingredient.evidenceStrength ?? "medium",
     });
   }
@@ -425,18 +440,20 @@ function scoreAdditives(ingredients: IngredientInput[]): {
     flags.push({
       name: ingredient.name,
       riskLevel: "caution",
-      reason: ingredient.riskReason ?? "Use in moderation",
+      reason: ingredient.riskReasonZh ?? ingredient.riskReason ?? "Use in moderation",
       evidenceStrength: ingredient.evidenceStrength ?? "medium",
     });
   }
 
   if (avoidIngredients.length > 0 || cautionIngredients.length > 0) {
+    const flagged = [...avoidIngredients, ...cautionIngredients];
+    const names = flagged.map(item => item.name).slice(0, 4).join("、");
     reasons.push({
-      label: `${avoidIngredients.length + cautionIngredients.length} ingredient flag(s) found`,
-      labelZh: `已找到 ${avoidIngredients.length + cautionIngredients.length} 項需留意成分`,
+      label: `${flagged.length} labelled ingredient signal(s) warrant a lower everyday frequency; this is not a toxicity claim.`,
+      labelZh: `成分表有 ${flagged.length} 項會影響日常食用頻率${names ? `（${names}）` : ""}；這不是把合法添加物說成有毒。`,
       impact: "negative",
       evidenceStrength: "medium",
-      source: "FACTA ingredient evidence database",
+      source: flagged.find(item => item.source)?.source ?? "FACTA ingredient evidence database",
     });
   }
 
@@ -567,8 +584,8 @@ function verdictFromGrade(grade: string, scope: AnalysisScope): { verdict: strin
   }
   if (scope === "ingredients_only") {
     return {
-      verdict: "Ingredient-only rating; nutrition evidence is still incomplete.",
-      verdictZh: "這是成分初評；營養標示資料尚未完整，不能當作完整產品結論。",
+      verdict: "Ingredient-only rating: enough evidence for a frequency recommendation, but not a complete nutrient comparison.",
+      verdictZh: "這是成分初評：現有證據足以建議食用頻率，但缺少糖、鈉與飽和脂肪數值，不能當作完整營養比較。",
     };
   }
 

@@ -75,7 +75,7 @@ export default function Methodology() {
         <section className="p-6 border-b border-border flex flex-col gap-4">
           <div className="flex items-center gap-3"><Database className="w-6 h-6" /><h2 className="text-lg font-black">成分與添加物怎麼算</h2></div>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            成分文字會與 FACTA 的證據資料庫對照。只有至少 80% 列出成分完成對照，才計算添加物分數；未對照成分不會被當成「安全」。有 caution／avoid 證據的成分會標記並扣分。
+            成分文字會與 FACTA 的證據資料庫及食藥署正面表列資訊對照。只有至少 80% 列出成分完成對照，才產生成分初評；未對照成分不會被當成「安全」。合法功能性添加物不會只因名稱多就被判有毒；添加糖、油脂抹醬、鹽與通稱香料則會在缺少數量時標成「影響日常頻率、但不能判定超標」。
           </p>
           <div className="bg-[#F2B84B]/10 border border-[#D9A21B] p-4 flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-[#9A6700] shrink-0" />
@@ -90,7 +90,7 @@ export default function Methodology() {
               ['完整評分', '營養與成分證據皆達到計分門檻；營養占 60%、添加物占 40%。'],
               ['飲用水分析', '成分符合單純飲用水；不因營養標示豁免判成資料不足，也不把 pH 宣稱當成療效。'],
               ['營養初評', '只有營養資料足夠；可以比較營養表現，但不能當成完整安全結論。'],
-              ['成分初評', '只有成分證據足夠；缺少營養標示，不能當成完整產品結論。'],
+              ['成分初評', '只有成分證據足夠；可先建議日常食用頻率，但缺少糖、鈉與飽和脂肪數值，不能當成完整營養比較。'],
               ['資料不足', '缺少公平比較所需資料，不顯示好壞判定。'],
             ].map(([title, description]) => (
               <div key={title} className="border border-border bg-card p-4 flex items-start gap-3">
@@ -104,13 +104,13 @@ export default function Methodology() {
         <section className="p-6 border-b border-border flex flex-col gap-3">
           <Database className="w-6 h-6" />
           <h2 className="text-lg font-black">AI 做什麼、不做什麼</h2>
-          <p className="text-sm text-muted-foreground leading-relaxed">AI 只協助辨識照片中的文字與欄位；使用者必須確認結果。AI 不決定 FACTA 分數，分數完全由固定規則計算。</p>
+          <p className="text-sm text-muted-foreground leading-relaxed">AI 協助辨識包裝文字，也查找商品、品牌與官方食安消息；使用者仍須確認 OCR 結果。營養與成分分數由固定規則計算，不讓生成式 AI 猜分數。</p>
         </section>
 
         <section className="p-6 border-b border-border flex flex-col gap-3">
           <Newspaper className="w-6 h-6" />
           <h2 className="text-lg font-black">最新新聞與分數分開</h2>
-          <p className="text-sm text-muted-foreground leading-relaxed">每份報告分別查詢商品、品牌與公司近 365 天消息，顯示來源、日期與影響範圍，並區分官方紀錄、獨立報導、新聞稿與廣編。品牌事件若未指向本商品，會明確註明。新聞不納入營養分數。</p>
+          <p className="text-sm text-muted-foreground leading-relaxed">每份報告分別查詢商品、品牌與公司近 365 天消息，顯示來源、日期與影響範圍，並區分官方紀錄、獨立報導、新聞稿與廣編。新聞不改寫營養分數；只有官方紀錄或獨立報導明確指向本商品時，才會把首要行動改成「先別吃」。品牌事件未指向本商品時，只顯示背景，不誤套結論。</p>
         </section>
 
         <section className="m-6 p-6 bg-foreground text-background flex flex-col gap-3">

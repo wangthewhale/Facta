@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@workspace/db";
 import {
   productSubmissionsTable, productsTable, brandsTable, barcodesTable,
-  nutritionFactsTable, productEvaluationsTable,
+  nutritionFactsTable, productEvaluationsTable, ingredientsTable,
 } from "@workspace/db";
 import {
   GetSubmissionParams, ConfirmOcrParams, ConfirmOcrBody,
@@ -11,6 +11,7 @@ import {
 } from "@workspace/api-zod";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { calculateScore, resolveAnalysisScope } from "../lib/scoring.js";
+import { mapIngredientList } from "../lib/ingredientEvidence.js";
 
 const router: IRouter = Router();
 
@@ -32,6 +33,9 @@ type ExtractedNutrition = {
   dietaryFiber?: number | null;
   totalSugars?: number | null;
   protein?: number | null;
+  netWeight?: number | null;
+  netWeightUnit?: string | null;
+  caloriesBasis?: "per_serving" | "per_package" | null;
 };
 
 function canProcessOcr(clientId: string): { allowed: boolean; retryAfterSeconds: number } {
@@ -48,13 +52,8 @@ function canProcessOcr(clientId: string): { allowed: boolean; retryAfterSeconds:
   return { allowed: true, retryAfterSeconds: 0 };
 }
 
-function splitSubmissionIngredients(raw: string): Array<{ name: string; riskLevel: "unknown" }> {
-  return raw
-    .split(/[、,，;；\n]/)
-    .map(name => name.trim())
-    .filter(Boolean)
-    .slice(0, 100)
-    .map(name => ({ name, riskLevel: "unknown" as const }));
+function splitSubmissionIngredients(raw: string) {
+  return mapIngredientList(raw);
 }
 
 function submissionToApi(s: typeof productSubmissionsTable.$inferSelect) {
@@ -107,8 +106,10 @@ Extract text from food product label images. Return a JSON object with:
 - rawIngredients: the ingredients list if visible (as a single string)
 - parsedNutrition: an object with numeric nutrition values if a nutrition facts panel is visible
   (servingSize, servingSizeUnit, calories, totalFat, saturatedFat, transFat, sodium, totalCarbs, dietaryFiber, totalSugars, protein — values exactly as shown per labelled serving)
+  - also extract netWeight, netWeightUnit and caloriesBasis when a fresh-food sticker prints package weight and "熱量每份" or "每包熱量"
   - servingSize must use the printed metric quantity and servingSizeUnit must be exactly "g" or "ml"
   - when both imperial and metric are printed, prefer the printed metric equivalent (for example, 20 FL OZ (590mL) becomes servingSize 590 and servingSizeUnit "ml")
+  - if one sealed fresh-food package prints both a net weight and "熱量每份" without a separate serving count, keep netWeight separately; do not silently treat package weight as a full nutrition panel
   - do not calculate a metric conversion when the package does not print one
 - confidence: a number 0-1 representing extraction confidence
 
@@ -265,12 +266,20 @@ router.post("/submissions/:id/finalize", async (req, res): Promise<void> => {
       }
 
       const nutrition = (submission.extractedNutrition ?? null) as ExtractedNutrition | null;
+      const ingredientReferences = await tx.select().from(ingredientsTable);
+      const mappedIngredients = mapIngredientList(submission.extractedIngredients, ingredientReferences);
+      const reviewedIngredientCoverage = mappedIngredients.length > 0
+        ? mappedIngredients.filter(item => ["safe", "caution", "avoid"].includes(item.riskLevel)).length / mappedIngredients.length
+        : 0;
       const hasNutrition = !!nutrition && Object.entries(nutrition)
-        .some(([key, value]) => key !== "servingSizeUnit" && typeof value === "number" && Number.isFinite(value));
+        .some(([key, value]) => !["servingSizeUnit", "netWeight", "netWeightUnit"].includes(key) && typeof value === "number" && Number.isFinite(value));
       const hasNutritionBasis = !!nutrition && typeof nutrition.servingSize === "number" &&
         nutrition.servingSize > 0 && typeof nutrition.servingSizeUnit === "string" &&
         nutrition.servingSizeUnit.trim().length > 0;
-      const dataCompleteness = hasNutritionBasis ? 0.7 : hasNutrition ? 0.5 : 0.3;
+      const dataCompleteness = hasNutritionBasis ? 0.7 : hasNutrition || reviewedIngredientCoverage >= 0.8 ? 0.5 : 0.3;
+      const netWeight = nutrition && typeof nutrition.netWeight === "number" && nutrition.netWeight > 0
+        ? `${nutrition.netWeight}${nutrition.netWeightUnit === "ml" ? "ml" : "g"}`
+        : null;
 
       // Create provisional product
       const [product] = await tx.insert(productsTable).values({
@@ -280,6 +289,7 @@ router.post("/submissions/:id/finalize", async (req, res): Promise<void> => {
         verificationStatus: "provisional",
         dataCompleteness: String(dataCompleteness),
         ingredientsList: submission.extractedIngredients,
+        netWeight,
       }).returning();
 
       // Attach barcode
@@ -325,7 +335,7 @@ router.post("/submissions/:id/finalize", async (req, res): Promise<void> => {
           totalSugars: nutrition.totalSugars ?? null,
           protein: nutrition.protein ?? null,
         } : null,
-        ingredients: splitSubmissionIngredients(submission.extractedIngredients),
+        ingredients: mappedIngredients,
         dataCompleteness,
       });
 

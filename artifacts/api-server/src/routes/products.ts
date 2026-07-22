@@ -22,6 +22,11 @@ import {
   lookupStagedBarcodeCandidate,
   stageOpenFoodFactsCandidate,
 } from "../lib/openFoodFacts.js";
+import {
+  extractDeclaredAllergens,
+  mapIngredientList,
+  splitIngredientList,
+} from "../lib/ingredientEvidence.js";
 
 const router: IRouter = Router();
 
@@ -186,8 +191,11 @@ async function buildFullProduct(p: typeof productsTable.$inferSelect) {
   } : null);
 
   const trustedIngredientNames = presentation.evidence
-    ? splitDisplayIngredients(presentation.evidence.ingredientsList)
+    ? splitIngredientList(presentation.evidence.ingredientsList)
     : null;
+  const mappedRawIngredients = !trustedIngredientNames && canUseDatabaseEvidence && ingredientRows.length === 0
+    ? mapIngredientList(presentation.ingredientsList)
+    : [];
   const resolvedIngredients = trustedIngredientNames
     ? trustedIngredientNames.map((name, index) => ({
         id: -(index + 1),
@@ -198,7 +206,7 @@ async function buildFullProduct(p: typeof productsTable.$inferSelect) {
         evidenceStrength: null,
         isAdditive: false,
       }))
-    : canUseDatabaseEvidence
+    : canUseDatabaseEvidence && ingredientRows.length > 0
       ? ingredientRows.map(r => ({
           id: r.ing?.id ?? 0,
           name: r.pi.rawName,
@@ -208,15 +216,25 @@ async function buildFullProduct(p: typeof productsTable.$inferSelect) {
           evidenceStrength: r.ing?.evidenceStrength ?? null,
           isAdditive: r.ing?.isAdditive === "true",
         }))
-      : [];
+      : mappedRawIngredients.map((ingredient, index) => ({
+          id: -(index + 1),
+          name: ingredient.name,
+          nameZh: ingredient.name,
+          riskLevel: ingredient.riskLevel,
+          riskReason: ingredient.riskReasonZh ?? ingredient.riskReason,
+          evidenceStrength: ingredient.evidenceStrength,
+          isAdditive: ingredient.isAdditive === "true",
+        }));
 
-  const resolvedAllergens = presentation.evidence?.allergens ?? (canUseDatabaseEvidence
-    ? allergenRows.map(r => ({
+  const databaseAllergens = allergenRows.map(r => ({
         name: r.al?.name ?? "Unknown",
         nameZh: r.al?.nameZh ?? null,
         severity: r.al?.severity ?? "moderate",
         source: r.pa.sourceType,
-      }))
+      }));
+  const declaredAllergens = extractDeclaredAllergens(presentation.ingredientsList);
+  const resolvedAllergens = presentation.evidence?.allergens ?? (canUseDatabaseEvidence
+    ? declaredAllergens.length > 0 ? declaredAllergens : databaseAllergens
     : []);
 
   return {
@@ -254,14 +272,6 @@ function parseNullableNumber(value: string | number | null | undefined): number 
   if (value == null || value === "") return null;
   const parsed = typeof value === "number" ? value : parseFloat(value);
   return Number.isFinite(parsed) ? parsed : null;
-}
-
-function splitDisplayIngredients(raw: string): string[] {
-  return raw
-    .split(/[、,，;；\n]/)
-    .map(value => value.trim())
-    .filter(Boolean)
-    .slice(0, 100);
 }
 
 // Data corrections
