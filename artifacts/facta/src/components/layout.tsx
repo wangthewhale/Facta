@@ -10,21 +10,28 @@ const navItems = [
   { href: '/preferences', label: '設定', icon: Settings, match: (p: string) => p.startsWith('/preferences') },
 ];
 
-export function Layout({ children }: { children: React.ReactNode }) {
+export function Layout({ children, surface = 'app' }: { children: React.ReactNode; surface?: 'app' | 'landing' }) {
   const [pathname] = useLocation();
   const mainRef = useRef<HTMLElement>(null);
+  const isLanding = surface === 'landing';
 
   useEffect(() => {
     mainRef.current?.scrollTo({ top: 0, behavior: 'auto' });
   }, [pathname]);
 
   return (
-    <div className="min-h-[100dvh] flex flex-col bg-background text-foreground max-w-md mx-auto w-full border-x border-border/50 relative shadow-sm">
-      <main ref={mainRef} className="flex-1 overflow-y-auto pb-20 w-full relative">
+    <div className={cn(
+      'min-h-[100dvh] flex flex-col bg-background text-foreground mx-auto w-full border-x border-border/50 relative shadow-sm',
+      isLanding ? 'max-w-md md:max-w-6xl md:shadow-none' : 'max-w-md'
+    )}>
+      <main ref={mainRef} className={cn('flex-1 overflow-y-auto w-full relative', isLanding ? 'pb-0' : 'pb-20')}>
         {children}
       </main>
 
-      <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-background/95 backdrop-blur-sm border-t border-border z-50" aria-label="主要導覽">
+      <nav className={cn(
+        'fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-background/95 backdrop-blur-sm border-t border-border z-50',
+        isLanding && 'hidden'
+      )} aria-label="主要導覽">
         <div className="flex justify-around items-center h-16 px-4">
           {navItems.map(({ href, label, icon: Icon, match }) => {
             const active = match(pathname);

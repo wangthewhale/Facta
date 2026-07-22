@@ -11,7 +11,7 @@ export default defineConfig({
   // This read-only catalog table is maintained outside Drizzle and powers
   // fallback product search. Excluding it prevents schema pushes/deploy checks
   // from treating its absence in the typed schema as permission to delete it.
-  tablesFilter: ["!facta_catalog_seed"],
+  tablesFilter: ["!facta_catalog_seed", "!catalog_import_runs", "!catalog_import_candidates"],
   dbCredentials: {
     url: process.env.DATABASE_URL,
   },

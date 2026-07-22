@@ -26,6 +26,8 @@ tags:
     description: Goals, Goal Fit, and user profile
   - name: mealLogs
     description: My Day meal logging
+  - name: decisionOutcomes
+    description: Household actions taken after a FACTA recommendation
   - name: guides
     description: FACTA Guides editorial content
   - name: collections
@@ -256,6 +258,91 @@ paths:
                 type: object
                 properties:
                   ok: { type: boolean }
+
+  # ── Decision Outcomes ───────────────────────────────────────────────────
+
+  /decision-outcomes:
+    get:
+      operationId: listDecisionOutcomes
+      tags: [decisionOutcomes]
+      summary: List the choices a household made after FACTA recommendations
+      parameters:
+        - name: session_id
+          in: query
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        "200":
+          description: Decision outcomes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DecisionOutcome"
+    post:
+      operationId: createDecisionOutcome
+      tags: [decisionOutcomes]
+      summary: Record what a household chose after seeing a recommendation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DecisionOutcomeInput"
+      responses:
+        "201":
+          description: Decision recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DecisionOutcome"
+        "400":
+          description: Invalid recommendation and outcome combination
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Product or evaluation not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /decision-outcomes/{id}:
+    delete:
+      operationId: deleteDecisionOutcome
+      tags: [decisionOutcomes]
+      summary: Permanently delete one household decision record
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+        - name: session_id
+          in: query
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 128 }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: boolean }
+        "404":
+          description: Decision not found for this session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   # ── Search ────────────────────────────────────────────────────────────────
 
@@ -641,7 +728,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/BarcodeNotFoundResponse"
 
   /products/{id}:
     get:
@@ -1369,6 +1456,34 @@ components:
         severity: { type: string }
         source:   { type: ["string", "null"] }
 
+    ExternalBarcodeCandidate:
+      type: object
+      required: [barcode, productName, evidenceTier, sourceName, sourceUrl, verificationStatus]
+      properties:
+        barcode:       { type: string }
+        productName:   { type: string }
+        productNameZh: { type: ["string", "null"] }
+        brandName:     { type: ["string", "null"] }
+        imageUrl:      { type: ["string", "null"] }
+        evidenceTier:
+          type: string
+          enum: [catalog_only, nutrition_ready, ingredients_ready, review_ready]
+        sourceName:    { type: string }
+        sourceUrl:     { type: string }
+        verificationStatus:
+          type: string
+          enum: [external_unverified]
+
+    BarcodeNotFoundResponse:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+        catalogCandidate:
+          anyOf:
+            - $ref: "#/components/schemas/ExternalBarcodeCandidate"
+            - type: "null"
+
     ProductSummary:
       type: object
       required: [id, name, verificationStatus]
@@ -1469,9 +1584,22 @@ components:
         conditionCount: { type: integer }
         updatedAt:      { type: ["string", "null"] }
 
+    ProductActionRecommendation:
+      type: object
+      required: [code, label, labelZh, reason, reasonZh, isPersonalized]
+      properties:
+        code:
+          type: string
+          enum: [buy, limit, swap, complete_data]
+        label:          { type: string }
+        labelZh:        { type: string }
+        reason:         { type: string }
+        reasonZh:       { type: string }
+        isPersonalized: { type: boolean }
+
     Evaluation:
       type: object
-      required: [id, productId, overallScore, analysisScope, scoreGrade, verdict, verificationStatus, rulesetVersion, evaluatedAt]
+      required: [id, productId, overallScore, analysisScope, scoreGrade, verdict, verificationStatus, actionRecommendation, rulesetVersion, evaluatedAt]
       properties:
         id:                  { type: integer }
         productId:           { type: integer }
@@ -1511,6 +1639,8 @@ components:
             $ref: "#/components/schemas/PersonalAlert"
         personalization:
           $ref: "#/components/schemas/PersonalizationContext"
+        actionRecommendation:
+          $ref: "#/components/schemas/ProductActionRecommendation"
 
     # ── Alternatives ──────────────────────────────────────────────────────
 
@@ -1739,7 +1869,7 @@ components:
 
     ShareCard:
       type: object
-      required: [productName, overallScore, analysisScope, scoreGrade, verdict]
+      required: [productName, overallScore, analysisScope, scoreGrade, verdict, actionRecommendation]
       properties:
         productName:       { type: string }
         productNameZh:     { type: ["string", "null"] }
@@ -1757,6 +1887,8 @@ components:
           items:
             $ref: "#/components/schemas/EvaluationReason"
         evidenceConfidence: { type: ["string", "null"] }
+        actionRecommendation:
+          $ref: "#/components/schemas/ProductActionRecommendation"
         alternativeName:   { type: ["string", "null"] }
         alternativeNameZh: { type: ["string", "null"] }
         rulesetVersion:    { type: string }
@@ -1936,6 +2068,70 @@ components:
         overallScore: { type: ["integer", "null"] }
         scoreGrade:  { type: ["string", "null"] }
 
+    # ── Decision Outcomes ─────────────────────────────────────────────────
+
+    DecisionRecommendationCode:
+      type: string
+      enum: [buy, limit, swap, complete_data]
+
+    DecisionOutcomeCode:
+      type: string
+      enum: [bought, skipped, limited, kept, swapped, could_not_find, will_complete_data]
+
+    DecisionReasonCode:
+      type: string
+      enum: [health, allergen, ingredients, price, availability, taste, family_preference, not_concerned, other]
+
+    DecisionOutcomeInput:
+      type: object
+      required: [clientEventId, sessionId, productId, evaluationId, recommendationCode, outcomeCode]
+      properties:
+        clientEventId: { type: string, minLength: 8, maxLength: 80 }
+        sessionId: { type: string, minLength: 1, maxLength: 128 }
+        productId: { type: integer, minimum: 1 }
+        evaluationId: { type: integer, minimum: 1 }
+        recommendationCode:
+          $ref: "#/components/schemas/DecisionRecommendationCode"
+        outcomeCode:
+          $ref: "#/components/schemas/DecisionOutcomeCode"
+        selectedAlternativeProductId: { type: ["integer", "null"], minimum: 1 }
+        reasonCode:
+          anyOf:
+            - $ref: "#/components/schemas/DecisionReasonCode"
+            - type: "null"
+        note: { type: ["string", "null"], maxLength: 300 }
+        source:
+          type: string
+          enum: [report, alternatives, history]
+          default: report
+
+    DecisionOutcome:
+      type: object
+      required: [id, clientEventId, sessionId, productId, evaluationId, recommendationCode, outcomeCode, source, createdAt]
+      properties:
+        id: { type: integer }
+        clientEventId: { type: string }
+        sessionId: { type: string }
+        productId: { type: integer }
+        evaluationId: { type: integer }
+        recommendationCode:
+          $ref: "#/components/schemas/DecisionRecommendationCode"
+        outcomeCode:
+          $ref: "#/components/schemas/DecisionOutcomeCode"
+        selectedAlternativeProductId: { type: ["integer", "null"] }
+        reasonCode:
+          anyOf:
+            - $ref: "#/components/schemas/DecisionReasonCode"
+            - type: "null"
+        note: { type: ["string", "null"] }
+        source: { type: string }
+        productName: { type: ["string", "null"] }
+        productNameZh: { type: ["string", "null"] }
+        imageUrl: { type: ["string", "null"] }
+        selectedAlternativeName: { type: ["string", "null"] }
+        selectedAlternativeNameZh: { type: ["string", "null"] }
+        createdAt: { type: string }
+
     # ── Search ────────────────────────────────────────────────────────────
 
     SearchResultItem:
@@ -1986,6 +2182,13 @@ components:
         priceTwd:      { type: ["number", "null"] }
         imageUrl:      { type: ["string", "null"] }
         sourceUrl:     { type: ["string", "null"] }
+        catalogSourceType:
+          type: ["string", "null"]
+          enum: [retailer_catalog, official_traceability, null]
+        evidenceTier:
+          type: ["string", "null"]
+          enum: [catalog_only, nutrition_ready, ingredients_ready, review_ready, null]
+        aiEnrichmentStatus: { type: ["string", "null"] }
 
     # ── Guides ────────────────────────────────────────────────────────────
 

@@ -4,8 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "catalog:tfda188": "tsx ./src/catalog-import.ts --dry-run",
+    "catalog:tfda188:write-staging": "tsx ./src/catalog-import.ts --write-staging",
+    "catalog:test": "tsx --test ./src/catalog/*.test.ts",
     "hello": "tsx ./src/hello.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@workspace/db": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

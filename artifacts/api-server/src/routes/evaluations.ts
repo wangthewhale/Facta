@@ -8,7 +8,7 @@ import {
   userPreferencesTable,
 } from "@workspace/db";
 import { GetProductEvaluationParams, GetProductEvaluationQueryParams, GetShareCardParams } from "@workspace/api-zod";
-import { calculateScore, resolveAnalysisScope, RULESET_VERSION } from "../lib/scoring.js";
+import { calculateScore, recommendProductAction, resolveAnalysisScope, RULESET_VERSION } from "../lib/scoring.js";
 import { resolveCatalogProduct } from "../lib/catalogEvidence.js";
 import { buildPersonalization } from "../lib/personalization.js";
 
@@ -201,6 +201,28 @@ router.get("/evaluations/product/:productId", async (req, res): Promise<void> =>
     negativeReasons: topReasons.filter(reason => reason.impact === "negative"),
     additiveFlags,
   });
+  const analysisScope = resolveAnalysisScope(
+    { nutritionScore: evaluation.nutritionScore, additiveScore: evaluation.additiveScore },
+    { productName: catalogProduct?.nameZh ?? catalogProduct?.name ?? product?.nameZh ?? product?.name, ingredients: responseIngredients },
+  );
+  const baseActionRecommendation = recommendProductAction({
+    analysisScope,
+    overallScore: evaluation.overallScore,
+    evidenceConfidence: evaluation.evidenceConfidence,
+    topReasons,
+    additiveFlags,
+  });
+  const firstPersonalAlert = personal.personalAlerts[0];
+  const actionRecommendation = firstPersonalAlert
+    ? {
+        code: "swap" as const,
+        label: "Swap it for this person",
+        labelZh: "換一款",
+        reason: `This product conflicts with a saved household food profile: ${firstPersonalAlert.message}`,
+        reasonZh: `這款與已儲存的家庭飲食條件衝突：${firstPersonalAlert.messageZh}`,
+        isPersonalized: true,
+      }
+    : baseActionRecommendation;
 
   res.json({
     id: evaluation.id,
@@ -212,10 +234,7 @@ router.get("/evaluations/product/:productId", async (req, res): Promise<void> =>
     overallScore: evaluation.overallScore,
     nutritionScore: evaluation.nutritionScore,
     additiveScore: evaluation.additiveScore,
-    analysisScope: resolveAnalysisScope(
-      { nutritionScore: evaluation.nutritionScore, additiveScore: evaluation.additiveScore },
-      { productName: catalogProduct?.nameZh ?? catalogProduct?.name ?? product?.nameZh ?? product?.name, ingredients: responseIngredients },
-    ),
+    analysisScope,
     scoreGrade: evaluation.scoreGrade,
     verdict: evaluation.verdict,
     verdictZh: evaluation.verdictZh,
@@ -229,6 +248,7 @@ router.get("/evaluations/product/:productId", async (req, res): Promise<void> =>
     allergenAlerts,
     personalAlerts: personal.personalAlerts,
     personalization: personal.personalization,
+    actionRecommendation,
   });
 });
 
@@ -254,6 +274,17 @@ router.get("/share-cards/:productId", async (req, res): Promise<void> => {
   const altCatalogProduct = altProduct ? resolveCatalogProduct(altProduct, null, null) : null;
 
   const topReasons = ((evaluation.topReasons as any[]) ?? []).slice(0, 3);
+  const analysisScope = resolveAnalysisScope(
+    { nutritionScore: evaluation.nutritionScore, additiveScore: evaluation.additiveScore },
+    { productName: catalogProduct?.nameZh ?? catalogProduct?.name ?? product?.nameZh ?? product?.name, ingredients: responseIngredients },
+  );
+  const actionRecommendation = recommendProductAction({
+    analysisScope,
+    overallScore: evaluation.overallScore,
+    evidenceConfidence: evaluation.evidenceConfidence,
+    topReasons,
+    additiveFlags: (evaluation.additiveFlags as any[]) ?? [],
+  });
 
   res.json({
     productName: catalogProduct?.name ?? "Unknown",
@@ -261,15 +292,13 @@ router.get("/share-cards/:productId", async (req, res): Promise<void> => {
     brandName: catalogProduct?.brandName ?? null,
     imageUrl: catalogProduct?.imageUrl ?? null,
     overallScore: evaluation.overallScore,
-    analysisScope: resolveAnalysisScope(
-      { nutritionScore: evaluation.nutritionScore, additiveScore: evaluation.additiveScore },
-      { productName: catalogProduct?.nameZh ?? catalogProduct?.name ?? product?.nameZh ?? product?.name, ingredients: responseIngredients },
-    ),
+    analysisScope,
     scoreGrade: evaluation.scoreGrade,
     verdict: evaluation.verdict,
     verdictZh: evaluation.verdictZh,
     topReasons,
     evidenceConfidence: evaluation.evidenceConfidence,
+    actionRecommendation,
     alternativeName: altCatalogProduct?.name ?? null,
     alternativeNameZh: altCatalogProduct?.nameZh ?? null,
     rulesetVersion: evaluation.rulesetVersion,

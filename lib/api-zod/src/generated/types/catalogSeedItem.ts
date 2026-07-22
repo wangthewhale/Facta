@@ -5,6 +5,8 @@
  * FACTA — Independent product intelligence API
  * OpenAPI spec version: 0.1.0
  */
+import type { CatalogSeedItemCatalogSourceType } from './catalogSeedItemCatalogSourceType';
+import type { CatalogSeedItemEvidenceTier } from './catalogSeedItemEvidenceTier';
 
 export interface CatalogSeedItem {
   factaSeedId: string;
@@ -22,4 +24,10 @@ export interface CatalogSeedItem {
   imageUrl?: string | null;
   /** @nullable */
   sourceUrl?: string | null;
+  /** @nullable */
+  catalogSourceType?: CatalogSeedItemCatalogSourceType;
+  /** @nullable */
+  evidenceTier?: CatalogSeedItemEvidenceTier;
+  /** @nullable */
+  aiEnrichmentStatus?: string | null;
 }

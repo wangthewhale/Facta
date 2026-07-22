@@ -211,6 +211,43 @@ export interface AllergenAlert {
   source?: string | null;
 }
 
+export type ExternalBarcodeCandidateEvidenceTier = typeof ExternalBarcodeCandidateEvidenceTier[keyof typeof ExternalBarcodeCandidateEvidenceTier];
+
+
+export const ExternalBarcodeCandidateEvidenceTier = {
+  catalog_only: 'catalog_only',
+  nutrition_ready: 'nutrition_ready',
+  ingredients_ready: 'ingredients_ready',
+  review_ready: 'review_ready',
+} as const;
+
+export type ExternalBarcodeCandidateVerificationStatus = typeof ExternalBarcodeCandidateVerificationStatus[keyof typeof ExternalBarcodeCandidateVerificationStatus];
+
+
+export const ExternalBarcodeCandidateVerificationStatus = {
+  external_unverified: 'external_unverified',
+} as const;
+
+export interface ExternalBarcodeCandidate {
+  barcode: string;
+  productName: string;
+  /** @nullable */
+  productNameZh?: string | null;
+  /** @nullable */
+  brandName?: string | null;
+  /** @nullable */
+  imageUrl?: string | null;
+  evidenceTier: ExternalBarcodeCandidateEvidenceTier;
+  sourceName: string;
+  sourceUrl: string;
+  verificationStatus: ExternalBarcodeCandidateVerificationStatus;
+}
+
+export interface BarcodeNotFoundResponse {
+  error: string;
+  catalogCandidate?: ExternalBarcodeCandidate | null;
+}
+
 export interface ProductSummary {
   id: number;
   name: string;
@@ -317,6 +354,25 @@ export interface PersonalizationContext {
   updatedAt?: string | null;
 }
 
+export type ProductActionRecommendationCode = typeof ProductActionRecommendationCode[keyof typeof ProductActionRecommendationCode];
+
+
+export const ProductActionRecommendationCode = {
+  buy: 'buy',
+  limit: 'limit',
+  swap: 'swap',
+  complete_data: 'complete_data',
+} as const;
+
+export interface ProductActionRecommendation {
+  code: ProductActionRecommendationCode;
+  label: string;
+  labelZh: string;
+  reason: string;
+  reasonZh: string;
+  isPersonalized: boolean;
+}
+
 export type EvaluationAnalysisScope = typeof EvaluationAnalysisScope[keyof typeof EvaluationAnalysisScope];
 
 
@@ -361,6 +417,7 @@ export interface Evaluation {
   allergenAlerts?: AllergenAlert[];
   personalAlerts?: PersonalAlert[];
   personalization?: PersonalizationContext;
+  actionRecommendation: ProductActionRecommendation;
 }
 
 export interface AlternativeProduct {
@@ -638,6 +695,7 @@ export interface ShareCard {
   topReasons?: EvaluationReason[];
   /** @nullable */
   evidenceConfidence?: string | null;
+  actionRecommendation: ProductActionRecommendation;
   /** @nullable */
   alternativeName?: string | null;
   /** @nullable */
@@ -808,6 +866,111 @@ export interface MealLog {
   scoreGrade?: string | null;
 }
 
+export type DecisionRecommendationCode = typeof DecisionRecommendationCode[keyof typeof DecisionRecommendationCode];
+
+
+export const DecisionRecommendationCode = {
+  buy: 'buy',
+  limit: 'limit',
+  swap: 'swap',
+  complete_data: 'complete_data',
+} as const;
+
+export type DecisionOutcomeCode = typeof DecisionOutcomeCode[keyof typeof DecisionOutcomeCode];
+
+
+export const DecisionOutcomeCode = {
+  bought: 'bought',
+  skipped: 'skipped',
+  limited: 'limited',
+  kept: 'kept',
+  swapped: 'swapped',
+  could_not_find: 'could_not_find',
+  will_complete_data: 'will_complete_data',
+} as const;
+
+export type DecisionReasonCode = typeof DecisionReasonCode[keyof typeof DecisionReasonCode];
+
+
+export const DecisionReasonCode = {
+  health: 'health',
+  allergen: 'allergen',
+  ingredients: 'ingredients',
+  price: 'price',
+  availability: 'availability',
+  taste: 'taste',
+  family_preference: 'family_preference',
+  not_concerned: 'not_concerned',
+  other: 'other',
+} as const;
+
+export type DecisionOutcomeInputSource = typeof DecisionOutcomeInputSource[keyof typeof DecisionOutcomeInputSource];
+
+
+export const DecisionOutcomeInputSource = {
+  report: 'report',
+  alternatives: 'alternatives',
+  history: 'history',
+} as const;
+
+export interface DecisionOutcomeInput {
+  /**
+     * @minLength 8
+     * @maxLength 80
+     */
+  clientEventId: string;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  sessionId: string;
+  /** @minimum 1 */
+  productId: number;
+  /** @minimum 1 */
+  evaluationId: number;
+  recommendationCode: DecisionRecommendationCode;
+  outcomeCode: DecisionOutcomeCode;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  selectedAlternativeProductId?: number | null;
+  reasonCode?: DecisionReasonCode | null;
+  /**
+     * @maxLength 300
+     * @nullable
+     */
+  note?: string | null;
+  source?: DecisionOutcomeInputSource;
+}
+
+export interface DecisionOutcome {
+  id: number;
+  clientEventId: string;
+  sessionId: string;
+  productId: number;
+  evaluationId: number;
+  recommendationCode: DecisionRecommendationCode;
+  outcomeCode: DecisionOutcomeCode;
+  /** @nullable */
+  selectedAlternativeProductId?: number | null;
+  reasonCode?: DecisionReasonCode | null;
+  /** @nullable */
+  note?: string | null;
+  source: string;
+  /** @nullable */
+  productName?: string | null;
+  /** @nullable */
+  productNameZh?: string | null;
+  /** @nullable */
+  imageUrl?: string | null;
+  /** @nullable */
+  selectedAlternativeName?: string | null;
+  /** @nullable */
+  selectedAlternativeNameZh?: string | null;
+  createdAt: string;
+}
+
 export interface SearchResultItem {
   product: ProductSummary;
   relevanceLabel: string;
@@ -820,6 +983,30 @@ export interface SearchResultItem {
 }
 
 export type SearchResultsParsedFilters = { [key: string]: unknown };
+
+/**
+ * @nullable
+ */
+export type CatalogSeedItemCatalogSourceType = typeof CatalogSeedItemCatalogSourceType[keyof typeof CatalogSeedItemCatalogSourceType] | null;
+
+
+export const CatalogSeedItemCatalogSourceType = {
+  retailer_catalog: 'retailer_catalog',
+  official_traceability: 'official_traceability',
+} as const;
+
+/**
+ * @nullable
+ */
+export type CatalogSeedItemEvidenceTier = typeof CatalogSeedItemEvidenceTier[keyof typeof CatalogSeedItemEvidenceTier] | null;
+
+
+export const CatalogSeedItemEvidenceTier = {
+  catalog_only: 'catalog_only',
+  nutrition_ready: 'nutrition_ready',
+  ingredients_ready: 'ingredients_ready',
+  review_ready: 'review_ready',
+} as const;
 
 export interface CatalogSeedItem {
   factaSeedId: string;
@@ -837,6 +1024,12 @@ export interface CatalogSeedItem {
   imageUrl?: string | null;
   /** @nullable */
   sourceUrl?: string | null;
+  /** @nullable */
+  catalogSourceType?: CatalogSeedItemCatalogSourceType;
+  /** @nullable */
+  evidenceTier?: CatalogSeedItemEvidenceTier;
+  /** @nullable */
+  aiEnrichmentStatus?: string | null;
 }
 
 export interface SearchResults {
@@ -1004,6 +1197,31 @@ date_str?: string;
 
 export type DeleteMealLog200 = {
   ok?: boolean;
+};
+
+export type ListDecisionOutcomesParams = {
+/**
+ * @minLength 1
+ * @maxLength 128
+ */
+session_id: string;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+limit?: number;
+};
+
+export type DeleteDecisionOutcomeParams = {
+/**
+ * @minLength 1
+ * @maxLength 128
+ */
+session_id: string;
+};
+
+export type DeleteDecisionOutcome200 = {
+  ok: boolean;
 };
 
 export type SearchProductsParams = {

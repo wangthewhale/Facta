@@ -225,10 +225,60 @@ router.get("/search", async (req, res): Promise<void> => {
           priceTwd: r.price_twd != null ? parseFloat(r.price_twd) : null,
           imageUrl: r.image_url ?? null,
           sourceUrl: r.source_url ?? null,
+          catalogSourceType: "retailer_catalog",
+          evidenceTier: "catalog_only",
+          aiEnrichmentStatus: null,
         });
       }
     } catch (err) {
       req.log.warn({ err }, "catalog seed search failed");
+    }
+
+    try {
+      const termConds = searchTerms
+        .map(t => t.slice(0, 100))
+        .map(t => {
+          const pat = `%${t}%`;
+          return sql`(product_name ILIKE ${pat} OR brand_name ILIKE ${pat} OR category_name ILIKE ${pat})`;
+        });
+      const remainingLimit = Math.max(0, Math.min(Math.max(Number(limit) || 20, 1), 50) - catalogItems.length);
+      if (remainingLimit > 0) {
+        const rows = await db.execute(sql`
+          SELECT source_key, source_record_id, product_name, brand_name,
+                 category_name, package_spec, image_urls, source_url,
+                 evidence_tier, ai_enrichment_status
+          FROM catalog_import_candidates
+          WHERE verification_status IN ('imported_unverified', 'pending_review')
+            AND (${sql.join(termConds, sql` OR `)})
+          ORDER BY CASE evidence_tier
+            WHEN 'review_ready' THEN 0
+            WHEN 'nutrition_ready' THEN 1
+            WHEN 'ingredients_ready' THEN 2
+            ELSE 3
+          END, product_name
+          LIMIT ${remainingLimit}`);
+        for (const r of (rows as any).rows ?? rows) {
+          const imageUrls = Array.isArray(r.image_urls) ? r.image_urls : [];
+          catalogItems.push({
+            factaSeedId: `${r.source_key}:${r.source_record_id}`,
+            productName: r.product_name,
+            brandRaw: r.brand_name ?? null,
+            retailer: "食藥署追溯資料",
+            categoryNormalized: r.category_name ?? null,
+            specRaw: r.package_spec ?? null,
+            priceTwd: null,
+            imageUrl: imageUrls[0] ?? null,
+            sourceUrl: r.source_url ?? null,
+            catalogSourceType: "official_traceability",
+            evidenceTier: r.evidence_tier ?? "catalog_only",
+            aiEnrichmentStatus: r.ai_enrichment_status ?? null,
+          });
+        }
+      }
+    } catch (err) {
+      // The source-backed import migration is intentionally deployable before
+      // the production data operation. Search remains available during that gap.
+      req.log.warn({ err }, "source-backed catalog search unavailable");
     }
   }
 

@@ -29,12 +29,17 @@ import type {
   AdminPublishGoalRuleset201,
   AdminUpdateMealContext200,
   AlternativeProduct,
+  BarcodeNotFoundResponse,
   Category,
   CollectionDetail,
   CollectionSummary,
   Correction,
   CorrectionInput,
   DashboardStats,
+  DecisionOutcome,
+  DecisionOutcomeInput,
+  DeleteDecisionOutcome200,
+  DeleteDecisionOutcomeParams,
   DeleteMealLog200,
   ErrorResponse,
   Evaluation,
@@ -48,6 +53,7 @@ import type {
   GuideSummary,
   HealthStatus,
   ListCollectionsParams,
+  ListDecisionOutcomesParams,
   ListGoalsParams,
   ListGuidesParams,
   ListMealLogsParams,
@@ -873,6 +879,241 @@ export const useDeleteMealLog = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteMealLogMutationOptions(options));
+    }
+
+export const getListDecisionOutcomesUrl = (params: ListDecisionOutcomesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/decision-outcomes?${stringifiedParams}` : `/api/decision-outcomes`
+}
+
+/**
+ * @summary List the choices a household made after FACTA recommendations
+ */
+export const listDecisionOutcomes = async (params: ListDecisionOutcomesParams, options?: RequestInit): Promise<DecisionOutcome[]> => {
+
+  return customFetch<DecisionOutcome[]>(getListDecisionOutcomesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListDecisionOutcomesQueryKey = (params?: ListDecisionOutcomesParams,) => {
+    return [
+    `/api/decision-outcomes`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListDecisionOutcomesQueryOptions = <TData = Awaited<ReturnType<typeof listDecisionOutcomes>>, TError = ErrorType<unknown>>(params: ListDecisionOutcomesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDecisionOutcomes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListDecisionOutcomesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listDecisionOutcomes>>> = ({ signal }) => listDecisionOutcomes(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listDecisionOutcomes>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListDecisionOutcomesQueryResult = NonNullable<Awaited<ReturnType<typeof listDecisionOutcomes>>>
+export type ListDecisionOutcomesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List the choices a household made after FACTA recommendations
+ */
+
+export function useListDecisionOutcomes<TData = Awaited<ReturnType<typeof listDecisionOutcomes>>, TError = ErrorType<unknown>>(
+ params: ListDecisionOutcomesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDecisionOutcomes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListDecisionOutcomesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateDecisionOutcomeUrl = () => {
+
+
+
+
+  return `/api/decision-outcomes`
+}
+
+/**
+ * @summary Record what a household chose after seeing a recommendation
+ */
+export const createDecisionOutcome = async (decisionOutcomeInput: DecisionOutcomeInput, options?: RequestInit): Promise<DecisionOutcome> => {
+
+  return customFetch<DecisionOutcome>(getCreateDecisionOutcomeUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(decisionOutcomeInput)
+  }
+);}
+
+
+
+
+
+export const getCreateDecisionOutcomeMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createDecisionOutcome>>, TError,{data: BodyType<DecisionOutcomeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createDecisionOutcome>>, TError,{data: BodyType<DecisionOutcomeInput>}, TContext> => {
+
+const mutationKey = ['createDecisionOutcome'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createDecisionOutcome>>, {data: BodyType<DecisionOutcomeInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createDecisionOutcome(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateDecisionOutcomeMutationResult = NonNullable<Awaited<ReturnType<typeof createDecisionOutcome>>>
+    export type CreateDecisionOutcomeMutationBody = BodyType<DecisionOutcomeInput>
+    export type CreateDecisionOutcomeMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Record what a household chose after seeing a recommendation
+ */
+export const useCreateDecisionOutcome = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createDecisionOutcome>>, TError,{data: BodyType<DecisionOutcomeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createDecisionOutcome>>,
+        TError,
+        {data: BodyType<DecisionOutcomeInput>},
+        TContext
+      > => {
+      return useMutation(getCreateDecisionOutcomeMutationOptions(options));
+    }
+
+export const getDeleteDecisionOutcomeUrl = (id: number,
+    params: DeleteDecisionOutcomeParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/decision-outcomes/${id}?${stringifiedParams}` : `/api/decision-outcomes/${id}`
+}
+
+/**
+ * @summary Permanently delete one household decision record
+ */
+export const deleteDecisionOutcome = async (id: number,
+    params: DeleteDecisionOutcomeParams, options?: RequestInit): Promise<DeleteDecisionOutcome200> => {
+
+  return customFetch<DeleteDecisionOutcome200>(getDeleteDecisionOutcomeUrl(id,params),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteDecisionOutcomeMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteDecisionOutcome>>, TError,{id: number;params: DeleteDecisionOutcomeParams}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteDecisionOutcome>>, TError,{id: number;params: DeleteDecisionOutcomeParams}, TContext> => {
+
+const mutationKey = ['deleteDecisionOutcome'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteDecisionOutcome>>, {id: number;params: DeleteDecisionOutcomeParams}> = (props) => {
+          const {id,params} = props ?? {};
+
+          return  deleteDecisionOutcome(id,params,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteDecisionOutcomeMutationResult = NonNullable<Awaited<ReturnType<typeof deleteDecisionOutcome>>>
+
+    export type DeleteDecisionOutcomeMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Permanently delete one household decision record
+ */
+export const useDeleteDecisionOutcome = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteDecisionOutcome>>, TError,{id: number;params: DeleteDecisionOutcomeParams}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteDecisionOutcome>>,
+        TError,
+        {id: number;params: DeleteDecisionOutcomeParams},
+        TContext
+      > => {
+      return useMutation(getDeleteDecisionOutcomeMutationOptions(options));
     }
 
 export const getSearchProductsUrl = (params: SearchProductsParams,) => {
@@ -2047,7 +2288,7 @@ export const getGetProductByBarcodeQueryKey = (barcode: string,) => {
     }
 
 
-export const getGetProductByBarcodeQueryOptions = <TData = Awaited<ReturnType<typeof getProductByBarcode>>, TError = ErrorType<ErrorResponse>>(barcode: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProductByBarcode>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetProductByBarcodeQueryOptions = <TData = Awaited<ReturnType<typeof getProductByBarcode>>, TError = ErrorType<BarcodeNotFoundResponse>>(barcode: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProductByBarcode>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -2066,14 +2307,14 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type GetProductByBarcodeQueryResult = NonNullable<Awaited<ReturnType<typeof getProductByBarcode>>>
-export type GetProductByBarcodeQueryError = ErrorType<ErrorResponse>
+export type GetProductByBarcodeQueryError = ErrorType<BarcodeNotFoundResponse>
 
 
 /**
  * @summary Look up product by barcode
  */
 
-export function useGetProductByBarcode<TData = Awaited<ReturnType<typeof getProductByBarcode>>, TError = ErrorType<ErrorResponse>>(
+export function useGetProductByBarcode<TData = Awaited<ReturnType<typeof getProductByBarcode>>, TError = ErrorType<BarcodeNotFoundResponse>>(
  barcode: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProductByBarcode>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {

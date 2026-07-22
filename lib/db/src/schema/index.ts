@@ -24,3 +24,4 @@ export * from "./goalProductEvaluations";
 export * from "./mealLogs";
 export * from "./guides";
 export * from "./collections";
+export * from "./decisionOutcomes";

@@ -20,6 +20,10 @@ export type AnalyticsEvent =
   | 'share_started'
   | 'share_completed'
   | 'share_link_copied'
+  | 'decision_cta_clicked'
+  | 'decision_outcome_selected'
+  | 'decision_outcome_saved'
+  | 'decision_outcome_failed'
   | 'alternative_empty_cta_clicked';
 
 export function track(event: AnalyticsEvent, props?: Record<string, string | number | boolean | null>) {

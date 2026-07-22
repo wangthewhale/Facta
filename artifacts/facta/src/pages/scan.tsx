@@ -8,6 +8,15 @@ import { getSessionId } from '@/lib/session';
 import { cn } from '@/lib/utils';
 import { track } from '@/lib/analytics';
 
+type ExternalBarcodeCandidate = {
+  productName: string;
+  productNameZh?: string | null;
+  brandName?: string | null;
+  sourceName: string;
+  sourceUrl: string;
+  evidenceTier: string;
+};
+
 export default function Scan() {
   const { t } = useTranslation();
   const [, setLocation] = useLocation();
@@ -19,6 +28,7 @@ export default function Scan() {
   const [manualMode, setManualMode] = useState(false);
   const [unknownBarcode, setUnknownBarcode] = useState<string>('');
   const [unverifiedProductName, setUnverifiedProductName] = useState<string>('');
+  const [externalCandidate, setExternalCandidate] = useState<ExternalBarcodeCandidate | null>(null);
   const [invalidBarcode, setInvalidBarcode] = useState<string>('');
   const [lookupFailed, setLookupFailed] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
@@ -46,7 +56,11 @@ export default function Scan() {
     } else if (isError) {
       const status = (error as any)?.status;
       if (status === 404) {
-        // Not in database — show a value-first prompt instead of dumping the user into a form
+        const candidate = (error as any)?.data?.catalogCandidate as ExternalBarcodeCandidate | null | undefined;
+        setExternalCandidate(candidate ?? null);
+        if (candidate) setUnverifiedProductName(candidate.productNameZh || candidate.productName);
+        // Not in the verified database — show public identity context, then
+        // collect the physical label instead of inventing a health conclusion.
         track('unknown_barcode_detected', { barcode: barcodeStr });
         setUnknownBarcode(barcodeStr);
       } else if (status === 422) {
@@ -162,6 +176,7 @@ export default function Scan() {
     setLookupFailed(false);
     setUnknownBarcode('');
     setUnverifiedProductName('');
+    setExternalCandidate(null);
     if (!isValidRetailBarcode(normalizedCode)) {
       setInvalidBarcode(normalizedCode || code);
       setBarcodeStr('');
@@ -262,14 +277,33 @@ export default function Scan() {
 
   // Unknown barcode — value-first prompt
   if (unknownBarcode) {
+    const submitParams = new URLSearchParams({
+      barcode: unknownBarcode,
+      ...(externalCandidate ? { name: externalCandidate.productNameZh || externalCandidate.productName } : {}),
+      ...(externalCandidate?.brandName ? { brand: externalCandidate.brandName } : {}),
+    }).toString();
     return (
       <Layout>
         <div className="flex flex-col min-h-full bg-background text-foreground p-6 pt-16 gap-6">
           <h1 className="text-2xl font-black leading-snug">
             {unverifiedProductName
-              ? `條碼對上「${unverifiedProductName}」，但資料還沒驗證完。`
+              ? `找到「${unverifiedProductName}」，但還不能直接叫你買。`
               : '條碼只認出商品；要判斷值不值得買，還需要背面標示。'}
           </h1>
+          {externalCandidate && (
+            <div className="border-2 border-[#D9A21B] bg-[#F2B84B]/10 p-4 flex flex-col gap-2">
+              <p className="text-xs font-black tracking-wide">公開條碼資料已找到商品身分</p>
+              <p className="text-sm font-bold">
+                {[externalCandidate.brandName, externalCandidate.productNameZh || externalCandidate.productName].filter(Boolean).join(' · ')}
+              </p>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                來源是社群公開資料，商品名稱與圖片尚未經 FACTA 核對；請以你手上的包裝為準。
+              </p>
+              <a href={externalCandidate.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] font-black underline self-start">
+                查看 {externalCandidate.sourceName} 原始紀錄
+              </a>
+            </div>
+          )}
           <p className="text-sm text-muted-foreground leading-relaxed">
             最好一張拍到「營養標示＋成分」；若分開印，下一步可以再補第二張。FACTA 會換算每 100g／ml，先告訴你糖、鈉、飽和脂肪最該注意哪一項。
           </p>
@@ -287,7 +321,7 @@ export default function Scan() {
           </ul>
           <div className="flex flex-col gap-3 mt-2">
             <button
-              onClick={() => setLocation(`/submit?barcode=${unknownBarcode}`)}
+              onClick={() => setLocation(`/submit?${submitParams}`)}
               className="w-full py-4 bg-foreground text-background font-black tracking-widest flex items-center justify-center gap-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
             >
               <Camera className="w-5 h-5" /> 拍商品背面，繼續分析

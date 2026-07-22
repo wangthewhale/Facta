@@ -17,6 +17,11 @@ import {
   isValidGtin,
   resolveCatalogProduct,
 } from "../lib/catalogEvidence.js";
+import {
+  lookupOpenFoodFacts,
+  lookupStagedBarcodeCandidate,
+  stageOpenFoodFactsCandidate,
+} from "../lib/openFoodFacts.js";
 
 const router: IRouter = Router();
 
@@ -97,7 +102,32 @@ router.get("/products/barcode/:barcode", async (req, res): Promise<void> => {
   const [barcodeRow] = trusted
     ? [{ productId: trusted.productId }]
     : await db.select().from(barcodesTable).where(eq(barcodesTable.barcode, params.data.barcode));
-  if (!barcodeRow) { res.status(404).json({ error: "Product not found for this barcode" }); return; }
+  if (!barcodeRow) {
+    let catalogCandidate = await lookupStagedBarcodeCandidate(params.data.barcode);
+    if (!catalogCandidate) {
+      try {
+        const externalResult = await lookupOpenFoodFacts(params.data.barcode);
+        catalogCandidate = externalResult?.candidate ?? null;
+        if (externalResult) {
+          // Staging is best-effort and never blocks the user-facing lookup.
+          void stageOpenFoodFactsCandidate(externalResult).catch(err => {
+            req.log.warn({ err, barcode: params.data.barcode }, "failed to stage Open Food Facts candidate");
+          });
+        }
+      } catch (err) {
+        req.log.warn({ err, barcode: params.data.barcode }, "external barcode lookup failed");
+        res.status(503).json({ error: "External barcode lookup is temporarily unavailable" });
+        return;
+      }
+    }
+    res.status(404).json({
+      error: catalogCandidate
+        ? "Product identity found in public data; physical label verification is required"
+        : "Product not found for this barcode",
+      catalogCandidate,
+    });
+    return;
+  }
 
   const [product] = await db.select().from(productsTable).where(eq(productsTable.id, barcodeRow.productId));
   if (!product) { res.status(404).json({ error: "Product not found" }); return; }

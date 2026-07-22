@@ -227,6 +227,8 @@ describe("Plain packaged water", () => {
     expect(result.verdictZh).toContain("日常補水");
     expect(result.topReasons.some(reason => reason.labelZh.includes("可免營養標示"))).toBe(true);
     expect(result.topReasons.some(reason => reason.labelZh.includes("pH 9"))).toBe(true);
+    expect(result.actionRecommendation.code).toBe("buy");
+    expect(result.actionRecommendation.labelZh).toBe("可以喝");
   });
 
   it("does not let sweetened or flavoured water bypass nutrition requirements", () => {
@@ -243,6 +245,65 @@ describe("Plain packaged water", () => {
 
     expect(result.analysisScope).toBe("insufficient");
     expect(result.verdictZh).toContain("資料不足");
+  });
+});
+
+describe("Immediate product action", () => {
+  it("never turns a favorable nutrition-only result into a buy recommendation", () => {
+    const result = calculateScore({
+      nutrition: greenTeaNutrition,
+      ingredients: [],
+      dataCompleteness: 0.9,
+    });
+
+    expect(result.analysisScope).toBe("nutrition_only");
+    expect(result.actionRecommendation.code).toBe("complete_data");
+    expect(result.actionRecommendation.labelZh).toBe("先補資料");
+  });
+
+  it("recommends limiting a product when a confirmed nutrition red flag exists", () => {
+    const result = calculateScore({
+      nutrition: highSugarDrinkNutrition,
+      ingredients: [],
+      dataCompleteness: 0.7,
+    });
+
+    expect(result.topReasons.some(reason => reason.impact === "negative")).toBe(true);
+    expect(result.actionRecommendation.code).toBe("limit");
+    expect(result.actionRecommendation.labelZh).toBe("少吃");
+  });
+
+  it("only recommends buying with complete high-confidence evidence and no red flags", () => {
+    const result = calculateScore({
+      nutrition: greenTeaNutrition,
+      ingredients: [
+        { name: "水", riskLevel: "safe", evidenceStrength: "high" },
+        { name: "茶葉", riskLevel: "safe", evidenceStrength: "high" },
+      ],
+      dataCompleteness: 0.9,
+    });
+
+    expect(result.analysisScope).toBe("complete");
+    expect(result.evidenceConfidence).toBe("high");
+    expect(result.actionRecommendation.code).toBe("buy");
+    expect(result.actionRecommendation.labelZh).toBe("可以買");
+  });
+
+  it("recommends swapping when multiple confirmed concerns exist", () => {
+    const result = calculateScore({
+      nutrition: {
+        servingSize: 100,
+        servingSizeUnit: "g",
+        totalSugars: 50,
+        sodium: 1500,
+        saturatedFat: 15,
+      },
+      ingredients: [],
+      dataCompleteness: 0.7,
+    });
+
+    expect(result.actionRecommendation.code).toBe("swap");
+    expect(result.actionRecommendation.labelZh).toBe("換一款");
   });
 });
 

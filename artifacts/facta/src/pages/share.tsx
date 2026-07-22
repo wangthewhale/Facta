@@ -57,7 +57,9 @@ export default function ShareCard() {
     isWaterAnalysis ? '飲用水分析' : '資料不足';
   const reportUrl = `${window.location.origin}/report/${productId}`;
   const scoreText = isWaterAnalysis ? '飲用水分析' : hasNumericRating ? `${shareData.overallScore} 分` : '資料不足';
-  const shareText = `${name}｜FACTA ${scoreText}（${scopeLabel}）\n${verdict}`;
+  const actionLabel = lang === 'zh' ? shareData.actionRecommendation.labelZh : shareData.actionRecommendation.label;
+  const actionReason = lang === 'zh' ? shareData.actionRecommendation.reasonZh : shareData.actionRecommendation.reason;
+  const shareText = `${name}｜FACTA 建議：${actionLabel}\n${actionReason}\n${scoreText}（${scopeLabel}）`;
 
   const handleShare = async () => {
     track('share_started', { productId, source: 'share_page' });
@@ -92,10 +94,9 @@ export default function ShareCard() {
   };
 
   let scoreColor = '#F4F1E8';
-  if (shareData.scoreGrade === 'Excellent' || shareData.scoreGrade === 'Good') scoreColor = '#B9F24A';
-  if (shareData.scoreGrade === 'Consider') scoreColor = '#F2B84B';
-  if (shareData.scoreGrade === 'Poor') scoreColor = '#E45145';
-  if (isWaterAnalysis) scoreColor = '#B9F24A';
+  if (shareData.actionRecommendation.code === 'buy') scoreColor = '#B9F24A';
+  if (shareData.actionRecommendation.code === 'limit') scoreColor = '#F2B84B';
+  if (shareData.actionRecommendation.code === 'swap') scoreColor = '#E45145';
 
   return (
     <div className="min-h-screen bg-neutral-900 text-white flex flex-col items-center pb-20">
@@ -143,23 +144,27 @@ export default function ShareCard() {
               <h2 className="text-7xl font-bold leading-tight">{name}</h2>
             </div>
 
-            {/* Score Block */}
-            <div className="flex items-end gap-12 mb-16">
-              <div 
-                className={`${isWaterAnalysis ? 'text-[170px]' : 'text-[250px]'} leading-none font-black font-mono tracking-tighter`}
+            {/* Decision Block */}
+            <div className="mb-16">
+              <p className="text-2xl font-mono uppercase tracking-[0.25em] opacity-60 mb-5">現在怎麼做</p>
+              <div
+                className="text-[170px] leading-none font-black tracking-[-0.08em]"
                 style={{ color: scoreColor }}
               >
-                {isWaterAnalysis ? '補水' : hasNumericRating ? shareData.overallScore : '—'}
+                {actionLabel}
               </div>
-              <div className="pb-12">
+              <p className="text-4xl font-semibold max-w-4xl leading-snug mt-8 opacity-90">
+                {actionReason}
+              </p>
+              <div className="flex items-center gap-5 mt-8">
                 <div 
                   className="px-6 py-2 text-2xl font-bold tracking-widest uppercase mb-4 inline-block"
                   style={{ backgroundColor: scoreColor, color: '#11120F' }}
                 >
                   {scopeLabel}
                 </div>
-                <p className="text-4xl font-semibold max-w-lg leading-snug opacity-90">
-                  {verdict}
+                <p className="text-3xl font-mono font-black mb-4">
+                  {scoreText}
                 </p>
               </div>
             </div>
@@ -183,7 +188,7 @@ export default function ShareCard() {
 
           {/* Footer */}
           <div className="p-12 bg-[#F4F1E8] text-[#11120F] flex justify-between items-center mt-auto">
-            <p className="text-3xl font-bold">買之前，先看懂這一款。</p>
+            <p className="text-3xl font-bold">掃完就知道：買、少吃，還是換一款。</p>
             <p className="text-2xl font-mono font-bold tracking-widest">facta.replit.app</p>
           </div>
           

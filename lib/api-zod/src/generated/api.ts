@@ -283,6 +283,115 @@ export const DeleteMealLogResponse = zod.object({
 
 
 /**
+ * @summary List the choices a household made after FACTA recommendations
+ */
+export const listDecisionOutcomesQuerySessionIdMax = 128;
+
+export const listDecisionOutcomesQueryLimitDefault = 20;
+export const listDecisionOutcomesQueryLimitMax = 100;
+
+
+
+export const ListDecisionOutcomesQueryParams = zod.object({
+  "session_id": zod.coerce.string().min(1).max(listDecisionOutcomesQuerySessionIdMax),
+  "limit": zod.coerce.number().min(1).max(listDecisionOutcomesQueryLimitMax).default(listDecisionOutcomesQueryLimitDefault)
+})
+
+export const ListDecisionOutcomesResponseItem = zod.object({
+  "id": zod.number(),
+  "clientEventId": zod.string(),
+  "sessionId": zod.string(),
+  "productId": zod.number(),
+  "evaluationId": zod.number(),
+  "recommendationCode": zod.enum(['buy', 'limit', 'swap', 'complete_data']),
+  "outcomeCode": zod.enum(['bought', 'skipped', 'limited', 'kept', 'swapped', 'could_not_find', 'will_complete_data']),
+  "selectedAlternativeProductId": zod.number().nullish(),
+  "reasonCode": zod.union([zod.enum(['health', 'allergen', 'ingredients', 'price', 'availability', 'taste', 'family_preference', 'not_concerned', 'other']),zod.null()]).optional(),
+  "note": zod.string().nullish(),
+  "source": zod.string(),
+  "productName": zod.string().nullish(),
+  "productNameZh": zod.string().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "selectedAlternativeName": zod.string().nullish(),
+  "selectedAlternativeNameZh": zod.string().nullish(),
+  "createdAt": zod.string()
+})
+export const ListDecisionOutcomesResponse = zod.array(ListDecisionOutcomesResponseItem)
+
+
+/**
+ * @summary Record what a household chose after seeing a recommendation
+ */
+export const createDecisionOutcomeBodyClientEventIdMin = 8;
+export const createDecisionOutcomeBodyClientEventIdMax = 80;
+
+export const createDecisionOutcomeBodySessionIdMax = 128;
+
+
+
+
+export const createDecisionOutcomeBodyNoteMax = 300;
+
+export const createDecisionOutcomeBodySourceDefault = `report`;
+
+export const CreateDecisionOutcomeBody = zod.object({
+  "clientEventId": zod.string().min(createDecisionOutcomeBodyClientEventIdMin).max(createDecisionOutcomeBodyClientEventIdMax),
+  "sessionId": zod.string().min(1).max(createDecisionOutcomeBodySessionIdMax),
+  "productId": zod.number().min(1),
+  "evaluationId": zod.number().min(1),
+  "recommendationCode": zod.enum(['buy', 'limit', 'swap', 'complete_data']),
+  "outcomeCode": zod.enum(['bought', 'skipped', 'limited', 'kept', 'swapped', 'could_not_find', 'will_complete_data']),
+  "selectedAlternativeProductId": zod.number().min(1).nullish(),
+  "reasonCode": zod.union([zod.enum(['health', 'allergen', 'ingredients', 'price', 'availability', 'taste', 'family_preference', 'not_concerned', 'other']),zod.null()]).optional(),
+  "note": zod.string().max(createDecisionOutcomeBodyNoteMax).nullish(),
+  "source": zod.enum(['report', 'alternatives', 'history']).default(createDecisionOutcomeBodySourceDefault)
+})
+
+export const CreateDecisionOutcomeResponse = zod.object({
+  "id": zod.number(),
+  "clientEventId": zod.string(),
+  "sessionId": zod.string(),
+  "productId": zod.number(),
+  "evaluationId": zod.number(),
+  "recommendationCode": zod.enum(['buy', 'limit', 'swap', 'complete_data']),
+  "outcomeCode": zod.enum(['bought', 'skipped', 'limited', 'kept', 'swapped', 'could_not_find', 'will_complete_data']),
+  "selectedAlternativeProductId": zod.number().nullish(),
+  "reasonCode": zod.union([zod.enum(['health', 'allergen', 'ingredients', 'price', 'availability', 'taste', 'family_preference', 'not_concerned', 'other']),zod.null()]).optional(),
+  "note": zod.string().nullish(),
+  "source": zod.string(),
+  "productName": zod.string().nullish(),
+  "productNameZh": zod.string().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "selectedAlternativeName": zod.string().nullish(),
+  "selectedAlternativeNameZh": zod.string().nullish(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Permanently delete one household decision record
+ */
+
+
+
+export const DeleteDecisionOutcomeParams = zod.object({
+  "id": zod.coerce.number().min(1)
+})
+
+export const deleteDecisionOutcomeQuerySessionIdMax = 128;
+
+
+
+export const DeleteDecisionOutcomeQueryParams = zod.object({
+  "session_id": zod.coerce.string().min(1).max(deleteDecisionOutcomeQuerySessionIdMax)
+})
+
+export const DeleteDecisionOutcomeResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
  * @summary Contextual natural language + structured product search
  */
 export const searchProductsQueryLimitDefault = 20;
@@ -342,7 +451,10 @@ export const SearchProductsResponse = zod.object({
   "specRaw": zod.string().nullish(),
   "priceTwd": zod.number().nullish(),
   "imageUrl": zod.string().nullish(),
-  "sourceUrl": zod.string().nullish()
+  "sourceUrl": zod.string().nullish(),
+  "catalogSourceType": zod.union([zod.literal('retailer_catalog'),zod.literal('official_traceability'),zod.literal(null)]).nullish(),
+  "evidenceTier": zod.union([zod.literal('catalog_only'),zod.literal('nutrition_ready'),zod.literal('ingredients_ready'),zod.literal('review_ready'),zod.literal(null)]).nullish(),
+  "aiEnrichmentStatus": zod.string().nullish()
 })).optional(),
   "total": zod.number().optional(),
   "hasMore": zod.boolean().optional()
@@ -924,7 +1036,15 @@ export const GetProductEvaluationResponse = zod.object({
   "profileNames": zod.array(zod.string()),
   "conditionCount": zod.number(),
   "updatedAt": zod.string().nullish()
-}).optional()
+}).optional(),
+  "actionRecommendation": zod.object({
+  "code": zod.enum(['buy', 'limit', 'swap', 'complete_data']),
+  "label": zod.string(),
+  "labelZh": zod.string(),
+  "reason": zod.string(),
+  "reasonZh": zod.string(),
+  "isPersonalized": zod.boolean()
+})
 })
 
 
@@ -1474,6 +1594,14 @@ export const GetShareCardResponse = zod.object({
   "source": zod.string().nullish()
 })).optional(),
   "evidenceConfidence": zod.string().nullish(),
+  "actionRecommendation": zod.object({
+  "code": zod.enum(['buy', 'limit', 'swap', 'complete_data']),
+  "label": zod.string(),
+  "labelZh": zod.string(),
+  "reason": zod.string(),
+  "reasonZh": zod.string(),
+  "isPersonalized": zod.boolean()
+}),
   "alternativeName": zod.string().nullish(),
   "alternativeNameZh": zod.string().nullish(),
   "rulesetVersion": zod.string().optional(),

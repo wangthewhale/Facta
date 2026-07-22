@@ -66,6 +66,111 @@ export interface AdditiveFlag {
 
 export type AnalysisScope = "complete" | "nutrition_only" | "ingredients_only" | "water" | "insufficient";
 
+export type ProductActionCode = "buy" | "limit" | "swap" | "complete_data";
+
+export interface ProductActionRecommendation {
+  code: ProductActionCode;
+  label: string;
+  labelZh: string;
+  reason: string;
+  reasonZh: string;
+  isPersonalized: boolean;
+}
+
+interface ProductActionInput {
+  analysisScope: AnalysisScope;
+  overallScore: number;
+  evidenceConfidence: "high" | "medium" | "low" | string | null;
+  topReasons?: ScoringReason[] | null;
+  additiveFlags?: AdditiveFlag[] | null;
+}
+
+/**
+ * Turn the evidence report into one immediate consumer action.
+ *
+ * A positive "buy" call is intentionally harder to earn than a numeric score:
+ * both nutrition and ingredient evidence must be complete, confidence must be
+ * high, and no negative reason may remain. Confirmed red flags can still lead
+ * to "limit" or "swap" with partial evidence, while missing evidence never
+ * becomes a positive recommendation.
+ */
+export function recommendProductAction(input: ProductActionInput): ProductActionRecommendation {
+  const negativeReasons = (input.topReasons ?? []).filter(reason => reason.impact === "negative");
+  const hasAvoidIngredient = (input.additiveFlags ?? []).some(flag => flag.riskLevel === "avoid");
+
+  if (input.analysisScope === "water") {
+    return {
+      code: "buy",
+      label: "Good for hydration",
+      labelZh: "可以喝",
+      reason: "The confirmed formula is plain unsweetened water. An alkaline or pH claim is not treated as an added health benefit.",
+      reasonZh: "已確認是無糖、無調味的單純飲用水，適合日常補水；鹼性或 pH 宣稱不算額外健康加分。",
+      isPersonalized: false,
+    };
+  }
+
+  if (input.analysisScope === "insufficient") {
+    return {
+      code: "complete_data",
+      label: "Complete the label",
+      labelZh: "先補資料",
+      reason: "There is not enough verified label evidence to recommend buying, limiting, or swapping this product.",
+      reasonZh: "目前沒有足夠的包裝證據，不能負責任地叫你買、少吃或換掉；先補拍成分與營養標示。",
+      isPersonalized: false,
+    };
+  }
+
+  const strongConcern = hasAvoidIngredient || input.overallScore < 40 || negativeReasons.length >= 2;
+  if (strongConcern) {
+    return {
+      code: "swap",
+      label: "Swap it",
+      labelZh: "換一款",
+      reason: "The verified evidence already shows multiple material concerns or an ingredient to avoid.",
+      reasonZh: "已確認的證據已有多項明顯疑慮，或出現建議避開的成分；先比較同類商品，不要把這款當日常選擇。",
+      isPersonalized: false,
+    };
+  }
+
+  const shouldLimit = input.overallScore < 80 || negativeReasons.length > 0;
+  if (shouldLimit) {
+    const firstConcernZh = negativeReasons[0]?.labelZh;
+    const firstConcern = negativeReasons[0]?.label;
+    return {
+      code: "limit",
+      label: "Have less often",
+      labelZh: "少吃",
+      reason: firstConcern
+        ? `${firstConcern}. Treat this as an occasional rather than everyday choice.`
+        : "The current evidence does not support making this an everyday choice.",
+      reasonZh: firstConcernZh
+        ? `${firstConcernZh}。這項證據已足以建議降低頻率，不要當作每天常吃的選擇。`
+        : "目前證據不支持把這款當作每天常吃的選擇，建議降低頻率。",
+      isPersonalized: false,
+    };
+  }
+
+  if (input.analysisScope !== "complete" || input.evidenceConfidence !== "high") {
+    return {
+      code: "complete_data",
+      label: "Complete the label",
+      labelZh: "先補資料",
+      reason: "The available evidence looks favorable, but it is not complete enough for a positive buying recommendation.",
+      reasonZh: "目前看到的資料偏正向，但成分、過敏原或證據完整度仍不足，還不能直接下「可以買」的結論。",
+      isPersonalized: false,
+    };
+  }
+
+  return {
+    code: "buy",
+    label: "Buy",
+    labelZh: "可以買",
+    reason: "Nutrition and ingredient evidence are complete, confidence is high, and no current red flag was found.",
+    reasonZh: "營養與成分證據已達完整門檻、信心高，且目前沒有找到紅燈指標；可以列入日常選擇。",
+    isPersonalized: false,
+  };
+}
+
 export interface ScoringResult {
   overallScore: number;
   nutritionScore: number | null;
@@ -79,8 +184,11 @@ export interface ScoringResult {
   analysisScope: AnalysisScope;
   nutritionBasis: "per_100g" | "per_100ml" | null;
   ingredientCoverage: number | null;
+  actionRecommendation: ProductActionRecommendation;
   rulesetVersion: string;
 }
+
+type ScoringResultWithoutAction = Omit<ScoringResult, "actionRecommendation" | "rulesetVersion">;
 
 interface NormalizedNutrition {
   foodForm: FoodForm;
@@ -418,7 +526,7 @@ function scorePlainWater(input: ScoringInput): ScoringResult {
     source: WHO_DRINKING_WATER_QUALITY_URL,
   });
 
-  return {
+  const resultWithoutAction: ScoringResultWithoutAction = {
     // Storage compatibility only; the water UI deliberately hides this internal score.
     overallScore: 85,
     nutritionScore: null,
@@ -436,6 +544,10 @@ function scorePlainWater(input: ScoringInput): ScoringResult {
     analysisScope: "water",
     nutritionBasis: normalized?.basis ?? null,
     ingredientCoverage: 1,
+  };
+  return {
+    ...resultWithoutAction,
+    actionRecommendation: recommendProductAction(resultWithoutAction),
     rulesetVersion: RULESET_VERSION,
   };
 }
@@ -497,7 +609,7 @@ export function calculateScore(input: ScoringInput): ScoringResult {
     })
     .slice(0, 6);
 
-  return {
+  const resultWithoutAction: ScoringResultWithoutAction = {
     overallScore: Math.max(0, Math.min(100, overallScore)),
     nutritionScore: nutrition.score,
     additiveScore: additives.score,
@@ -510,6 +622,10 @@ export function calculateScore(input: ScoringInput): ScoringResult {
     analysisScope,
     nutritionBasis: nutrition.basis,
     ingredientCoverage: additives.coverage == null ? null : round(additives.coverage),
+  };
+  return {
+    ...resultWithoutAction,
+    actionRecommendation: recommendProductAction(resultWithoutAction),
     rulesetVersion: RULESET_VERSION,
   };
 }

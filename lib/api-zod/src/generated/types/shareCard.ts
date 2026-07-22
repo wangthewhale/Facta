@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EvaluationReason } from './evaluationReason';
+import type { ProductActionRecommendation } from './productActionRecommendation';
 import type { ShareCardAnalysisScope } from './shareCardAnalysisScope';
 
 export interface ShareCard {
@@ -25,6 +26,7 @@ export interface ShareCard {
   topReasons?: EvaluationReason[];
   /** @nullable */
   evidenceConfidence?: string | null;
+  actionRecommendation: ProductActionRecommendation;
   /** @nullable */
   alternativeName?: string | null;
   /** @nullable */

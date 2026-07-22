@@ -11,6 +11,7 @@ import type { EvaluationAnalysisScope } from './evaluationAnalysisScope';
 import type { EvaluationReason } from './evaluationReason';
 import type { PersonalAlert } from './personalAlert';
 import type { PersonalizationContext } from './personalizationContext';
+import type { ProductActionRecommendation } from './productActionRecommendation';
 
 export interface Evaluation {
   id: number;
@@ -45,4 +46,5 @@ export interface Evaluation {
   allergenAlerts?: AllergenAlert[];
   personalAlerts?: PersonalAlert[];
   personalization?: PersonalizationContext;
+  actionRecommendation: ProductActionRecommendation;
 }

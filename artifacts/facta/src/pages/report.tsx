@@ -3,13 +3,14 @@ import { Link, useLocation, useParams } from 'wouter';
 import { Layout } from '@/components/layout';
 import { useGetProduct, useGetProductEvaluation, useGetAlternatives, useRecordScan, useGetUserGoals, useGetGoalFit, useGetProductNews, useGetProductSafetyCheck } from '@workspace/api-client-react';
 import { useTranslation } from '@/lib/i18n';
-import { AlertTriangle, ArrowRight, CheckCircle2, ChevronRight, Droplets, Info, Link as LinkIcon, Share, TriangleAlert, XOctagon, RefreshCw, Users } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Camera, CheckCircle2, ChevronRight, CircleSlash2, Droplets, Info, Link as LinkIcon, Repeat2, Share, ShoppingBasket, TriangleAlert, Utensils, XOctagon, RefreshCw, Users } from 'lucide-react';
 import { track } from '@/lib/analytics';
 import { startFamilyCheckCheckout } from '@/pages/familyCheck';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getSessionId } from '@/lib/session';
 import { SaveProductButton } from '@/components/save-product-button';
+import { DecisionFeedback } from '@/components/decision-feedback';
 
 export function GradeBadge({ grade, className }: { grade: string, className?: string }) {
   const { t, lang } = useTranslation();
@@ -65,7 +66,7 @@ function AnimatedScore({ score, grade }: { score: number, grade: string }) {
 
   return (
     <div className="flex flex-col items-center justify-center">
-      <div className={cn("text-8xl font-black tracking-tighter leading-none font-mono", textColor)}>
+      <div className={cn("text-6xl font-black tracking-tighter leading-none font-mono", textColor)}>
         {displayScore}
       </div>
     </div>
@@ -467,6 +468,84 @@ export default function Report() {
         : isWaterAnalysis
           ? '飲用水依法可能免營養標示；FACTA 改看配方是否單純、pH 宣稱的界線，以及官方抽驗與近期消息。'
         : '缺少可公平比較的每份量／營養資料，或成分證據尚未達到門檻，因此不判定好壞。';
+  // Keeps the page usable during a rolling deployment where the frontend can
+  // briefly reach an older API instance. The server response remains the
+  // authority as soon as actionRecommendation is available.
+  const fallbackAction = (() => {
+    const negativeCount = evaluation.topReasons?.filter(reason => reason.impact === 'negative').length ?? 0;
+    if (analysisScope === 'water') return {
+      code: 'buy', label: 'Good for hydration', labelZh: '可以喝',
+      reason: 'Plain unsweetened water for everyday hydration.',
+      reasonZh: '已確認是無糖、無調味的單純飲用水，適合日常補水；pH 宣稱不算額外健康加分。',
+      isPersonalized: false,
+    };
+    if (analysisScope === 'insufficient') return {
+      code: 'complete_data', label: 'Complete the label', labelZh: '先補資料',
+      reason: 'More verified label evidence is required.',
+      reasonZh: '目前沒有足夠的包裝證據，先補拍成分與營養標示。',
+      isPersonalized: false,
+    };
+    if (evaluation.overallScore < 40 || negativeCount >= 2) return {
+      code: 'swap', label: 'Swap it', labelZh: '換一款',
+      reason: 'The verified evidence already shows multiple material concerns.',
+      reasonZh: '已確認的證據已有多項明顯疑慮；先比較同類商品，不要把這款當日常選擇。',
+      isPersonalized: false,
+    };
+    if (evaluation.overallScore < 80 || negativeCount > 0) return {
+      code: 'limit', label: 'Have less often', labelZh: '少吃',
+      reason: 'Treat this as an occasional rather than everyday choice.',
+      reasonZh: '目前證據不支持把這款當作每天常吃的選擇，建議降低頻率。',
+      isPersonalized: false,
+    };
+    if (analysisScope !== 'complete') return {
+      code: 'complete_data', label: 'Complete the label', labelZh: '先補資料',
+      reason: 'The evidence is favorable but incomplete.',
+      reasonZh: '目前資料偏正向，但成分或過敏原證據仍不足，還不能直接下「可以買」的結論。',
+      isPersonalized: false,
+    };
+    return {
+      code: 'buy', label: 'Buy', labelZh: '可以買',
+      reason: 'Complete evidence with no current red flag.',
+      reasonZh: '營養與成分證據已達完整門檻，且目前沒有找到紅燈指標；可以列入日常選擇。',
+      isPersonalized: false,
+    };
+  })();
+  const action = (evaluation as any).actionRecommendation ?? fallbackAction;
+  const firstAlternative = alternatives?.[0];
+  const alternativeName = firstAlternative
+    ? (lang === 'zh' && firstAlternative.product.nameZh ? firstAlternative.product.nameZh : firstAlternative.product.name)
+    : null;
+  const submissionQuery = new URLSearchParams({
+    ...(product.barcode ? { barcode: product.barcode } : {}),
+    name,
+    ...(brand ? { brand } : {}),
+  }).toString();
+  const actionHref = action.code === 'complete_data'
+    ? `/submit?${submissionQuery}`
+    : (action.code === 'swap' || action.code === 'limit')
+      ? (firstAlternative ? `/report/${firstAlternative.product.id}` : `/alternatives/${productId}`)
+      : '/scan';
+  const actionCta = action.code === 'complete_data'
+    ? '拍包裝背面補資料'
+    : action.code === 'swap'
+      ? (alternativeName ? `改看 ${alternativeName}` : '找同類更好的選擇')
+      : action.code === 'limit'
+        ? (alternativeName ? `比較 ${alternativeName}` : '找更適合常吃的')
+        : '繼續掃下一款';
+  const actionStyle = action.code === 'buy'
+    ? 'bg-primary text-black'
+    : action.code === 'limit'
+      ? 'bg-[#F2B84B] text-black'
+      : action.code === 'swap'
+        ? 'bg-destructive text-destructive-foreground'
+        : 'bg-foreground text-background';
+  const actionIcon = action.code === 'buy'
+    ? (isWaterAnalysis ? <Droplets className="w-8 h-8" /> : <ShoppingBasket className="w-8 h-8" />)
+    : action.code === 'limit'
+      ? <Utensils className="w-8 h-8" />
+      : action.code === 'swap'
+        ? <Repeat2 className="w-8 h-8" />
+        : <Camera className="w-8 h-8" />;
 
   return (
     <Layout>
@@ -519,8 +598,53 @@ export default function Report() {
           )}
         </div>
 
+        {/* Immediate decision — the score is evidence, this is what to do now. */}
+        <section className={cn('px-6 py-7 border-b border-border', actionStyle)}>
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[11px] font-mono font-black tracking-[0.22em] uppercase opacity-70">現在怎麼做</p>
+            {action.isPersonalized && (
+              <span className="px-2 py-1 border border-current text-[10px] font-black tracking-wider">已套用家庭條件</span>
+            )}
+          </div>
+          <div className="mt-4 flex items-center gap-4">
+            <div className="w-14 h-14 border-2 border-current flex items-center justify-center shrink-0" aria-hidden="true">
+              {actionIcon}
+            </div>
+            <h2 className="text-5xl font-black tracking-[-0.05em] leading-none">
+              {lang === 'zh' ? action.labelZh : action.label}
+            </h2>
+          </div>
+          <p className="mt-5 text-sm font-bold leading-relaxed max-w-md">
+            {lang === 'zh' ? action.reasonZh : action.reason}
+          </p>
+          {action.code === 'swap' && alternativeName && (
+            <p className="mt-3 pt-3 border-t border-current/30 text-xs font-black">
+              同類替代：{alternativeName}
+              {firstAlternative?.scoreImprovement ? `（FACTA +${firstAlternative.scoreImprovement} 分）` : ''}
+            </p>
+          )}
+          <Link
+            href={actionHref}
+            onClick={() => track('decision_cta_clicked', { productId, action: action.code, hasAlternative: Boolean(firstAlternative) })}
+            className="mt-5 min-h-12 px-4 border-2 border-current flex items-center justify-between gap-3 text-sm font-black focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+          >
+            <span>{actionCta}</span>
+            {action.code === 'complete_data' ? <Camera className="w-4 h-4" /> : action.code === 'buy' ? <ShoppingBasket className="w-4 h-4" /> : action.code === 'swap' ? <Repeat2 className="w-4 h-4" /> : <CircleSlash2 className="w-4 h-4" />}
+          </Link>
+        </section>
+
+        <DecisionFeedback
+          productId={productId}
+          evaluationId={evaluation.id}
+          recommendationCode={action.code}
+          alternative={firstAlternative ? {
+            id: firstAlternative.product.id,
+            name: alternativeName || firstAlternative.product.name,
+          } : null}
+        />
+
         {/* Score Section */}
-        <div className="p-10 flex flex-col items-center justify-center border-b border-border relative overflow-hidden">
+        <div className="p-7 flex flex-col items-center justify-center border-b border-border relative overflow-hidden">
           <p className="text-xs font-mono tracking-widest text-muted-foreground uppercase mb-4">{scoreTitle}</p>
           {isWaterAnalysis ? (
             <div className="flex flex-col items-center text-center gap-3">

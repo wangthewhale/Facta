@@ -232,7 +232,7 @@ export default function Search() {
           {!isLoading && data && data.catalogItems && data.catalogItems.length > 0 && (
             <div className="flex flex-col gap-3">
               <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                {lang === 'zh' ? '通路型錄商品' : 'Retail Catalog Items'}
+                {lang === 'zh' ? '公開商品資料・待 FACTA 驗證' : 'Public catalog data · FACTA verification pending'}
               </div>
               {data.catalogItems.map((c) => (
                 <div key={c.factaSeedId} className="bg-card border border-border p-4 flex gap-4">
@@ -250,22 +250,33 @@ export default function Search() {
                     </p>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <span className="px-2 py-0.5 text-[10px] font-bold tracking-wide bg-amber-100 text-amber-800 border border-amber-300">
-                        {lang === 'zh' ? '型錄資料・待標籤驗證' : 'Catalog data · label verification needed'}
+                        {lang === 'zh'
+                          ? c.catalogSourceType === 'official_traceability'
+                            ? c.evidenceTier === 'review_ready'
+                              ? '官方公開資料・標示待核對'
+                              : '官方公開資料・證據待補齊'
+                            : '通路型錄・待標籤驗證'
+                          : 'Public data · label verification needed'}
                       </span>
+                      {c.aiEnrichmentStatus === 'queued' && (
+                        <span className="px-2 py-0.5 text-[10px] font-bold tracking-wide border border-border text-muted-foreground">
+                          AI 標示擷取待處理
+                        </span>
+                      )}
                     </div>
                     <button
                       onClick={() => setLocation(`/submit?name=${encodeURIComponent(c.productName)}&brand=${encodeURIComponent(c.brandRaw ?? '')}`)}
                       className="mt-3 self-start text-[11px] font-bold underline text-primary-strong"
                     >
-                      {lang === 'zh' ? '拍照補標籤資料，解鎖 FACTA 評分 →' : 'Photograph the label to unlock a FACTA score →'}
+                      {lang === 'zh' ? '核對手上包裝，解鎖行動建議 →' : 'Verify the package to unlock an action recommendation →'}
                     </button>
                   </div>
                 </div>
               ))}
               <p className="text-[10px] text-muted-foreground">
                 {lang === 'zh'
-                  ? '型錄商品來自通路公開網頁，尚未經標籤驗證，因此不顯示評分。你補完一款，下一位掃到同款時就能少走一步。'
-                  : 'Catalog items come from public retailer listings and are unscored until label-verified.'}
+                  ? '這些資料來自官方公開資料集或通路頁面，尚未經 FACTA 核對，因此不顯示分數，也不會直接叫你買。你核對一款，下一位就能更快得到可靠結論。'
+                  : 'These public records remain unscored until FACTA verifies the physical label.'}
               </p>
             </div>
           )}
