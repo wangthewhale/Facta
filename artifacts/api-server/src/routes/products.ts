@@ -27,8 +27,29 @@ import {
   mapIngredientList,
   splitIngredientList,
 } from "../lib/ingredientEvidence.js";
+import { resolveConvenienceRetailer } from "../lib/convenienceRetailer.js";
+import {
+  discoverBarcodeFromWeb,
+  stageWebBarcodeCandidate,
+} from "../lib/webBarcodeDiscovery.js";
 
 const router: IRouter = Router();
+const WEB_BARCODE_RATE_LIMIT = 12;
+const WEB_BARCODE_RATE_WINDOW_MS = 10 * 60 * 1000;
+const webBarcodeRateBuckets = new Map<string, { count: number; resetAt: number }>();
+
+function canRunWebBarcodeLookup(clientId: string): boolean {
+  const now = Date.now();
+  const current = webBarcodeRateBuckets.get(clientId);
+  if (!current || current.resetAt <= now) {
+    if (webBarcodeRateBuckets.size >= 5_000) webBarcodeRateBuckets.delete(webBarcodeRateBuckets.keys().next().value ?? "");
+    webBarcodeRateBuckets.set(clientId, { count: 1, resetAt: now + WEB_BARCODE_RATE_WINDOW_MS });
+    return true;
+  }
+  if (current.count >= WEB_BARCODE_RATE_LIMIT) return false;
+  current.count += 1;
+  return true;
+}
 
 async function buildProductSummary(p: typeof productsTable.$inferSelect) {
   const [brand] = p.brandId ? await db.select().from(brandsTable).where(eq(brandsTable.id, p.brandId)) : [null];
@@ -50,6 +71,14 @@ async function buildProductSummary(p: typeof productsTable.$inferSelect) {
 
   const presentation = resolveCatalogProduct(p, barcode?.barcode, brand);
   const canShowScore = presentation.verificationStatus === "verified" && evalRow?.rulesetVersion === RULESET_VERSION;
+  const retailerIdentity = resolveConvenienceRetailer({
+    barcode: presentation.barcode,
+    explicitRetailerName: retailer?.name,
+    explicitRetailerSlug: retailer?.slug,
+    brandNames: [presentation.evidence?.brandName, presentation.evidence?.brandNameZh, presentation.brandName],
+    productNames: [presentation.name, presentation.nameZh],
+    sourceUrls: [presentation.evidence?.productSourceUrl, presentation.evidence?.barcodeSourceUrl],
+  });
 
   return {
     id: p.id,
@@ -63,7 +92,13 @@ async function buildProductSummary(p: typeof productsTable.$inferSelect) {
     overallScore: canShowScore ? evalRow.overallScore : null,
     scoreGrade: canShowScore ? evalRow.scoreGrade : null,
     barcode: presentation.barcode,
-    retailerName: retailer?.name ?? null,
+    retailerName: retailer?.name ?? retailerIdentity.retailerName,
+    retailerSlug: retailer?.slug ?? retailerIdentity.retailerSlug,
+    retailerConfidence: retailer ? "confirmed" : retailerIdentity.retailerConfidence,
+    retailerEvidence: retailer ? "retailer_record" : retailerIdentity.retailerEvidence,
+    retailerReasonZh: retailer
+      ? "商品紀錄已明確連結此販售通路。"
+      : retailerIdentity.retailerReasonZh,
     priceNtd: priceRow?.priceNtd ? parseFloat(priceRow.priceNtd) : null,
   };
 }
@@ -121,15 +156,34 @@ router.get("/products/barcode/:barcode", async (req, res): Promise<void> => {
         }
       } catch (err) {
         req.log.warn({ err, barcode: params.data.barcode }, "external barcode lookup failed");
-        res.status(503).json({ error: "External barcode lookup is temporarily unavailable" });
-        return;
       }
     }
+    if (!catalogCandidate && canRunWebBarcodeLookup(req.ip || "unknown")) {
+      const webResult = await discoverBarcodeFromWeb(params.data.barcode);
+      catalogCandidate = webResult?.candidate ?? null;
+      if (webResult) {
+        // Persist only as an unverified candidate. The physical label still
+        // has to be confirmed before FACTA creates or scores a product.
+        void stageWebBarcodeCandidate(webResult).catch(err => {
+          req.log.warn({ err, barcode: params.data.barcode }, "failed to stage web barcode candidate");
+        });
+      }
+    }
+    const retailerIdentity = catalogCandidate
+      ? {
+          retailerName: catalogCandidate.retailerName,
+          retailerSlug: catalogCandidate.retailerSlug,
+          retailerConfidence: catalogCandidate.retailerConfidence,
+          retailerEvidence: catalogCandidate.retailerEvidence,
+          retailerReasonZh: catalogCandidate.retailerReasonZh,
+        }
+      : resolveConvenienceRetailer({ barcode: params.data.barcode });
     res.status(404).json({
       error: catalogCandidate
         ? "Product identity found in public data; physical label verification is required"
         : "Product not found for this barcode",
       catalogCandidate,
+      retailerIdentity,
     });
     return;
   }
@@ -174,6 +228,14 @@ async function buildFullProduct(p: typeof productsTable.$inferSelect) {
     .where(eq(productAllergensTable.productId, p.id));
 
   const presentation = resolveCatalogProduct(p, barcode?.barcode, brand);
+  const retailerIdentity = resolveConvenienceRetailer({
+    barcode: presentation.barcode,
+    explicitRetailerName: retailer?.name,
+    explicitRetailerSlug: retailer?.slug,
+    brandNames: [presentation.evidence?.brandName, presentation.evidence?.brandNameZh, presentation.brandName],
+    productNames: [presentation.name, presentation.nameZh],
+    sourceUrls: [presentation.evidence?.productSourceUrl, presentation.evidence?.barcodeSourceUrl],
+  });
   const trustedNutrition = presentation.evidence?.nutrition ?? null;
   const canUseDatabaseEvidence = presentation.verificationStatus !== "catalog_unverified";
   const resolvedNutrition = trustedNutrition ?? (canUseDatabaseEvidence && nutrition ? {
@@ -249,7 +311,13 @@ async function buildFullProduct(p: typeof productsTable.$inferSelect) {
     categoryNameZh: category?.nameZh ?? null,
     verificationStatus: presentation.verificationStatus,
     dataCompleteness: presentation.evidence ? 1 : (p.dataCompleteness ? parseFloat(p.dataCompleteness) : null),
-    retailerName: retailer?.name ?? null,
+    retailerName: retailer?.name ?? retailerIdentity.retailerName,
+    retailerSlug: retailer?.slug ?? retailerIdentity.retailerSlug,
+    retailerConfidence: retailer ? "confirmed" : retailerIdentity.retailerConfidence,
+    retailerEvidence: retailer ? "retailer_record" : retailerIdentity.retailerEvidence,
+    retailerReasonZh: retailer
+      ? "商品紀錄已明確連結此販售通路。"
+      : retailerIdentity.retailerReasonZh,
     retailerId: retailer?.id ?? null,
     priceNtd: priceRow?.priceNtd ? parseFloat(priceRow.priceNtd) : null,
     netWeight: presentation.evidence?.netWeight ?? p.netWeight,

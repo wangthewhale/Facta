@@ -13,6 +13,8 @@ export interface Submission {
   brandName?: string | null;
   /** @nullable */
   barcode?: string | null;
+  /** @nullable */
+  retailerSlug?: string | null;
   status: string;
   /** @nullable */
   ocrStatus?: string | null;

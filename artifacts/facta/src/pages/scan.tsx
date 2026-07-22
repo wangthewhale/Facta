@@ -8,12 +8,21 @@ import { getSessionId } from '@/lib/session';
 import { cn } from '@/lib/utils';
 import { track } from '@/lib/analytics';
 
-type ExternalBarcodeCandidate = {
+type RetailerIdentity = {
+  retailerName?: string | null;
+  retailerSlug?: string | null;
+  retailerConfidence?: 'confirmed' | 'strong' | 'possible' | 'unknown';
+  retailerEvidence?: 'retailer_record' | 'official_catalog' | 'package_or_brand' | 'restricted_barcode_only' | 'unknown';
+  retailerReasonZh?: string;
+};
+
+type ExternalBarcodeCandidate = RetailerIdentity & {
   productName: string;
   productNameZh?: string | null;
   brandName?: string | null;
   sourceName: string;
   sourceUrl: string;
+  identityEvidenceUrls?: string[];
   evidenceTier: string;
 };
 
@@ -29,6 +38,7 @@ export default function Scan() {
   const [unknownBarcode, setUnknownBarcode] = useState<string>('');
   const [unverifiedProductName, setUnverifiedProductName] = useState<string>('');
   const [externalCandidate, setExternalCandidate] = useState<ExternalBarcodeCandidate | null>(null);
+  const [retailerIdentity, setRetailerIdentity] = useState<RetailerIdentity | null>(null);
   const [invalidBarcode, setInvalidBarcode] = useState<string>('');
   const [lookupFailed, setLookupFailed] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
@@ -51,13 +61,22 @@ export default function Scan() {
       } else {
         track('unverified_barcode_detected', { barcode: barcodeStr, productId: productData.id });
         setUnverifiedProductName(productData.nameZh || productData.name);
+        setRetailerIdentity({
+          retailerName: productData.retailerName,
+          retailerSlug: productData.retailerSlug,
+          retailerConfidence: productData.retailerConfidence,
+          retailerEvidence: productData.retailerEvidence,
+          retailerReasonZh: productData.retailerReasonZh,
+        });
         setUnknownBarcode(barcodeStr);
       }
     } else if (isError) {
       const status = (error as any)?.status;
       if (status === 404) {
         const candidate = (error as any)?.data?.catalogCandidate as ExternalBarcodeCandidate | null | undefined;
+        const identity = (error as any)?.data?.retailerIdentity as RetailerIdentity | null | undefined;
         setExternalCandidate(candidate ?? null);
+        setRetailerIdentity(candidate ?? identity ?? null);
         if (candidate) setUnverifiedProductName(candidate.productNameZh || candidate.productName);
         // Not in the verified database — show public identity context, then
         // collect the physical label instead of inventing a health conclusion.
@@ -177,6 +196,7 @@ export default function Scan() {
     setUnknownBarcode('');
     setUnverifiedProductName('');
     setExternalCandidate(null);
+    setRetailerIdentity(null);
     if (!isValidRetailBarcode(normalizedCode)) {
       setInvalidBarcode(normalizedCode || code);
       setBarcodeStr('');
@@ -281,6 +301,7 @@ export default function Scan() {
       barcode: unknownBarcode,
       ...(externalCandidate ? { name: externalCandidate.productNameZh || externalCandidate.productName } : {}),
       ...(externalCandidate?.brandName ? { brand: externalCandidate.brandName } : {}),
+      ...(retailerIdentity?.retailerSlug ? { retailer: retailerIdentity.retailerSlug } : {}),
     }).toString();
     return (
       <Layout>
@@ -297,11 +318,31 @@ export default function Scan() {
                 {[externalCandidate.brandName, externalCandidate.productNameZh || externalCandidate.productName].filter(Boolean).join(' · ')}
               </p>
               <p className="text-[11px] text-muted-foreground leading-relaxed">
-                來源是社群公開資料，商品名稱與圖片尚未經 FACTA 核對；請以你手上的包裝為準。
+                {externalCandidate.sourceName === 'Open Food Facts'
+                  ? '來源是社群公開資料，商品名稱與圖片尚未經 FACTA 核對；請以你手上的包裝為準。'
+                  : 'FACTA 以完整條碼找到公開商品頁；這仍是待驗證身分，請用你手上的包裝確認商品名稱、品牌與通路。'}
               </p>
               <a href={externalCandidate.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] font-black underline self-start">
                 查看 {externalCandidate.sourceName} 原始紀錄
               </a>
+            </div>
+          )}
+          {retailerIdentity && (
+            <div className="border-2 border-border bg-card p-4 flex flex-col gap-2">
+              <p className="text-xs font-black tracking-wide">便利商店辨識</p>
+              {retailerIdentity.retailerName ? (
+                <>
+                  <p className="text-lg font-black">{retailerIdentity.retailerName}</p>
+                  <p className="text-[11px] font-bold text-primary-strong">
+                    {retailerIdentity.retailerConfidence === 'confirmed' ? '已由通路紀錄確認' : '包裝／品牌高度吻合，下一步請再確認'}
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm font-black">目前不能只靠這組條碼判定店家</p>
+              )}
+              {retailerIdentity.retailerReasonZh && (
+                <p className="text-[11px] text-muted-foreground leading-relaxed">{retailerIdentity.retailerReasonZh}</p>
+              )}
             </div>
           )}
           <p className="text-sm text-muted-foreground leading-relaxed">
@@ -417,7 +458,7 @@ export default function Scan() {
                   
                   {isFetching && (
                     <div className="bg-black/80 px-4 py-2 text-white font-mono text-xs uppercase tracking-widest animate-pulse">
-                      查詢中⋯
+                      查商品與便利商店中⋯
                     </div>
                   )}
 
@@ -456,7 +497,7 @@ export default function Scan() {
                 className="w-full py-4 bg-foreground text-background font-bold tracking-widest flex items-center justify-center gap-2"
                 disabled={isFetching}
               >
-                {isFetching ? '查詢中⋯' : '查這個條碼'} <ArrowRight className="w-5 h-5" />
+                {isFetching ? '查商品與便利商店中⋯' : '查這個條碼'} <ArrowRight className="w-5 h-5" />
               </button>
             </form>
             <button 

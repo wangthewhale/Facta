@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { OcrResultParsedNutrition } from './ocrResultParsedNutrition';
+import type { OcrResultRetailerConfidence } from './ocrResultRetailerConfidence';
 import type { OcrResultStructuredData } from './ocrResultStructuredData';
 
 export interface OcrResult {
@@ -19,4 +20,11 @@ export interface OcrResult {
   productName?: string | null;
   /** @nullable */
   brandName?: string | null;
+  /** @nullable */
+  retailerName?: string | null;
+  /** @nullable */
+  retailerSlug?: string | null;
+  retailerConfidence?: OcrResultRetailerConfidence;
+  /** @nullable */
+  retailerReasonZh?: string | null;
 }

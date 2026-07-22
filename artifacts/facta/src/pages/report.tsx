@@ -77,30 +77,39 @@ function SafetyAlertSection({ productId }: { productId: number }) {
   const { lang } = useTranslation();
   const { data } = useGetProductSafetyCheck(productId, { query: { staleTime: 10 * 60 * 1000 } as any });
 
-  if (!data?.affected || !data.matches?.length) return null;
+  if (!data?.matches?.length) return null;
+  const hasExactProductMatch = data.affected;
 
   return (
-    <section className="px-6 py-5 bg-red-50 border-y-4 border-red-600">
+    <section id="facta-safety" className={cn(
+      "px-6 py-5 border-y-4",
+      hasExactProductMatch ? "bg-red-50 border-red-600" : "bg-amber-50 border-amber-500",
+    )}>
       {data.matches.map((m, i) => (
         <div key={i} className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
-            <span className="bg-red-600 text-white px-2 py-0.5 text-[10px] font-black tracking-widest uppercase">
-              {lang === 'zh' ? '政府食安警報' : 'GOV FOOD SAFETY ALERT'}
+            <span className={cn(
+              "text-white px-2 py-0.5 text-[10px] font-black tracking-widest uppercase",
+              m.affectsProduct === true ? "bg-red-600" : "bg-amber-600",
+            )}>
+              {lang === 'zh'
+                ? (m.affectsProduct === true ? '本商品官方警報' : '同通路／業者食安事件')
+                : (m.affectsProduct === true ? 'EXACT PRODUCT ALERT' : 'RETAILER / BUSINESS EVENT')}
             </span>
           </div>
-          <h3 className="font-black text-red-700 text-sm leading-snug">
+          <h3 className={cn("font-black text-sm leading-snug", m.affectsProduct === true ? "text-red-700" : "text-amber-900")}>
             {lang === 'zh' ? m.alert.titleZh : m.alert.title}
           </h3>
-          <p className="text-xs text-red-900/90 leading-relaxed">
+          <p className={cn("text-xs leading-relaxed", m.affectsProduct === true ? "text-red-900/90" : "text-amber-950/90")}>
             {lang === 'zh' ? m.alert.summaryZh : m.alert.summary}
           </p>
-          <p className="text-xs font-bold text-red-800">
-            {lang === 'zh'
-              ? `此品牌／業者「${m.matchedBusiness}」名列食藥署公布的受影響業者名單`
-              : `This brand/business "${m.matchedBusiness}" appears on the TFDA affected-business list`}
+          <p className={cn("text-xs font-bold", m.affectsProduct === true ? "text-red-800" : "text-amber-900")}>
+            {lang === 'zh' ? m.statusZh : (m.affectsProduct === true
+              ? 'The official record names this product or barcode.'
+              : 'The same retailer/business appears in the event, but this exact barcode is not confirmed as affected.')}
             {m.productExamples.length > 0 && (
               <span className="font-normal">
-                {lang === 'zh' ? '（受波及產品例：' : ' (affected examples: '}
+                {lang === 'zh' ? '（官方列舉品項：' : ' (official examples: '}
                 {m.productExamples.join('、')}
                 {lang === 'zh' ? '）' : ')'}
               </span>
@@ -111,15 +120,19 @@ function SafetyAlertSection({ productId }: { productId: number }) {
               href={m.alert.officialUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs underline font-bold text-red-700"
+              className={cn("text-xs underline font-bold", m.affectsProduct === true ? "text-red-700" : "text-amber-900")}
             >
               {lang === 'zh' ? '查看食藥署官方完整下架名單 →' : 'View full official TFDA recall list →'}
             </a>
           )}
-          <p className="text-[10px] text-red-900/60">
+          <p className={cn("text-[10px]", m.affectsProduct === true ? "text-red-900/60" : "text-amber-950/60")}>
             {lang === 'zh'
-              ? '注意：此為品牌／業者層級比對，實際受影響品項以食藥署公告為準。'
-              : 'Note: matched at brand/business level; refer to the official TFDA list for exact affected items.'}
+              ? (m.affectsProduct === true
+                ? '請再依官方公告核對有效日期、批號與回收範圍。'
+                : `比對到的業者／通路是「${m.matchedBusiness}」；FACTA 不會因此把同店所有商品都判成受影響。`)
+              : (m.affectsProduct === true
+                ? 'Verify the applicable date, batch and recall scope in the official notice.'
+                : 'FACTA does not treat every product sold by the same retailer as affected.')}
           </p>
         </div>
       ))}
@@ -404,6 +417,9 @@ export default function Report() {
   const { data: decisionNews, isLoading: decisionNewsLoading } = useGetProductNews(productId, {
     query: { enabled: !!productId, staleTime: 5 * 60 * 1000 } as any
   });
+  const { data: decisionSafety, isLoading: decisionSafetyLoading } = useGetProductSafetyCheck(productId, {
+    query: { enabled: !!productId, staleTime: 10 * 60 * 1000 } as any
+  });
 
   const { data: alternatives, isLoading: altLoading } = useGetAlternatives(productId, {
     query: { enabled: !!productId } as any
@@ -520,11 +536,14 @@ export default function Report() {
   const exactAffectedNews = decisionNews?.articles?.find(article =>
     article.affectsProduct === true && (article.reportType === 'official_record' || article.reportType === 'news')
   );
+  const exactAffectedSafety = decisionSafety?.matches?.find(match => match.affectsProduct === true);
+  const exactAffectedEvidence = Boolean(exactAffectedNews || exactAffectedSafety);
   const brandConcernDoesNotNameProduct = !exactAffectedNews &&
-    (decisionNews?.sentiment === 'negative' || decisionNews?.sentiment === 'mixed') &&
-    decisionNews.articles.some(article => article.affectsProduct === false);
+    (((decisionNews?.sentiment === 'negative' || decisionNews?.sentiment === 'mixed') &&
+      decisionNews.articles.some(article => article.affectsProduct === false)) ||
+      decisionSafety?.relatedBusinessReported === true);
   const evidenceAction = (evaluation as any).actionRecommendation ?? fallbackAction;
-  const action = exactAffectedNews ? {
+  const action = exactAffectedEvidence ? {
     code: 'swap',
     label: 'Do not choose this batch',
     labelZh: '先別吃',
@@ -540,15 +559,18 @@ export default function Report() {
     ...(product.barcode ? { barcode: product.barcode } : {}),
     name,
     ...(brand ? { brand } : {}),
+    ...(product.retailerSlug ? { retailer: product.retailerSlug } : {}),
   }).toString();
-  const actionHref = exactAffectedNews
-    ? '#facta-news'
+  const actionHref = exactAffectedSafety
+    ? '#facta-safety'
+    : exactAffectedNews
+      ? '#facta-news'
     : action.code === 'complete_data'
     ? `/submit?${submissionQuery}`
     : (action.code === 'swap' || action.code === 'limit')
       ? (firstAlternative ? `/report/${firstAlternative.product.id}` : `/alternatives/${productId}`)
       : '/scan';
-  const actionCta = exactAffectedNews
+  const actionCta = exactAffectedEvidence
     ? '查看本商品食安證據'
     : action.code === 'complete_data'
     ? '拍包裝背面補資料'
@@ -583,6 +605,12 @@ export default function Report() {
               <p className="text-xs font-mono tracking-widest text-muted-foreground uppercase">{brand || 'UNKNOWN BRAND'}</p>
               <h1 className="text-2xl font-bold leading-tight mt-1">{name}</h1>
               {product.barcode && <p className="text-xs text-muted-foreground font-mono mt-2">{product.barcode}</p>}
+              {product.retailerName && (
+                <p className="text-xs font-bold mt-2">
+                  {product.retailerName}
+                  <span className="font-normal text-muted-foreground"> · {product.retailerConfidence === 'confirmed' ? '通路已確認' : '包裝／品牌辨識'}</span>
+                </p>
+              )}
             </div>
             {product.imageUrl && (
               <img src={product.imageUrl} alt={name} className="w-20 h-20 object-contain mix-blend-multiply" />
@@ -645,8 +673,10 @@ export default function Report() {
           <div className="mt-4 border border-current/35 bg-background/10 p-3 text-xs leading-relaxed">
             <p className="font-black tracking-wide">AI 食安查核</p>
             <p className="mt-1 font-semibold">
-              {decisionNewsLoading
+              {decisionNewsLoading || decisionSafetyLoading
                 ? '正在查近 365 天的商品、品牌與官方食安消息…'
+                : exactAffectedSafety
+                  ? `食藥署事件資料可對應本商品：${exactAffectedSafety.alert.titleZh}`
                 : exactAffectedNews
                   ? `來源明確指向本商品：${exactAffectedNews.title}`
                   : brandConcernDoesNotNameProduct

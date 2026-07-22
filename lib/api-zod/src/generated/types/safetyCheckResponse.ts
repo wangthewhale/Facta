@@ -9,5 +9,6 @@ import type { SafetyAlertMatch } from './safetyAlertMatch';
 
 export interface SafetyCheckResponse {
   affected: boolean;
+  relatedBusinessReported: boolean;
   matches: SafetyAlertMatch[];
 }

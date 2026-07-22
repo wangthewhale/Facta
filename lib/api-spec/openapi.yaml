@@ -1391,20 +1391,27 @@ components:
             $ref: "#/components/schemas/SafetyAlert"
     SafetyAlertMatch:
       type: object
-      required: [alert, matchedBusiness, matchedKeyword, productExamples]
+      required: [alert, matchedBusiness, matchedKeyword, productExamples, matchScope, statusZh]
       properties:
         alert:
           $ref: "#/components/schemas/SafetyAlert"
         matchedBusiness: { type: string }
         matchedKeyword: { type: string }
+        matchedProductExample: { type: ["string", "null"] }
         productExamples:
           type: array
           items: { type: string }
+        matchScope:
+          type: string
+          enum: [exact_product, business]
+        affectsProduct: { type: ["boolean", "null"] }
+        statusZh: { type: string }
     SafetyCheckResponse:
       type: object
-      required: [affected, matches]
+      required: [affected, relatedBusinessReported, matches]
       properties:
         affected: { type: boolean }
+        relatedBusinessReported: { type: boolean }
         matches:
           type: array
           items:
@@ -1504,9 +1511,23 @@ components:
         severity: { type: string }
         source:   { type: ["string", "null"] }
 
+    RetailerIdentity:
+      type: object
+      required: [retailerName, retailerSlug, retailerConfidence, retailerEvidence, retailerReasonZh]
+      properties:
+        retailerName: { type: ["string", "null"] }
+        retailerSlug: { type: ["string", "null"] }
+        retailerConfidence:
+          type: string
+          enum: [confirmed, strong, possible, unknown]
+        retailerEvidence:
+          type: string
+          enum: [retailer_record, official_catalog, package_or_brand, restricted_barcode_only, unknown]
+        retailerReasonZh: { type: string }
+
     ExternalBarcodeCandidate:
       type: object
-      required: [barcode, productName, evidenceTier, sourceName, sourceUrl, verificationStatus]
+      required: [barcode, productName, evidenceTier, sourceName, sourceUrl, identityEvidenceUrls, verificationStatus, retailerName, retailerSlug, retailerConfidence, retailerEvidence, retailerReasonZh]
       properties:
         barcode:       { type: string }
         productName:   { type: string }
@@ -1518,15 +1539,29 @@ components:
           enum: [catalog_only, nutrition_ready, ingredients_ready, review_ready]
         sourceName:    { type: string }
         sourceUrl:     { type: string }
+        identityEvidenceUrls:
+          type: array
+          items: { type: string }
         verificationStatus:
           type: string
           enum: [external_unverified]
+        retailerName: { type: ["string", "null"] }
+        retailerSlug: { type: ["string", "null"] }
+        retailerConfidence:
+          type: string
+          enum: [confirmed, strong, possible, unknown]
+        retailerEvidence:
+          type: string
+          enum: [retailer_record, official_catalog, package_or_brand, restricted_barcode_only, unknown]
+        retailerReasonZh: { type: string }
 
     BarcodeNotFoundResponse:
       type: object
-      required: [error]
+      required: [error, retailerIdentity]
       properties:
         error: { type: string }
+        retailerIdentity:
+          $ref: "#/components/schemas/RetailerIdentity"
         catalogCandidate:
           anyOf:
             - $ref: "#/components/schemas/ExternalBarcodeCandidate"
@@ -1548,6 +1583,14 @@ components:
         scoreGrade:         { type: ["string", "null"] }
         barcode:            { type: ["string", "null"] }
         retailerName:       { type: ["string", "null"] }
+        retailerSlug:       { type: ["string", "null"] }
+        retailerConfidence:
+          type: string
+          enum: [confirmed, strong, possible, unknown]
+        retailerEvidence:
+          type: string
+          enum: [retailer_record, official_catalog, package_or_brand, restricted_barcode_only, unknown]
+        retailerReasonZh:   { type: string }
         priceNtd:           { type: ["number", "null"] }
 
     Product:
@@ -1566,6 +1609,14 @@ components:
         verificationStatus: { type: string }
         dataCompleteness:   { type: ["number", "null"] }
         retailerName:       { type: ["string", "null"] }
+        retailerSlug:       { type: ["string", "null"] }
+        retailerConfidence:
+          type: string
+          enum: [confirmed, strong, possible, unknown]
+        retailerEvidence:
+          type: string
+          enum: [retailer_record, official_catalog, package_or_brand, restricted_barcode_only, unknown]
+        retailerReasonZh:   { type: string }
         retailerId:         { type: ["integer", "null"] }
         priceNtd:           { type: ["number", "null"] }
         netWeight:          { type: ["string", "null"] }
@@ -1870,6 +1921,12 @@ components:
           additionalProperties: true
         productName:        { type: ["string", "null"] }
         brandName:          { type: ["string", "null"] }
+        retailerName:       { type: ["string", "null"] }
+        retailerSlug:       { type: ["string", "null"] }
+        retailerConfidence:
+          type: string
+          enum: [confirmed, strong, possible, unknown]
+        retailerReasonZh:   { type: ["string", "null"] }
 
     SubmissionInput:
       type: object
@@ -1903,6 +1960,7 @@ components:
         productName:     { type: string }
         brandName:       { type: ["string", "null"] }
         barcode:         { type: ["string", "null"] }
+        retailerSlug:    { type: ["string", "null"] }
         status:          { type: string }
         ocrStatus:       { type: ["string", "null"] }
         extractedIngredients: { type: ["string", "null"] }

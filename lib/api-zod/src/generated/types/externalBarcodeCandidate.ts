@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ExternalBarcodeCandidateEvidenceTier } from './externalBarcodeCandidateEvidenceTier';
+import type { ExternalBarcodeCandidateRetailerConfidence } from './externalBarcodeCandidateRetailerConfidence';
+import type { ExternalBarcodeCandidateRetailerEvidence } from './externalBarcodeCandidateRetailerEvidence';
 import type { ExternalBarcodeCandidateVerificationStatus } from './externalBarcodeCandidateVerificationStatus';
 
 export interface ExternalBarcodeCandidate {
@@ -20,5 +22,13 @@ export interface ExternalBarcodeCandidate {
   evidenceTier: ExternalBarcodeCandidateEvidenceTier;
   sourceName: string;
   sourceUrl: string;
+  identityEvidenceUrls: string[];
   verificationStatus: ExternalBarcodeCandidateVerificationStatus;
+  /** @nullable */
+  retailerName: string | null;
+  /** @nullable */
+  retailerSlug: string | null;
+  retailerConfidence: ExternalBarcodeCandidateRetailerConfidence;
+  retailerEvidence: ExternalBarcodeCandidateRetailerEvidence;
+  retailerReasonZh: string;
 }

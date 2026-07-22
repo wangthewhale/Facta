@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { pool } from "@workspace/db";
+import { resolveConvenienceRetailer, type RetailerIdentity } from "./convenienceRetailer.js";
 
 const OFF_API_BASE = "https://world.openfoodfacts.org/api/v3/product";
 const OFF_SOURCE_KEY = "open_food_facts";
@@ -25,15 +26,16 @@ type OffResponse = {
   product?: OffProduct;
 };
 
-export interface ExternalBarcodeCandidate {
+export interface ExternalBarcodeCandidate extends RetailerIdentity {
   barcode: string;
   productName: string;
   productNameZh: string | null;
   brandName: string | null;
   imageUrl: string | null;
   evidenceTier: "catalog_only" | "nutrition_ready" | "ingredients_ready" | "review_ready";
-  sourceName: "Open Food Facts";
+  sourceName: "Open Food Facts" | "FACTA Web Identity";
   sourceUrl: string;
+  identityEvidenceUrls: string[];
   verificationStatus: "external_unverified";
 }
 
@@ -122,6 +124,11 @@ export async function lookupOpenFoodFacts(barcode: string): Promise<{ candidate:
         : ingredients
           ? "ingredients_ready"
           : "catalog_only";
+    const retailerIdentity = resolveConvenienceRetailer({
+      barcode,
+      brandNames: [text(product.brands)?.split(",")[0]?.trim()],
+      productNames: [text(product.product_name_zh), text(product.product_name)],
+    });
     const result: { candidate: ExternalBarcodeCandidate; rawProduct: OffProduct } = {
       candidate: {
         barcode,
@@ -132,7 +139,9 @@ export async function lookupOpenFoodFacts(barcode: string): Promise<{ candidate:
         evidenceTier,
         sourceName: "Open Food Facts",
         sourceUrl: sourceUrl(barcode),
+        identityEvidenceUrls: [sourceUrl(barcode)],
         verificationStatus: "external_unverified",
+        ...retailerIdentity,
       },
       rawProduct: product,
     };
@@ -152,8 +161,9 @@ export async function lookupStagedBarcodeCandidate(barcode: string): Promise<Ext
       image_urls: unknown;
       evidence_tier: ExternalBarcodeCandidate["evidenceTier"];
       source_url: string;
+      source_key: string;
     }>(`
-      select product_name, brand_name, image_urls, evidence_tier, source_url
+      select product_name, brand_name, image_urls, evidence_tier, source_url, source_key
       from catalog_import_candidates
       where gtin = $1
         and verification_status in ('imported_unverified', 'pending_review')
@@ -162,12 +172,20 @@ export async function lookupStagedBarcodeCandidate(barcode: string): Promise<Ext
         when 'nutrition_ready' then 1
         when 'ingredients_ready' then 2
         else 3
-      end
+      end,
+      case when source_key = 'facta_web_identity' then 0 else 1 end,
+      last_seen_at desc
       limit 1
     `, [barcode]);
     const row = result.rows[0];
     if (!row) return null;
     const images = Array.isArray(row.image_urls) ? row.image_urls.filter((item): item is string => typeof item === "string") : [];
+    const retailerIdentity = resolveConvenienceRetailer({
+      barcode,
+      brandNames: [row.brand_name],
+      productNames: [row.product_name],
+      sourceUrls: [row.source_url],
+    });
     return {
       barcode,
       productName: row.product_name,
@@ -175,9 +193,11 @@ export async function lookupStagedBarcodeCandidate(barcode: string): Promise<Ext
       brandName: row.brand_name,
       imageUrl: images[0] ?? null,
       evidenceTier: row.evidence_tier,
-      sourceName: "Open Food Facts",
+      sourceName: row.source_key === "facta_web_identity" ? "FACTA Web Identity" : "Open Food Facts",
       sourceUrl: row.source_url,
+      identityEvidenceUrls: [row.source_url],
       verificationStatus: "external_unverified",
+      ...retailerIdentity,
     };
   } catch (error) {
     if ((error as { code?: string }).code === "42P01") return null;

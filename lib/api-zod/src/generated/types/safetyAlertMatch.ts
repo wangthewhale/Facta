@@ -6,10 +6,17 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { SafetyAlert } from './safetyAlert';
+import type { SafetyAlertMatchMatchScope } from './safetyAlertMatchMatchScope';
 
 export interface SafetyAlertMatch {
   alert: SafetyAlert;
   matchedBusiness: string;
   matchedKeyword: string;
+  /** @nullable */
+  matchedProductExample?: string | null;
   productExamples: string[];
+  matchScope: SafetyAlertMatchMatchScope;
+  /** @nullable */
+  affectsProduct?: boolean | null;
+  statusZh: string;
 }

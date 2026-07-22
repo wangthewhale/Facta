@@ -422,6 +422,10 @@ export const SearchProductsResponse = zod.object({
   "scoreGrade": zod.string().nullish(),
   "barcode": zod.string().nullish(),
   "retailerName": zod.string().nullish(),
+  "retailerSlug": zod.string().nullish(),
+  "retailerConfidence": zod.enum(['confirmed', 'strong', 'possible', 'unknown']).optional(),
+  "retailerEvidence": zod.enum(['retailer_record', 'official_catalog', 'package_or_brand', 'restricted_barcode_only', 'unknown']).optional(),
+  "retailerReasonZh": zod.string().optional(),
   "priceNtd": zod.number().nullish()
 }),
   "relevanceLabel": zod.string(),
@@ -614,6 +618,10 @@ export const GetCollectionResponse = zod.object({
   "scoreGrade": zod.string().nullish(),
   "barcode": zod.string().nullish(),
   "retailerName": zod.string().nullish(),
+  "retailerSlug": zod.string().nullish(),
+  "retailerConfidence": zod.enum(['confirmed', 'strong', 'possible', 'unknown']).optional(),
+  "retailerEvidence": zod.enum(['retailer_record', 'official_catalog', 'package_or_brand', 'restricted_barcode_only', 'unknown']).optional(),
+  "retailerReasonZh": zod.string().optional(),
   "priceNtd": zod.number().nullish()
 }).optional(),
   "reason": zod.string().nullish(),
@@ -881,6 +889,10 @@ export const ListProductsResponseItem = zod.object({
   "scoreGrade": zod.string().nullish(),
   "barcode": zod.string().nullish(),
   "retailerName": zod.string().nullish(),
+  "retailerSlug": zod.string().nullish(),
+  "retailerConfidence": zod.enum(['confirmed', 'strong', 'possible', 'unknown']).optional(),
+  "retailerEvidence": zod.enum(['retailer_record', 'official_catalog', 'package_or_brand', 'restricted_barcode_only', 'unknown']).optional(),
+  "retailerReasonZh": zod.string().optional(),
   "priceNtd": zod.number().nullish()
 })
 export const ListProductsResponse = zod.array(ListProductsResponseItem)
@@ -906,6 +918,10 @@ export const GetProductByBarcodeResponse = zod.object({
   "verificationStatus": zod.string(),
   "dataCompleteness": zod.number().nullish(),
   "retailerName": zod.string().nullish(),
+  "retailerSlug": zod.string().nullish(),
+  "retailerConfidence": zod.enum(['confirmed', 'strong', 'possible', 'unknown']).optional(),
+  "retailerEvidence": zod.enum(['retailer_record', 'official_catalog', 'package_or_brand', 'restricted_barcode_only', 'unknown']).optional(),
+  "retailerReasonZh": zod.string().optional(),
   "retailerId": zod.number().nullish(),
   "priceNtd": zod.number().nullish(),
   "netWeight": zod.string().nullish(),
@@ -967,6 +983,10 @@ export const GetProductResponse = zod.object({
   "verificationStatus": zod.string(),
   "dataCompleteness": zod.number().nullish(),
   "retailerName": zod.string().nullish(),
+  "retailerSlug": zod.string().nullish(),
+  "retailerConfidence": zod.enum(['confirmed', 'strong', 'possible', 'unknown']).optional(),
+  "retailerEvidence": zod.enum(['retailer_record', 'official_catalog', 'package_or_brand', 'restricted_barcode_only', 'unknown']).optional(),
+  "retailerReasonZh": zod.string().optional(),
   "retailerId": zod.number().nullish(),
   "priceNtd": zod.number().nullish(),
   "netWeight": zod.string().nullish(),
@@ -1107,6 +1127,10 @@ export const GetAlternativesResponseItem = zod.object({
   "scoreGrade": zod.string().nullish(),
   "barcode": zod.string().nullish(),
   "retailerName": zod.string().nullish(),
+  "retailerSlug": zod.string().nullish(),
+  "retailerConfidence": zod.enum(['confirmed', 'strong', 'possible', 'unknown']).optional(),
+  "retailerEvidence": zod.enum(['retailer_record', 'official_catalog', 'package_or_brand', 'restricted_barcode_only', 'unknown']).optional(),
+  "retailerReasonZh": zod.string().optional(),
   "priceNtd": zod.number().nullish()
 }),
   "scoreImprovement": zod.number().nullish(),
@@ -1145,6 +1169,10 @@ export const DiscoverAlternativesResponse = zod.object({
   "scoreGrade": zod.string().nullish(),
   "barcode": zod.string().nullish(),
   "retailerName": zod.string().nullish(),
+  "retailerSlug": zod.string().nullish(),
+  "retailerConfidence": zod.enum(['confirmed', 'strong', 'possible', 'unknown']).optional(),
+  "retailerEvidence": zod.enum(['retailer_record', 'official_catalog', 'package_or_brand', 'restricted_barcode_only', 'unknown']).optional(),
+  "retailerReasonZh": zod.string().optional(),
   "priceNtd": zod.number().nullish()
 }),
   "scoreImprovement": zod.number().nullish(),
@@ -1264,6 +1292,7 @@ export const CreateSubmissionResponse = zod.object({
   "productName": zod.string(),
   "brandName": zod.string().nullish(),
   "barcode": zod.string().nullish(),
+  "retailerSlug": zod.string().nullish(),
   "status": zod.string(),
   "ocrStatus": zod.string().nullish(),
   "extractedIngredients": zod.string().nullish(),
@@ -1289,6 +1318,7 @@ export const GetSubmissionResponse = zod.object({
   "productName": zod.string(),
   "brandName": zod.string().nullish(),
   "barcode": zod.string().nullish(),
+  "retailerSlug": zod.string().nullish(),
   "status": zod.string(),
   "ocrStatus": zod.string().nullish(),
   "extractedIngredients": zod.string().nullish(),
@@ -1322,6 +1352,7 @@ export const ConfirmOcrResponse = zod.object({
   "productName": zod.string(),
   "brandName": zod.string().nullish(),
   "barcode": zod.string().nullish(),
+  "retailerSlug": zod.string().nullish(),
   "status": zod.string(),
   "ocrStatus": zod.string().nullish(),
   "extractedIngredients": zod.string().nullish(),
@@ -1380,6 +1411,7 @@ export const GetProductSafetyCheckParams = zod.object({
 
 export const GetProductSafetyCheckResponse = zod.object({
   "affected": zod.boolean(),
+  "relatedBusinessReported": zod.boolean(),
   "matches": zod.array(zod.object({
   "alert": zod.object({
   "id": zod.number(),
@@ -1397,7 +1429,11 @@ export const GetProductSafetyCheckResponse = zod.object({
 }),
   "matchedBusiness": zod.string(),
   "matchedKeyword": zod.string(),
-  "productExamples": zod.array(zod.string())
+  "matchedProductExample": zod.string().nullish(),
+  "productExamples": zod.array(zod.string()),
+  "matchScope": zod.enum(['exact_product', 'business']),
+  "affectsProduct": zod.boolean().nullish(),
+  "statusZh": zod.string()
 }))
 })
 
@@ -1448,7 +1484,11 @@ export const ProcessOcrResponse = zod.object({
   "rawIngredients": zod.string().nullish(),
   "parsedNutrition": zod.record(zod.string(), zod.unknown()).optional(),
   "productName": zod.string().nullish(),
-  "brandName": zod.string().nullish()
+  "brandName": zod.string().nullish(),
+  "retailerName": zod.string().nullish(),
+  "retailerSlug": zod.string().nullish(),
+  "retailerConfidence": zod.enum(['confirmed', 'strong', 'possible', 'unknown']).optional(),
+  "retailerReasonZh": zod.string().nullish()
 })
 
 
@@ -1764,6 +1804,10 @@ export const ListRecentProductsResponseItem = zod.object({
   "scoreGrade": zod.string().nullish(),
   "barcode": zod.string().nullish(),
   "retailerName": zod.string().nullish(),
+  "retailerSlug": zod.string().nullish(),
+  "retailerConfidence": zod.enum(['confirmed', 'strong', 'possible', 'unknown']).optional(),
+  "retailerEvidence": zod.enum(['retailer_record', 'official_catalog', 'package_or_brand', 'restricted_barcode_only', 'unknown']).optional(),
+  "retailerReasonZh": zod.string().optional(),
   "priceNtd": zod.number().nullish()
 })
 export const ListRecentProductsResponse = zod.array(ListRecentProductsResponseItem)
@@ -1785,6 +1829,7 @@ export const AdminListPendingResponseItem = zod.object({
   "productName": zod.string(),
   "brandName": zod.string().nullish(),
   "barcode": zod.string().nullish(),
+  "retailerSlug": zod.string().nullish(),
   "status": zod.string(),
   "ocrStatus": zod.string().nullish(),
   "extractedIngredients": zod.string().nullish(),
@@ -1816,6 +1861,7 @@ export const AdminVerifySubmissionResponse = zod.object({
   "productName": zod.string(),
   "brandName": zod.string().nullish(),
   "barcode": zod.string().nullish(),
+  "retailerSlug": zod.string().nullish(),
   "status": zod.string(),
   "ocrStatus": zod.string().nullish(),
   "extractedIngredients": zod.string().nullish(),
@@ -1846,6 +1892,7 @@ export const AdminRejectSubmissionResponse = zod.object({
   "productName": zod.string(),
   "brandName": zod.string().nullish(),
   "barcode": zod.string().nullish(),
+  "retailerSlug": zod.string().nullish(),
   "status": zod.string(),
   "ocrStatus": zod.string().nullish(),
   "extractedIngredients": zod.string().nullish(),
@@ -1889,6 +1936,10 @@ export const AdminUpdateProductResponse = zod.object({
   "verificationStatus": zod.string(),
   "dataCompleteness": zod.number().nullish(),
   "retailerName": zod.string().nullish(),
+  "retailerSlug": zod.string().nullish(),
+  "retailerConfidence": zod.enum(['confirmed', 'strong', 'possible', 'unknown']).optional(),
+  "retailerEvidence": zod.enum(['retailer_record', 'official_catalog', 'package_or_brand', 'restricted_barcode_only', 'unknown']).optional(),
+  "retailerReasonZh": zod.string().optional(),
   "retailerId": zod.number().nullish(),
   "priceNtd": zod.number().nullish(),
   "netWeight": zod.string().nullish(),

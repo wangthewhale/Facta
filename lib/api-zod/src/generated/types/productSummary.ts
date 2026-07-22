@@ -5,6 +5,8 @@
  * FACTA — Independent product intelligence API
  * OpenAPI spec version: 0.1.0
  */
+import type { ProductSummaryRetailerConfidence } from './productSummaryRetailerConfidence';
+import type { ProductSummaryRetailerEvidence } from './productSummaryRetailerEvidence';
 
 export interface ProductSummary {
   id: number;
@@ -28,6 +30,11 @@ export interface ProductSummary {
   barcode?: string | null;
   /** @nullable */
   retailerName?: string | null;
+  /** @nullable */
+  retailerSlug?: string | null;
+  retailerConfidence?: ProductSummaryRetailerConfidence;
+  retailerEvidence?: ProductSummaryRetailerEvidence;
+  retailerReasonZh?: string;
   /** @nullable */
   priceNtd?: number | null;
 }

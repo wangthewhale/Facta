@@ -4,6 +4,7 @@ import { db } from "@workspace/db";
 import {
   productSubmissionsTable, productsTable, brandsTable, barcodesTable,
   nutritionFactsTable, productEvaluationsTable, ingredientsTable,
+  retailersTable, productRetailerPricesTable,
 } from "@workspace/db";
 import {
   GetSubmissionParams, ConfirmOcrParams, ConfirmOcrBody,
@@ -12,6 +13,10 @@ import {
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { calculateScore, resolveAnalysisScope } from "../lib/scoring.js";
 import { mapIngredientList } from "../lib/ingredientEvidence.js";
+import {
+  getConvenienceRetailerBySlug,
+  resolveConvenienceRetailer,
+} from "../lib/convenienceRetailer.js";
 
 const router: IRouter = Router();
 
@@ -62,6 +67,7 @@ function submissionToApi(s: typeof productSubmissionsTable.$inferSelect) {
     productName: s.productName,
     brandName: s.brandName,
     barcode: s.barcode,
+    retailerSlug: s.retailerSlug,
     status: s.status,
     ocrStatus: s.ocrStatus,
     extractedIngredients: s.extractedIngredients,
@@ -103,6 +109,8 @@ Extract text from food product label images. Return a JSON object with:
 - extractedText: the full raw text extracted
 - productName: the full detailed product name exactly as printed on the label (e.g. "愛之味雙纖麥仔茶 590ml"), or null if not visible
 - brandName: the brand/manufacturer name as printed (e.g. "愛之味"), or null if not visible
+- retailerName: the convenience-store chain visibly printed on the package or shelf label
+  (7-ELEVEN, FamilyMart/全家, Hi-Life/萊爾富, or OKmart/OK超商), or null if it is not visible
 - rawIngredients: the ingredients list if visible (as a single string)
 - parsedNutrition: an object with numeric nutrition values if a nutrition facts panel is visible
   (servingSize, servingSizeUnit, calories, totalFat, saturatedFat, transFat, sodium, totalCarbs, dietaryFiber, totalSugars, protein — values exactly as shown per labelled serving)
@@ -139,6 +147,13 @@ Do not invent data. If something is not visible, set it to null. Return only the
       parsed2 = { extractedText: content, confidence: 0.3 };
     }
 
+    const retailerIdentity = resolveConvenienceRetailer({
+      barcode: null,
+      brandNames: [parsed2.brandName],
+      productNames: [parsed2.productName],
+      packageText: [parsed2.retailerName, parsed2.extractedText],
+    });
+
     res.json({
       extractedText: parsed2.extractedText ?? content,
       confidence: parsed2.confidence ?? 0.5,
@@ -147,6 +162,10 @@ Do not invent data. If something is not visible, set it to null. Return only the
       parsedNutrition: parsed2.parsedNutrition ?? null,
       productName: typeof parsed2.productName === "string" && parsed2.productName.trim() ? parsed2.productName.trim() : null,
       brandName: typeof parsed2.brandName === "string" && parsed2.brandName.trim() ? parsed2.brandName.trim() : null,
+      retailerName: retailerIdentity.retailerName,
+      retailerSlug: retailerIdentity.retailerSlug,
+      retailerConfidence: retailerIdentity.retailerConfidence,
+      retailerReasonZh: retailerIdentity.retailerReasonZh,
     });
   } catch (err) {
     req.log.warn({ err }, "OCR AI unavailable");
@@ -291,6 +310,32 @@ router.post("/submissions/:id/finalize", async (req, res): Promise<void> => {
         ingredientsList: submission.extractedIngredients,
         netWeight,
       }).returning();
+
+      // A user-confirmed package retailer is stored as an availability link.
+      // It deliberately carries no price because the package photo proves the
+      // channel identity, not a current shelf price.
+      const retailerDefinition = getConvenienceRetailerBySlug(submission.retailerSlug);
+      if (retailerDefinition) {
+        const [retailer] = await tx.insert(retailersTable)
+          .values({
+            name: retailerDefinition.name,
+            slug: retailerDefinition.slug,
+            country: "TW",
+          })
+          .onConflictDoUpdate({
+            target: retailersTable.slug,
+            set: { name: retailerDefinition.name },
+          })
+          .returning();
+        await tx.insert(productRetailerPricesTable).values({
+          productId: product.id,
+          retailerId: retailer.id,
+          priceNtd: null,
+          isAvailable: "true",
+          sourceUrl: null,
+          retrievedAt: new Date(),
+        });
+      }
 
       // Attach barcode
       if (submission.barcode) {

@@ -8,6 +8,8 @@
 import type { AllergenAlert } from './allergenAlert';
 import type { IngredientItem } from './ingredientItem';
 import type { NutritionFact } from './nutritionFact';
+import type { ProductRetailerConfidence } from './productRetailerConfidence';
+import type { ProductRetailerEvidence } from './productRetailerEvidence';
 
 export interface Product {
   id: number;
@@ -31,6 +33,11 @@ export interface Product {
   dataCompleteness?: number | null;
   /** @nullable */
   retailerName?: string | null;
+  /** @nullable */
+  retailerSlug?: string | null;
+  retailerConfidence?: ProductRetailerConfidence;
+  retailerEvidence?: ProductRetailerEvidence;
+  retailerReasonZh?: string;
   /** @nullable */
   retailerId?: number | null;
   /** @nullable */

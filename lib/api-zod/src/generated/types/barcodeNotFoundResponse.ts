@@ -6,8 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ExternalBarcodeCandidate } from './externalBarcodeCandidate';
+import type { RetailerIdentity } from './retailerIdentity';
 
 export interface BarcodeNotFoundResponse {
   error: string;
+  retailerIdentity: RetailerIdentity;
   catalogCandidate?: ExternalBarcodeCandidate | null;
 }

@@ -1,16 +1,28 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
 import { db } from "@workspace/db";
-import { productsTable, brandsTable, barcodesTable, productNewsTable } from "@workspace/db";
+import {
+  productsTable,
+  brandsTable,
+  barcodesTable,
+  productNewsTable,
+  productRetailerPricesTable,
+  retailersTable,
+} from "@workspace/db";
 import { GetProductNewsParams } from "@workspace/api-zod";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { CATALOG_EVIDENCE_UPDATED_AT, resolveCatalogProduct } from "../lib/catalogEvidence.js";
+import {
+  getConvenienceRetailerSearchTerms,
+  resolveConvenienceRetailer,
+} from "../lib/convenienceRetailer.js";
 
 const router: IRouter = Router();
 
 /** Product news should feel current; stale data is labelled instead of silently reused. */
 const NEWS_TTL_MS = 24 * 60 * 60 * 1000;
 const NEWS_LOOKBACK_DAYS = 365;
+const RETAILER_NEWS_CONTEXT_UPDATED_AT = new Date("2026-07-23T00:00:00+08:00");
 
 type ReportType = "news" | "official_record" | "advertorial" | "press_release" | "unknown";
 type NewsScope = "product" | "brand" | "company";
@@ -200,10 +212,23 @@ router.get("/products/:id/news", async (req, res): Promise<void> => {
     : [null];
   const [barcode] = await db.select().from(barcodesTable)
     .where(eq(barcodesTable.productId, product.id)).limit(1);
+  const [priceRow] = await db.select({ retailerId: productRetailerPricesTable.retailerId })
+    .from(productRetailerPricesTable).where(eq(productRetailerPricesTable.productId, product.id)).limit(1);
+  const [retailer] = priceRow?.retailerId
+    ? await db.select().from(retailersTable).where(eq(retailersTable.id, priceRow.retailerId))
+    : [null];
 
   const catalogProduct = resolveCatalogProduct(product, barcode?.barcode, brand);
+  const retailerIdentity = resolveConvenienceRetailer({
+    barcode: catalogProduct.barcode,
+    explicitRetailerName: retailer?.name,
+    explicitRetailerSlug: retailer?.slug,
+    brandNames: [catalogProduct.evidence?.brandName, catalogProduct.evidence?.brandNameZh, catalogProduct.brandName],
+    productNames: [catalogProduct.name, catalogProduct.nameZh],
+    sourceUrls: [catalogProduct.evidence?.productSourceUrl, catalogProduct.evidence?.barcodeSourceUrl],
+  });
   const hasUserConfirmedIdentity = product.verificationStatus === "provisional" &&
-    !!barcode?.barcode && !!brand?.name?.trim() && !!product.name.trim();
+    !!barcode?.barcode && !!product.name.trim() && !!(brand?.name?.trim() || retailerIdentity.retailerSlug);
   if (catalogProduct.verificationStatus !== "verified" && !hasUserConfirmedIdentity) {
     res.json({
       sentiment: "none",
@@ -224,9 +249,15 @@ router.get("/products/:id/news", async (req, res): Promise<void> => {
     catalogProduct.evidence?.brandName,
     catalogProduct.brandName,
   ].filter(Boolean))] as string[];
+  const retailerNames = [...new Set([
+    retailer?.name,
+    retailerIdentity.retailerName,
+    ...getConvenienceRetailerSearchTerms(retailerIdentity.retailerSlug),
+  ].filter(Boolean))] as string[];
   const productLabel = productNames[0] || `product ${product.id}`;
   const brandLabel = brandNames[0] || "unknown brand";
-  const query = `${brandLabel}｜${productLabel}`;
+  const retailerLabel = retailerNames[0] || null;
+  const query = [retailerLabel, brandLabel, productLabel].filter(Boolean).join("｜");
 
   const [cached] = await db.select().from(productNewsTable)
     .where(eq(productNewsTable.productId, product.id));
@@ -250,7 +281,11 @@ router.get("/products/:id/news", async (req, res): Promise<void> => {
     return;
   }
 
-  const cacheMatchesCurrentIdentity = !catalogProduct.evidence || cached?.fetchedAt.getTime() >= CATALOG_EVIDENCE_UPDATED_AT.getTime();
+  const identityUpdatedAt = Math.max(
+    catalogProduct.evidence ? CATALOG_EVIDENCE_UPDATED_AT.getTime() : 0,
+    RETAILER_NEWS_CONTEXT_UPDATED_AT.getTime(),
+  );
+  const cacheMatchesCurrentIdentity = Boolean(cached && cached.fetchedAt.getTime() >= identityUpdatedAt);
   if (cached && cacheMatchesCurrentIdentity && Date.now() - cached.fetchedAt.getTime() < NEWS_TTL_MS) {
     res.json(newsToApi(cached, cachedArticles.length === 0 && cached.sentiment === "none" ? "no_results" : "cached", query));
     return;
@@ -271,9 +306,10 @@ router.get("/products/:id/news", async (req, res): Promise<void> => {
 
 Exact product names: ${productNames.map(name => `"${name}"`).join(", ") || `"${productLabel}"`}
 Brand/company names: ${brandNames.map(name => `"${name}"`).join(", ") || `"${brandLabel}"`}
+Convenience-store/retailer names: ${retailerNames.map(name => `"${name}"`).join(", ") || "not identified"}
 Confirmed package barcode: ${catalogProduct.barcode || "not available"}
 
-Run separate searches for: (1) the exact product name; (2) the brand/company plus 食安, 回收, 下架, 違規, 污染, 裁罰, 認證, 檢驗; (3) the newest general brand news. Include relevant brand/company incidents even when the exact product is not named, but never imply that the exact product is affected unless a source explicitly says so. Prefer TFDA or other official records and independent journalism. Verify the publication date and original URL. Deduplicate rewritten versions of the same event.
+Run separate searches for: (1) the exact product name and barcode; (2) the brand/company plus 食安, 回收, 下架, 違規, 污染, 裁罰, 認證, 檢驗; (3) the identified retailer/company plus the exact product; (4) the identified retailer/company plus 致癌油, 問題油, 苯(a)駢芘, BaP, 回收, 下架; (5) the newest general brand news. Include relevant brand, supplier or retailer incidents even when the exact product is not named, but never imply that the exact product is affected unless a source explicitly names the product, barcode, or applicable batch. Prefer current TFDA/health-department records and independent journalism. Verify the publication date and original URL. Deduplicate rewritten versions of the same event.
 
 Classify each result:
 - reportType "official_record": government, court, regulator, or certification-body record
@@ -281,7 +317,7 @@ Classify each result:
 - reportType "advertorial": sponsored/paid brand content (廣編、業配、品牌專區、贊助內容)
 - reportType "press_release": company release or lightly rewritten PR
 - reportType "unknown": cannot determine
-- scope "product" only when the exact product is named; otherwise "brand" or "company"
+- scope "product" only when the exact product/barcode is named; retailer-wide, supplier-wide and company-wide events use "company"
 - affectsProduct true only with explicit evidence the exact product is affected; false when sources identify other products; null when unclear
 
 Overall sentiment may use only official_record and news. Absence of negative news is NOT positive evidence. If a serious brand event exists but the exact product is not implicated, reflect the brand-level concern and clearly state the exact product status in both summaries.

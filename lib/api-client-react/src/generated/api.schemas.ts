@@ -62,15 +62,30 @@ export interface SafetyAlertsResponse {
   alerts: SafetyAlert[];
 }
 
+export type SafetyAlertMatchMatchScope = typeof SafetyAlertMatchMatchScope[keyof typeof SafetyAlertMatchMatchScope];
+
+
+export const SafetyAlertMatchMatchScope = {
+  exact_product: 'exact_product',
+  business: 'business',
+} as const;
+
 export interface SafetyAlertMatch {
   alert: SafetyAlert;
   matchedBusiness: string;
   matchedKeyword: string;
+  /** @nullable */
+  matchedProductExample?: string | null;
   productExamples: string[];
+  matchScope: SafetyAlertMatchMatchScope;
+  /** @nullable */
+  affectsProduct?: boolean | null;
+  statusZh: string;
 }
 
 export interface SafetyCheckResponse {
   affected: boolean;
+  relatedBusinessReported: boolean;
   matches: SafetyAlertMatch[];
 }
 
@@ -211,6 +226,37 @@ export interface AllergenAlert {
   source?: string | null;
 }
 
+export type RetailerIdentityRetailerConfidence = typeof RetailerIdentityRetailerConfidence[keyof typeof RetailerIdentityRetailerConfidence];
+
+
+export const RetailerIdentityRetailerConfidence = {
+  confirmed: 'confirmed',
+  strong: 'strong',
+  possible: 'possible',
+  unknown: 'unknown',
+} as const;
+
+export type RetailerIdentityRetailerEvidence = typeof RetailerIdentityRetailerEvidence[keyof typeof RetailerIdentityRetailerEvidence];
+
+
+export const RetailerIdentityRetailerEvidence = {
+  retailer_record: 'retailer_record',
+  official_catalog: 'official_catalog',
+  package_or_brand: 'package_or_brand',
+  restricted_barcode_only: 'restricted_barcode_only',
+  unknown: 'unknown',
+} as const;
+
+export interface RetailerIdentity {
+  /** @nullable */
+  retailerName: string | null;
+  /** @nullable */
+  retailerSlug: string | null;
+  retailerConfidence: RetailerIdentityRetailerConfidence;
+  retailerEvidence: RetailerIdentityRetailerEvidence;
+  retailerReasonZh: string;
+}
+
 export type ExternalBarcodeCandidateEvidenceTier = typeof ExternalBarcodeCandidateEvidenceTier[keyof typeof ExternalBarcodeCandidateEvidenceTier];
 
 
@@ -228,6 +274,27 @@ export const ExternalBarcodeCandidateVerificationStatus = {
   external_unverified: 'external_unverified',
 } as const;
 
+export type ExternalBarcodeCandidateRetailerConfidence = typeof ExternalBarcodeCandidateRetailerConfidence[keyof typeof ExternalBarcodeCandidateRetailerConfidence];
+
+
+export const ExternalBarcodeCandidateRetailerConfidence = {
+  confirmed: 'confirmed',
+  strong: 'strong',
+  possible: 'possible',
+  unknown: 'unknown',
+} as const;
+
+export type ExternalBarcodeCandidateRetailerEvidence = typeof ExternalBarcodeCandidateRetailerEvidence[keyof typeof ExternalBarcodeCandidateRetailerEvidence];
+
+
+export const ExternalBarcodeCandidateRetailerEvidence = {
+  retailer_record: 'retailer_record',
+  official_catalog: 'official_catalog',
+  package_or_brand: 'package_or_brand',
+  restricted_barcode_only: 'restricted_barcode_only',
+  unknown: 'unknown',
+} as const;
+
 export interface ExternalBarcodeCandidate {
   barcode: string;
   productName: string;
@@ -240,13 +307,43 @@ export interface ExternalBarcodeCandidate {
   evidenceTier: ExternalBarcodeCandidateEvidenceTier;
   sourceName: string;
   sourceUrl: string;
+  identityEvidenceUrls: string[];
   verificationStatus: ExternalBarcodeCandidateVerificationStatus;
+  /** @nullable */
+  retailerName: string | null;
+  /** @nullable */
+  retailerSlug: string | null;
+  retailerConfidence: ExternalBarcodeCandidateRetailerConfidence;
+  retailerEvidence: ExternalBarcodeCandidateRetailerEvidence;
+  retailerReasonZh: string;
 }
 
 export interface BarcodeNotFoundResponse {
   error: string;
+  retailerIdentity: RetailerIdentity;
   catalogCandidate?: ExternalBarcodeCandidate | null;
 }
+
+export type ProductSummaryRetailerConfidence = typeof ProductSummaryRetailerConfidence[keyof typeof ProductSummaryRetailerConfidence];
+
+
+export const ProductSummaryRetailerConfidence = {
+  confirmed: 'confirmed',
+  strong: 'strong',
+  possible: 'possible',
+  unknown: 'unknown',
+} as const;
+
+export type ProductSummaryRetailerEvidence = typeof ProductSummaryRetailerEvidence[keyof typeof ProductSummaryRetailerEvidence];
+
+
+export const ProductSummaryRetailerEvidence = {
+  retailer_record: 'retailer_record',
+  official_catalog: 'official_catalog',
+  package_or_brand: 'package_or_brand',
+  restricted_barcode_only: 'restricted_barcode_only',
+  unknown: 'unknown',
+} as const;
 
 export interface ProductSummary {
   id: number;
@@ -271,8 +368,34 @@ export interface ProductSummary {
   /** @nullable */
   retailerName?: string | null;
   /** @nullable */
+  retailerSlug?: string | null;
+  retailerConfidence?: ProductSummaryRetailerConfidence;
+  retailerEvidence?: ProductSummaryRetailerEvidence;
+  retailerReasonZh?: string;
+  /** @nullable */
   priceNtd?: number | null;
 }
+
+export type ProductRetailerConfidence = typeof ProductRetailerConfidence[keyof typeof ProductRetailerConfidence];
+
+
+export const ProductRetailerConfidence = {
+  confirmed: 'confirmed',
+  strong: 'strong',
+  possible: 'possible',
+  unknown: 'unknown',
+} as const;
+
+export type ProductRetailerEvidence = typeof ProductRetailerEvidence[keyof typeof ProductRetailerEvidence];
+
+
+export const ProductRetailerEvidence = {
+  retailer_record: 'retailer_record',
+  official_catalog: 'official_catalog',
+  package_or_brand: 'package_or_brand',
+  restricted_barcode_only: 'restricted_barcode_only',
+  unknown: 'unknown',
+} as const;
 
 export interface Product {
   id: number;
@@ -296,6 +419,11 @@ export interface Product {
   dataCompleteness?: number | null;
   /** @nullable */
   retailerName?: string | null;
+  /** @nullable */
+  retailerSlug?: string | null;
+  retailerConfidence?: ProductRetailerConfidence;
+  retailerEvidence?: ProductRetailerEvidence;
+  retailerReasonZh?: string;
   /** @nullable */
   retailerId?: number | null;
   /** @nullable */
@@ -592,6 +720,16 @@ export type OcrResultStructuredData = { [key: string]: unknown };
 
 export type OcrResultParsedNutrition = { [key: string]: unknown };
 
+export type OcrResultRetailerConfidence = typeof OcrResultRetailerConfidence[keyof typeof OcrResultRetailerConfidence];
+
+
+export const OcrResultRetailerConfidence = {
+  confirmed: 'confirmed',
+  strong: 'strong',
+  possible: 'possible',
+  unknown: 'unknown',
+} as const;
+
 export interface OcrResult {
   extractedText: string;
   confidence: number;
@@ -603,6 +741,13 @@ export interface OcrResult {
   productName?: string | null;
   /** @nullable */
   brandName?: string | null;
+  /** @nullable */
+  retailerName?: string | null;
+  /** @nullable */
+  retailerSlug?: string | null;
+  retailerConfidence?: OcrResultRetailerConfidence;
+  /** @nullable */
+  retailerReasonZh?: string | null;
 }
 
 export interface SubmissionInput {
@@ -640,6 +785,8 @@ export interface Submission {
   brandName?: string | null;
   /** @nullable */
   barcode?: string | null;
+  /** @nullable */
+  retailerSlug?: string | null;
   status: string;
   /** @nullable */
   ocrStatus?: string | null;

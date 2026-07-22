@@ -15,6 +15,7 @@ import { resolveCatalogProduct } from "../lib/catalogEvidence.js";
 import { expandCatalogSearchTerms, scoreCatalogCandidate } from "../lib/catalogDiscovery.js";
 import { discoverLiveCatalog } from "../lib/liveCatalogDiscovery.js";
 import { sanitizeCommerceBrand } from "../lib/alternativeDiscovery.js";
+import { resolveConvenienceRetailer } from "../lib/convenienceRetailer.js";
 
 const router: IRouter = Router();
 
@@ -66,7 +67,10 @@ function parseNaturalLanguage(q: string) {
 
   // Retailer detection
   const retailerMap: Record<string, string> = {
-    "7-eleven": "7eleven", "seven": "7eleven", "全家": "family-mart",
+    "7-eleven": "7eleven", "7-11": "7eleven", "小七": "7eleven", "seven": "7eleven",
+    "全家": "family-mart", "familymart": "family-mart",
+    "萊爾富": "hi-life", "hi-life": "hi-life", "hilife": "hi-life",
+    "okmart": "ok-mart", "ok超商": "ok-mart",
     "全聯": "pxmart", "家樂福": "carrefour", "costco": "costco",
   };
   for (const [term, slug] of Object.entries(retailerMap)) {
@@ -88,7 +92,7 @@ function parseNaturalLanguage(q: string) {
   else if (lq.match(/皮膚|skin/)) filters.goalSlug = "skin_health";
 
   // Remaining keywords for text search
-  const cleanQ = q.replace(/7-eleven|seven|全家|全聯|家樂福|costco|早餐|午餐|晚餐|點心|蛋白質|protein|體脂|減重|皮膚|skin/gi, "").trim();
+  const cleanQ = q.replace(/7-eleven|7-11|seven|小七|全家|familymart|萊爾富|hi-life|hilife|okmart|ok超商|全聯|家樂福|costco|早餐|午餐|晚餐|點心|蛋白質|protein|體脂|減重|皮膚|skin/gi, "").trim();
   if (cleanQ) filters.keywords = cleanQ.split(/\s+/).filter(Boolean);
 
   return filters;
@@ -159,6 +163,15 @@ router.get("/search", async (req, res): Promise<void> => {
 
     const presentation = resolveCatalogProduct(p, barcode?.barcode, brand);
     if (presentation.verificationStatus !== "verified") return null;
+    const retailerIdentity = resolveConvenienceRetailer({
+      barcode: presentation.barcode,
+      explicitRetailerName: retailer?.name,
+      explicitRetailerSlug: retailer?.slug,
+      brandNames: [presentation.evidence?.brandName, presentation.evidence?.brandNameZh, presentation.brandName],
+      productNames: [presentation.name, presentation.nameZh],
+      sourceUrls: [presentation.evidence?.productSourceUrl, presentation.evidence?.barcodeSourceUrl],
+    });
+    const resolvedRetailerSlug = retailer?.slug ?? retailerIdentity.retailerSlug;
     const canShowScore = evalRow?.rulesetVersion === RULESET_VERSION;
     const productSummary = {
       id: p.id, name: presentation.name, nameZh: presentation.nameZh,
@@ -168,13 +181,17 @@ router.get("/search", async (req, res): Promise<void> => {
       overallScore: canShowScore ? evalRow.overallScore : null,
       scoreGrade: canShowScore ? evalRow.scoreGrade : null,
       barcode: presentation.barcode,
-      retailerName: retailer?.name ?? null,
+      retailerName: retailer?.name ?? retailerIdentity.retailerName,
+      retailerSlug: resolvedRetailerSlug,
+      retailerConfidence: retailer ? "confirmed" : retailerIdentity.retailerConfidence,
+      retailerEvidence: retailer ? "retailer_record" : retailerIdentity.retailerEvidence,
+      retailerReasonZh: retailer ? "商品紀錄已明確連結此販售通路。" : retailerIdentity.retailerReasonZh,
       priceNtd: priceRow?.priceNtd ? parseFloat(priceRow.priceNtd) : null,
     };
 
     // Filter by retailer
-    if (retailer_slug && retailer?.slug !== retailer_slug) return null;
-    if (nlFilters.retailerSlugs && nlFilters.retailerSlugs.length > 0 && !nlFilters.retailerSlugs.includes(retailer?.slug ?? "")) return null;
+    if (retailer_slug && resolvedRetailerSlug !== retailer_slug) return null;
+    if (nlFilters.retailerSlugs && nlFilters.retailerSlugs.length > 0 && !nlFilters.retailerSlugs.includes(resolvedRetailerSlug ?? "")) return null;
 
     let fitLevel: string | null = null;
     const matchReasons: string[] = [];

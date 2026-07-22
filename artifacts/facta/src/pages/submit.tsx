@@ -66,6 +66,7 @@ export default function Submit() {
   const initialBarcode = params.get('barcode') || '';
   const initialName = params.get('name') || '';
   const initialBrand = params.get('brand') || '';
+  const initialRetailer = params.get('retailer') || '';
   const [, setLocation] = useLocation();
   const sessionId = getSessionId();
 
@@ -75,6 +76,7 @@ export default function Submit() {
   // OCR results (user-confirmable)
   const [productName, setProductName] = useState(initialName);
   const [brandName, setBrandName] = useState(initialBrand);
+  const [retailerSlug, setRetailerSlug] = useState(initialRetailer);
   const [extractedText, setExtractedText] = useState('');
   const [parsedNutrition, setParsedNutrition] = useState<NutritionDraft | null>(null);
   const [nutritionLoading, setNutritionLoading] = useState(false);
@@ -159,6 +161,7 @@ export default function Submit() {
       setParsedNutrition(normalizeNutritionDraft(ocrRes.parsedNutrition));
       if (ocrRes.productName) setProductName(prev => (ocrRes.productName!.length > prev.length ? ocrRes.productName! : prev));
       if (ocrRes.brandName) setBrandName(prev => prev || ocrRes.brandName!);
+      if (ocrRes.retailerSlug) setRetailerSlug(prev => prev || ocrRes.retailerSlug!);
       setStep('confirm');
     } catch (err) {
       console.error(err);
@@ -181,6 +184,7 @@ export default function Submit() {
       setParsedNutrition(previous => ({ ...(previous || {}), ...Object.fromEntries(Object.entries(next).filter(([, value]) => value != null)) }));
       if (ocrRes.productName) setProductName(previous => previous || ocrRes.productName!);
       if (ocrRes.brandName) setBrandName(previous => previous || ocrRes.brandName!);
+      if (ocrRes.retailerSlug) setRetailerSlug(previous => previous || ocrRes.retailerSlug!);
       track('photo_selected', { kind: 'nutrition' });
     } catch {
       setErrorMsg('營養標示沒有辨識成功，可直接在下方手動輸入。');
@@ -213,6 +217,7 @@ export default function Submit() {
           productName: productName.trim() || '未命名商品（待確認）',
           brandName: brandName.trim(),
           barcode: barcode.trim(),
+          ...(retailerSlug ? { retailerSlug } : {}),
           userSession: sessionId,
           userConsented: consented,
         }
@@ -354,6 +359,23 @@ export default function Submit() {
             </div>
 
             <div className="flex flex-col gap-2">
+              <label htmlFor="retailer-input" className="text-xs font-bold uppercase tracking-widest">在哪家便利商店看到？（選填）</label>
+              <select
+                id="retailer-input"
+                className="p-4 border-2 border-border focus:border-foreground bg-background outline-none font-medium"
+                value={retailerSlug}
+                onChange={e => setRetailerSlug(e.target.value)}
+              >
+                <option value="">不確定／不是便利商店</option>
+                <option value="7eleven">7-ELEVEN</option>
+                <option value="family-mart">全家 FamilyMart</option>
+                <option value="hi-life">萊爾富 Hi-Life</option>
+                <option value="ok-mart">OKmart</option>
+              </select>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">AI 會先讀包裝 Logo；請你最後確認。這項資料用來查同通路的回收、問題油與官方公告，不會只靠條碼前綴猜店家。</p>
+            </div>
+
+            <div className="flex flex-col gap-2">
               <label htmlFor="ingredients-text" className="text-xs font-bold uppercase tracking-widest">成分表（請對照包裝，可修改）</label>
               <textarea
                 id="ingredients-text"
@@ -438,7 +460,7 @@ export default function Submit() {
             <label className="flex items-start gap-3 border border-border bg-muted/50 p-4 cursor-pointer">
               <input type="checkbox" checked={consented} onChange={e => setConsented(e.target.checked)} className="mt-0.5 w-4 h-4 accent-black" />
               <span className="text-[11px] leading-relaxed">
-                我已對照包裝確認，並同意保存上述商品文字與營養數值，供 FACTA 建立待驗證商品。原始照片不寫入 FACTA 商品資料庫。
+                我已對照包裝確認，並同意保存上述商品文字、便利商店通路與營養數值，供 FACTA 建立待驗證商品。原始照片不寫入 FACTA 商品資料庫。
               </span>
             </label>
 
