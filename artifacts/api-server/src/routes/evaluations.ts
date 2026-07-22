@@ -196,7 +196,7 @@ router.get("/evaluations/product/:productId", async (req, res): Promise<void> =>
     scoreGrade: evaluation.scoreGrade,
     verdict: evaluation.verdict,
     verdictZh: evaluation.verdictZh,
-    verificationStatus: evaluation.verificationStatus,
+    verificationStatus: catalogProduct?.verificationStatus ?? evaluation.verificationStatus,
     dataCompleteness: evaluation.dataCompleteness ? parseFloat(evaluation.dataCompleteness) : null,
     evidenceConfidence: evaluation.evidenceConfidence,
     rulesetVersion: evaluation.rulesetVersion,
