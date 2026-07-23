@@ -265,7 +265,9 @@ async function main() {
         });
       }
     }
-    if ((fetched.payload.products?.length ?? 0) < options.pageSize) break;
+    const returnedRows = fetched.payload.products?.length ?? 0;
+    const reachedReportedEnd = sourceTotal != null && page * options.pageSize >= sourceTotal;
+    if (returnedRows === 0 || reachedReportedEnd || (sourceTotal == null && returnedRows < options.pageSize)) break;
     if (offset < options.maxPages - 1 && options.delayMs > 0) await sleep(options.delayMs);
   }
 
