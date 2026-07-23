@@ -16,6 +16,7 @@ import collectionsRouter from "./collections.js";
 import newsRouter from "./news.js";
 import safetyAlertsRouter from "./safetyAlerts.js";
 import decisionOutcomesRouter from "./decisionOutcomes.js";
+import scientificEvidenceRouter from "./scientificEvidence.js";
 
 const router = Router();
 
@@ -36,5 +37,6 @@ router.use(collectionsRouter);
 router.use(newsRouter);
 router.use(safetyAlertsRouter);
 router.use(decisionOutcomesRouter);
+router.use(scientificEvidenceRouter);
 
 export default router;

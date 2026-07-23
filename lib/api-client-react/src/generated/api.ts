@@ -61,6 +61,7 @@ import type {
   ListMealLogsParams,
   ListProductsParams,
   ListRecentProductsParams,
+  ListScientificEvidenceSourcesParams,
   LiveCatalogDiscovery,
   MealLog,
   MealLogInput,
@@ -69,6 +70,7 @@ import type {
   OcrResult,
   Product,
   ProductNewsResponse,
+  ProductScientificEvidence,
   ProductSummary,
   ProductUpdate,
   Retailer,
@@ -77,6 +79,9 @@ import type {
   SafetyCheckResponse,
   ScanEvent,
   ScanEventInput,
+  ScientificEvidenceStats,
+  ScientificEvidenceTopic,
+  ScientificEvidenceTopicSources,
   SearchProductsParams,
   SearchResults,
   ShareCard,
@@ -4535,6 +4540,326 @@ export function useAdminListCorrections<TData = Awaited<ReturnType<typeof adminL
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getAdminListCorrectionsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetScientificEvidenceStatsUrl = () => {
+
+
+
+
+  return `/api/evidence/stats`
+}
+
+/**
+ * @summary Get scientific evidence library coverage and integrity statistics
+ */
+export const getScientificEvidenceStats = async ( options?: RequestInit): Promise<ScientificEvidenceStats> => {
+
+  return customFetch<ScientificEvidenceStats>(getGetScientificEvidenceStatsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetScientificEvidenceStatsQueryKey = () => {
+    return [
+    `/api/evidence/stats`
+    ] as const;
+    }
+
+
+export const getGetScientificEvidenceStatsQueryOptions = <TData = Awaited<ReturnType<typeof getScientificEvidenceStats>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getScientificEvidenceStats>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetScientificEvidenceStatsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getScientificEvidenceStats>>> = ({ signal }) => getScientificEvidenceStats({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getScientificEvidenceStats>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetScientificEvidenceStatsQueryResult = NonNullable<Awaited<ReturnType<typeof getScientificEvidenceStats>>>
+export type GetScientificEvidenceStatsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get scientific evidence library coverage and integrity statistics
+ */
+
+export function useGetScientificEvidenceStats<TData = Awaited<ReturnType<typeof getScientificEvidenceStats>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getScientificEvidenceStats>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetScientificEvidenceStatsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListScientificEvidenceTopicsUrl = () => {
+
+
+
+
+  return `/api/evidence/topics`
+}
+
+/**
+ * @summary List indexed scientific evidence topics
+ */
+export const listScientificEvidenceTopics = async ( options?: RequestInit): Promise<ScientificEvidenceTopic[]> => {
+
+  return customFetch<ScientificEvidenceTopic[]>(getListScientificEvidenceTopicsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListScientificEvidenceTopicsQueryKey = () => {
+    return [
+    `/api/evidence/topics`
+    ] as const;
+    }
+
+
+export const getListScientificEvidenceTopicsQueryOptions = <TData = Awaited<ReturnType<typeof listScientificEvidenceTopics>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listScientificEvidenceTopics>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListScientificEvidenceTopicsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listScientificEvidenceTopics>>> = ({ signal }) => listScientificEvidenceTopics({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listScientificEvidenceTopics>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListScientificEvidenceTopicsQueryResult = NonNullable<Awaited<ReturnType<typeof listScientificEvidenceTopics>>>
+export type ListScientificEvidenceTopicsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List indexed scientific evidence topics
+ */
+
+export function useListScientificEvidenceTopics<TData = Awaited<ReturnType<typeof listScientificEvidenceTopics>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listScientificEvidenceTopics>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListScientificEvidenceTopicsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListScientificEvidenceSourcesUrl = (topic: string,
+    params?: ListScientificEvidenceSourcesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/evidence/topics/${topic}/sources?${stringifiedParams}` : `/api/evidence/topics/${topic}/sources`
+}
+
+/**
+ * @summary List non-retracted source metadata for one evidence topic
+ */
+export const listScientificEvidenceSources = async (topic: string,
+    params?: ListScientificEvidenceSourcesParams, options?: RequestInit): Promise<ScientificEvidenceTopicSources> => {
+
+  return customFetch<ScientificEvidenceTopicSources>(getListScientificEvidenceSourcesUrl(topic,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListScientificEvidenceSourcesQueryKey = (topic: string,
+    params?: ListScientificEvidenceSourcesParams,) => {
+    return [
+    `/api/evidence/topics/${topic}/sources`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListScientificEvidenceSourcesQueryOptions = <TData = Awaited<ReturnType<typeof listScientificEvidenceSources>>, TError = ErrorType<unknown>>(topic: string,
+    params?: ListScientificEvidenceSourcesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listScientificEvidenceSources>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListScientificEvidenceSourcesQueryKey(topic,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listScientificEvidenceSources>>> = ({ signal }) => listScientificEvidenceSources(topic,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: topic !== null && topic !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listScientificEvidenceSources>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListScientificEvidenceSourcesQueryResult = NonNullable<Awaited<ReturnType<typeof listScientificEvidenceSources>>>
+export type ListScientificEvidenceSourcesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List non-retracted source metadata for one evidence topic
+ */
+
+export function useListScientificEvidenceSources<TData = Awaited<ReturnType<typeof listScientificEvidenceSources>>, TError = ErrorType<unknown>>(
+ topic: string,
+    params?: ListScientificEvidenceSourcesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listScientificEvidenceSources>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListScientificEvidenceSourcesQueryOptions(topic,params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetProductScientificEvidenceUrl = (id: number,) => {
+
+
+
+
+  return `/api/products/${id}/scientific-evidence`
+}
+
+/**
+ * @summary Match one product's confirmed ingredients and nutrition to indexed evidence topics
+ */
+export const getProductScientificEvidence = async (id: number, options?: RequestInit): Promise<ProductScientificEvidence> => {
+
+  return customFetch<ProductScientificEvidence>(getGetProductScientificEvidenceUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetProductScientificEvidenceQueryKey = (id: number,) => {
+    return [
+    `/api/products/${id}/scientific-evidence`
+    ] as const;
+    }
+
+
+export const getGetProductScientificEvidenceQueryOptions = <TData = Awaited<ReturnType<typeof getProductScientificEvidence>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProductScientificEvidence>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetProductScientificEvidenceQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getProductScientificEvidence>>> = ({ signal }) => getProductScientificEvidence(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getProductScientificEvidence>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetProductScientificEvidenceQueryResult = NonNullable<Awaited<ReturnType<typeof getProductScientificEvidence>>>
+export type GetProductScientificEvidenceQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Match one product's confirmed ingredients and nutrition to indexed evidence topics
+ */
+
+export function useGetProductScientificEvidence<TData = Awaited<ReturnType<typeof getProductScientificEvidence>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProductScientificEvidence>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetProductScientificEvidenceQueryOptions(id,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

@@ -25,3 +25,4 @@ export * from "./mealLogs";
 export * from "./guides";
 export * from "./collections";
 export * from "./decisionOutcomes";
+export * from "./scientificEvidence";

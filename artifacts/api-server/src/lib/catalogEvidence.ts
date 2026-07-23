@@ -1,4 +1,5 @@
 import type { NutritionInput } from "./scoring.js";
+import { isValidRetailGtin } from "./barcodeIdentity.js";
 
 /**
  * Source-backed corrections for legacy demo rows.
@@ -263,30 +264,5 @@ export function isVerifiedCatalogProduct(
 
 /** Validate the printed check digit before looking up a retail GTIN. */
 export function isValidGtin(value: string): boolean {
-  if (!/^\d{8}$|^\d{12,14}$/.test(value)) return false;
-
-  const validates = (digits: string): boolean => {
-    const payload = digits.slice(0, -1).split("").map(Number).reverse();
-    const sum = payload.reduce(
-      (total, digit, index) => total + digit * (index % 2 === 0 ? 3 : 1),
-      0,
-    );
-    return (10 - (sum % 10)) % 10 === Number(digits.at(-1));
-  };
-
-  if (validates(value)) return true;
-
-  // UPC-E uses an eight-digit compressed representation. Expand number-system
-  // 0/1 codes to UPC-A and validate the resulting check digit.
-  if (value.length !== 8 || !/^[01]/.test(value)) return false;
-  const [numberSystem, d1, d2, d3, d4, d5, d6, check] = value;
-  const payload =
-    d6 === "0" || d6 === "1" || d6 === "2"
-      ? `${numberSystem}${d1}${d2}${d6}0000${d3}${d4}${d5}`
-      : d6 === "3"
-        ? `${numberSystem}${d1}${d2}${d3}00000${d4}${d5}`
-        : d6 === "4"
-          ? `${numberSystem}${d1}${d2}${d3}${d4}00000${d5}`
-          : `${numberSystem}${d1}${d2}${d3}${d4}${d5}0000${d6}`;
-  return validates(`${payload}${check}`);
+  return isValidRetailGtin(value);
 }

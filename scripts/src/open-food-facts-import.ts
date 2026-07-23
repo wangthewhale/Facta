@@ -271,6 +271,8 @@ async function main() {
 
   const unique = new Map(candidates.map(candidate => [candidate.gtin, candidate]));
   const deduped = [...unique.values()];
+  const summary = summarizeOpenFoodFactsCandidates(deduped);
+  const fetchedRows = candidates.length + rejected.length;
   const payloadSha256 = createHash("sha256").update(hashes.join("|"), "utf8").digest("hex");
   const output: Record<string, unknown> = {
     mode: options.writeStaging ? "write_staging" : "dry_run",
@@ -281,11 +283,16 @@ async function main() {
     startPage: options.startPage,
     pagesFetched,
     pageSize: options.pageSize,
-    fetchedRows: candidates.length + rejected.length,
+    fetchedRows,
     rejected: rejected.length,
+    duplicateGtins: candidates.length - deduped.length,
+    acceptanceRate: fetchedRows ? deduped.length / fetchedRows : 0,
     rejectedSample: rejected.slice(0, 5),
     payloadSha256,
-    ...summarizeOpenFoodFactsCandidates(deduped),
+    ...summary,
+    imageCoverageRate: deduped.length ? summary.withImages / deduped.length : 0,
+    nutritionCoverageRate: deduped.length ? summary.nutritionReady / deduped.length : 0,
+    reviewReadyRate: deduped.length ? summary.reviewReady / deduped.length : 0,
     safetyRule: "Open Food Facts rows remain unverified staging candidates and can never receive a positive buy recommendation automatically.",
   };
 

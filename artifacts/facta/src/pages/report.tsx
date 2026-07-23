@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useParams } from 'wouter';
 import { Layout } from '@/components/layout';
-import { useGetProduct, useGetProductEvaluation, useGetAlternatives, useRecordScan, useGetUserGoals, useGetGoalFit, useGetProductNews, useGetProductSafetyCheck } from '@workspace/api-client-react';
+import { useGetProduct, useGetProductEvaluation, useGetAlternatives, useRecordScan, useGetUserGoals, useGetGoalFit, useGetProductNews, useGetProductSafetyCheck, useGetProductScientificEvidence } from '@workspace/api-client-react';
 import { useTranslation } from '@/lib/i18n';
-import { AlertTriangle, ArrowRight, Camera, CheckCircle2, ChevronRight, CircleSlash2, Droplets, Info, Link as LinkIcon, Repeat2, Share, ShoppingBasket, TriangleAlert, Utensils, XOctagon, RefreshCw, Users } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Camera, CheckCircle2, ChevronRight, CircleSlash2, Droplets, Info, Link as LinkIcon, Microscope, Repeat2, Share, ShoppingBasket, TriangleAlert, Utensils, XOctagon, RefreshCw, Users } from 'lucide-react';
 import { track } from '@/lib/analytics';
 import { startFamilyCheckCheckout } from '@/pages/familyCheck';
 import { cn } from '@/lib/utils';
@@ -398,6 +398,59 @@ function GoalFitCard({ productId, goal }: { productId: number, goal: any }) {
   );
 }
 
+function ScientificEvidenceSection({ productId }: { productId: number }) {
+  const { data, isLoading } = useGetProductScientificEvidence(productId, {
+    query: { enabled: productId > 0, staleTime: 30 * 60 * 1000, retry: false } as any,
+  });
+  if (isLoading) {
+    return (
+      <section className="p-6 border-b border-border bg-card/50">
+        <div className="flex items-center gap-2 text-xs font-mono tracking-widest text-muted-foreground uppercase">
+          <Microscope className="w-4 h-4" /> 正在比對科學研究…
+        </div>
+      </section>
+    );
+  }
+  if (!data?.matchedTopics?.length) return null;
+  const currentLinks = data.matchedTopics.reduce((sum, topic) => sum + topic.currentSourceCount, 0);
+  const reviewedLinks = data.matchedTopics.reduce((sum, topic) => sum + topic.reviewedEligibleCount, 0);
+  const excludedLinks = data.matchedTopics.reduce((sum, topic) => sum + topic.integrityExcludedCount, 0);
+
+  return (
+    <section className="p-6 border-b border-border bg-card/50">
+      <div className="flex items-center gap-2 mb-3">
+        <Microscope className="w-4 h-4 text-primary-strong" />
+        <h3 className="text-xs font-mono tracking-widest text-muted-foreground uppercase">科學研究比對</h3>
+      </div>
+      <p className="text-sm font-black leading-relaxed">
+        包裝資料對到 {data.matchedTopics.length} 個研究主題、{currentLinks} 筆有效研究關聯
+      </p>
+      <p className="text-[11px] text-muted-foreground leading-relaxed mt-2">
+        研究關聯不等於這款商品會造成某種結果。只有完成整體證據審查的內容，才會加入購買建議；目前已審查可用 {reviewedLinks} 筆。
+      </p>
+      <div className="flex flex-col gap-2 mt-4">
+        {data.matchedTopics.slice(0, 6).map(topic => (
+          <div key={topic.canonicalName} className="border border-border bg-background p-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-black">{topic.displayNameZh || topic.canonicalName}</p>
+              <p className="text-[10px] text-muted-foreground mt-1">
+                {topic.matchBasis === 'ingredient_and_nutrition' ? '成分＋營養命中' : topic.matchBasis === 'ingredient' ? '成分命中' : '營養數值命中'}
+              </p>
+            </div>
+            <div className="text-right shrink-0">
+              <p className="text-sm font-mono font-black">{topic.currentSourceCount}</p>
+              <p className="text-[9px] text-muted-foreground">有效來源</p>
+            </div>
+          </div>
+        ))}
+      </div>
+      {excludedLinks > 0 && (
+        <p className="text-[10px] text-muted-foreground mt-3">另有 {excludedLinks} 筆撤稿、疑慮或排除關聯，已隔離且不參與結論。</p>
+      )}
+    </section>
+  );
+}
+
 export default function Report() {
   const { id } = useParams<{ id: string }>();
   const { t, lang } = useTranslation();
@@ -786,6 +839,8 @@ export default function Report() {
               </div>
             </div>
           )}
+
+          <ScientificEvidenceSection productId={productId} />
 
           {/* Goal Fit */}
           <SafetyAlertSection productId={productId} />

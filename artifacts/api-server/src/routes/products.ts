@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, ilike, or, desc } from "drizzle-orm";
+import { eq, ilike, or, desc, inArray } from "drizzle-orm";
 import { db } from "@workspace/db";
 import {
   productsTable, brandsTable, barcodesTable, categoriesTable,
@@ -19,7 +19,8 @@ import {
 } from "../lib/catalogEvidence.js";
 import {
   lookupOpenFoodFacts,
-  lookupStagedBarcodeCandidate,
+  lookupStagedBarcodeResolution,
+  resolveExternalBarcodeCandidates,
   stageOpenFoodFactsCandidate,
 } from "../lib/openFoodFacts.js";
 import {
@@ -32,6 +33,7 @@ import {
   discoverBarcodeFromWeb,
   stageWebBarcodeCandidate,
 } from "../lib/webBarcodeDiscovery.js";
+import { normalizeRetailGtin, retailGtinLookupVariants } from "../lib/barcodeIdentity.js";
 
 const router: IRouter = Router();
 const WEB_BARCODE_RATE_LIMIT = 12;
@@ -138,30 +140,70 @@ router.get("/products/barcode/:barcode", async (req, res): Promise<void> => {
     return;
   }
 
-  const trusted = getTrustedProductEvidenceByBarcode(params.data.barcode);
-  const [barcodeRow] = trusted
-    ? [{ productId: trusted.productId }]
-    : await db.select().from(barcodesTable).where(eq(barcodesTable.barcode, params.data.barcode));
+  const normalizedBarcode = normalizeRetailGtin(params.data.barcode)!;
+  const barcodeVariants = retailGtinLookupVariants(params.data.barcode);
+
+  const trustedMatches = barcodeVariants
+    .map(getTrustedProductEvidenceByBarcode)
+    .filter((item): item is NonNullable<typeof item> => Boolean(item));
+  const trustedProductIds = [...new Set(trustedMatches.map(item => item.productId))];
+  if (trustedProductIds.length > 1) {
+    req.log.error({ barcode: params.data.barcode, barcodeVariants, productIds: trustedProductIds }, "conflicting trusted barcode mappings");
+    res.status(404).json({
+      error: "Conflicting trusted product identities exist for an equivalent barcode",
+      identityStatus: "conflict",
+      normalizedBarcode,
+      catalogCandidate: null,
+      identityCandidates: [],
+      requiredCapture: "front_and_label",
+      retailerIdentity: resolveConvenienceRetailer({ barcode: normalizedBarcode }),
+    });
+    return;
+  }
+  const barcodeRows = trustedProductIds[0]
+    ? [{ productId: trustedProductIds[0] }]
+    : await db.select().from(barcodesTable).where(inArray(barcodesTable.barcode, barcodeVariants));
+  const productIds = [...new Set(barcodeRows.map(row => row.productId))];
+  if (productIds.length > 1) {
+    req.log.error({ barcode: params.data.barcode, barcodeVariants, productIds }, "conflicting canonical barcode mappings");
+    res.status(404).json({
+      error: "Conflicting product identities exist for an equivalent barcode",
+      identityStatus: "conflict",
+      normalizedBarcode,
+      catalogCandidate: null,
+      identityCandidates: [],
+      requiredCapture: "front_and_label",
+      retailerIdentity: resolveConvenienceRetailer({ barcode: normalizedBarcode }),
+    });
+    return;
+  }
+  const barcodeRow = barcodeRows[0];
   if (!barcodeRow) {
-    let catalogCandidate = await lookupStagedBarcodeCandidate(params.data.barcode);
-    if (!catalogCandidate) {
+    let resolution = await lookupStagedBarcodeResolution(barcodeVariants);
+    if (!resolution.candidate || resolution.status === "conflict") {
       try {
-        const externalResult = await lookupOpenFoodFacts(params.data.barcode);
-        catalogCandidate = externalResult?.candidate ?? null;
+        const externalResult = await lookupOpenFoodFacts(normalizedBarcode);
         if (externalResult) {
+          resolution = resolveExternalBarcodeCandidates([
+            ...resolution.candidates,
+            externalResult.candidate,
+          ]);
           // Staging is best-effort and never blocks the user-facing lookup.
           void stageOpenFoodFactsCandidate(externalResult).catch(err => {
-            req.log.warn({ err, barcode: params.data.barcode }, "failed to stage Open Food Facts candidate");
+            req.log.warn({ err, barcode: normalizedBarcode }, "failed to stage Open Food Facts candidate");
           });
         }
       } catch (err) {
-        req.log.warn({ err, barcode: params.data.barcode }, "external barcode lookup failed");
+        req.log.warn({ err, barcode: normalizedBarcode }, "external barcode lookup failed");
       }
     }
-    if (!catalogCandidate && canRunWebBarcodeLookup(req.ip || "unknown")) {
+    if ((!resolution.candidate || resolution.status === "conflict") && canRunWebBarcodeLookup(req.ip || "unknown")) {
       const webResult = await discoverBarcodeFromWeb(params.data.barcode);
-      catalogCandidate = webResult?.candidate ?? null;
       if (webResult) {
+        resolution = resolveExternalBarcodeCandidates([
+          ...resolution.candidates,
+          webResult.candidate,
+        ]);
         // Persist only as an unverified candidate. The physical label still
         // has to be confirmed before FACTA creates or scores a product.
         void stageWebBarcodeCandidate(webResult).catch(err => {
@@ -169,6 +211,7 @@ router.get("/products/barcode/:barcode", async (req, res): Promise<void> => {
         });
       }
     }
+    const catalogCandidate = resolution.candidate;
     const retailerIdentity = catalogCandidate
       ? {
           retailerName: catalogCandidate.retailerName,
@@ -177,12 +220,18 @@ router.get("/products/barcode/:barcode", async (req, res): Promise<void> => {
           retailerEvidence: catalogCandidate.retailerEvidence,
           retailerReasonZh: catalogCandidate.retailerReasonZh,
         }
-      : resolveConvenienceRetailer({ barcode: params.data.barcode });
+      : resolveConvenienceRetailer({ barcode: normalizedBarcode });
     res.status(404).json({
-      error: catalogCandidate
+      error: resolution.status === "conflict"
+        ? "Exact-barcode sources disagree; verify the physical package"
+        : catalogCandidate
         ? "Product identity found in public data; physical label verification is required"
         : "Product not found for this barcode",
+      identityStatus: resolution.status,
+      normalizedBarcode,
       catalogCandidate,
+      identityCandidates: resolution.status === "conflict" ? resolution.candidates : [],
+      requiredCapture: catalogCandidate ? "ingredients_and_nutrition" : "front_and_label",
       retailerIdentity,
     });
     return;

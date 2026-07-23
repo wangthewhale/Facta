@@ -34,6 +34,8 @@ tags:
     description: Curated product collections
   - name: admin
     description: Admin review and management
+  - name: evidence
+    description: Rights-aware scientific evidence index and review status
 
 paths:
   # ── Goals ─────────────────────────────────────────────────────────────────
@@ -1336,8 +1338,160 @@ paths:
                 items:
                   $ref: "#/components/schemas/Correction"
 
+  /evidence/stats:
+    get:
+      operationId: getScientificEvidenceStats
+      tags: [evidence]
+      summary: Get scientific evidence library coverage and integrity statistics
+      responses:
+        "200":
+          description: Evidence coverage
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScientificEvidenceStats"
+
+  /evidence/topics:
+    get:
+      operationId: listScientificEvidenceTopics
+      tags: [evidence]
+      summary: List indexed scientific evidence topics
+      responses:
+        "200":
+          description: Evidence topics
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ScientificEvidenceTopic"
+
+  /evidence/topics/{topic}/sources:
+    get:
+      operationId: listScientificEvidenceSources
+      tags: [evidence]
+      summary: List non-retracted source metadata for one evidence topic
+      parameters:
+        - name: topic
+          in: path
+          required: true
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50, maximum: 100 }
+      responses:
+        "200":
+          description: Evidence source metadata; abstracts and full text are not returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScientificEvidenceTopicSources"
+
+  /products/{id}/scientific-evidence:
+    get:
+      operationId: getProductScientificEvidence
+      tags: [evidence]
+      summary: Match one product's confirmed ingredients and nutrition to indexed evidence topics
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Topic-level evidence matches; counts are not health conclusions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductScientificEvidence"
+
 components:
   schemas:
+    ScientificEvidenceStats:
+      type: object
+      required: [totalSources, topicCount, currentSources, integrityExcluded, openAccessSources, abstractSources, licensedFullTextSources, reviewedEligibleLinks, consumerClaimsAutoApproved]
+      properties:
+        totalSources: { type: integer }
+        topicCount: { type: integer }
+        currentSources: { type: integer }
+        integrityExcluded: { type: integer }
+        openAccessSources: { type: integer }
+        abstractSources: { type: integer }
+        licensedFullTextSources: { type: integer }
+        reviewedEligibleLinks: { type: integer }
+        consumerClaimsAutoApproved: { type: integer, enum: [0] }
+        lastSyncedAt: { type: ["string", "null"] }
+
+    ScientificEvidenceTopic:
+      type: object
+      required: [canonicalName, topicType, sourceCount, reviewedEligibleCount]
+      properties:
+        canonicalName: { type: string }
+        displayNameZh: { type: ["string", "null"] }
+        topicType: { type: string }
+        sourceCount: { type: integer }
+        reviewedEligibleCount: { type: integer }
+        lastSyncedAt: { type: ["string", "null"] }
+
+    ScientificEvidenceSource:
+      type: object
+      required: [title, studyDesign, studyDesignRank, integrityStatus, consumerUseStatus, reviewStatus, sourceUrl, isOpenAccess]
+      properties:
+        title: { type: string }
+        journal: { type: ["string", "null"] }
+        publicationDate: { type: ["string", "null"] }
+        publicationTypes:
+          type: array
+          items: { type: string }
+        studyDesign: { type: string }
+        studyDesignRank: { type: integer }
+        integrityStatus: { type: string }
+        consumerUseStatus: { type: string }
+        reviewStatus: { type: string }
+        sourceUrl: { type: string }
+        doi: { type: ["string", "null"] }
+        pmid: { type: ["string", "null"] }
+        isOpenAccess: { type: boolean }
+        licenseId: { type: ["string", "null"] }
+
+    ScientificEvidenceTopicSources:
+      type: object
+      required: [topic, important, sources]
+      properties:
+        topic: { type: string }
+        displayNameZh: { type: ["string", "null"] }
+        important: { type: string }
+        sources:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScientificEvidenceSource"
+
+    ProductScientificEvidenceTopic:
+      type: object
+      required: [canonicalName, topicType, matchBasis, currentSourceCount, reviewedEligibleCount, integrityExcludedCount]
+      properties:
+        canonicalName: { type: string }
+        displayNameZh: { type: ["string", "null"] }
+        topicType: { type: string }
+        matchBasis:
+          type: string
+          enum: [ingredient, nutrition, ingredient_and_nutrition]
+        currentSourceCount: { type: integer }
+        reviewedEligibleCount: { type: integer }
+        integrityExcludedCount: { type: integer }
+        lastSyncedAt: { type: ["string", "null"] }
+
+    ProductScientificEvidence:
+      type: object
+      required: [productId, important, matchedTopics]
+      properties:
+        productId: { type: integer }
+        important: { type: string }
+        matchedTopics:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductScientificEvidenceTopic"
+
     HealthStatus:
       type: object
       required: [status]

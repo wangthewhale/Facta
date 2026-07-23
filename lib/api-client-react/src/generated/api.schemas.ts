@@ -5,6 +5,96 @@
  * FACTA — Independent product intelligence API
  * OpenAPI spec version: 0.1.0
  */
+export type ScientificEvidenceStatsConsumerClaimsAutoApproved = typeof ScientificEvidenceStatsConsumerClaimsAutoApproved[keyof typeof ScientificEvidenceStatsConsumerClaimsAutoApproved];
+
+
+export const ScientificEvidenceStatsConsumerClaimsAutoApproved = {
+  NUMBER_0: 0,
+} as const;
+
+export interface ScientificEvidenceStats {
+  totalSources: number;
+  topicCount: number;
+  currentSources: number;
+  integrityExcluded: number;
+  openAccessSources: number;
+  abstractSources: number;
+  licensedFullTextSources: number;
+  reviewedEligibleLinks: number;
+  consumerClaimsAutoApproved: ScientificEvidenceStatsConsumerClaimsAutoApproved;
+  /** @nullable */
+  lastSyncedAt?: string | null;
+}
+
+export interface ScientificEvidenceTopic {
+  canonicalName: string;
+  /** @nullable */
+  displayNameZh?: string | null;
+  topicType: string;
+  sourceCount: number;
+  reviewedEligibleCount: number;
+  /** @nullable */
+  lastSyncedAt?: string | null;
+}
+
+export interface ScientificEvidenceSource {
+  title: string;
+  /** @nullable */
+  journal?: string | null;
+  /** @nullable */
+  publicationDate?: string | null;
+  publicationTypes?: string[];
+  studyDesign: string;
+  studyDesignRank: number;
+  integrityStatus: string;
+  consumerUseStatus: string;
+  reviewStatus: string;
+  sourceUrl: string;
+  /** @nullable */
+  doi?: string | null;
+  /** @nullable */
+  pmid?: string | null;
+  isOpenAccess: boolean;
+  /** @nullable */
+  licenseId?: string | null;
+}
+
+export interface ScientificEvidenceTopicSources {
+  topic: string;
+  /** @nullable */
+  displayNameZh?: string | null;
+  important: string;
+  sources: ScientificEvidenceSource[];
+}
+
+export type ProductScientificEvidenceTopicMatchBasis = typeof ProductScientificEvidenceTopicMatchBasis[keyof typeof ProductScientificEvidenceTopicMatchBasis];
+
+
+export const ProductScientificEvidenceTopicMatchBasis = {
+  ingredient: 'ingredient',
+  nutrition: 'nutrition',
+  ingredient_and_nutrition: 'ingredient_and_nutrition',
+} as const;
+
+export interface ProductScientificEvidenceTopic {
+  canonicalName: string;
+  /** @nullable */
+  displayNameZh?: string | null;
+  topicType: string;
+  matchBasis: ProductScientificEvidenceTopicMatchBasis;
+  currentSourceCount: number;
+  reviewedEligibleCount: number;
+  integrityExcludedCount: number;
+  /** @nullable */
+  lastSyncedAt?: string | null;
+}
+
+export interface ProductScientificEvidence {
+  productId: number;
+  important: string;
+  matchedTopics: ProductScientificEvidenceTopic[];
+}
+
 export interface HealthStatus {
   status: string;
 }
@@ -1634,5 +1724,12 @@ limit?: number;
 export type AdminListPendingParams = {
 limit?: number;
 offset?: number;
+};
+
+export type ListScientificEvidenceSourcesParams = {
+/**
+ * @maximum 100
+ */
+limit?: number;
 };
 

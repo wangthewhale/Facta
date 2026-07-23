@@ -33,10 +33,17 @@ export interface ExternalBarcodeCandidate extends RetailerIdentity {
   brandName: string | null;
   imageUrl: string | null;
   evidenceTier: "catalog_only" | "nutrition_ready" | "ingredients_ready" | "review_ready";
-  sourceName: "Open Food Facts" | "FACTA Web Identity";
+  sourceName: string;
   sourceUrl: string;
   identityEvidenceUrls: string[];
   verificationStatus: "external_unverified";
+}
+
+export interface ExternalBarcodeResolution {
+  status: "not_found" | "single_source" | "corroborated" | "conflict";
+  candidate: ExternalBarcodeCandidate | null;
+  candidates: ExternalBarcodeCandidate[];
+  sourceCount: number;
 }
 
 const lookupCache = new Map<string, { expiresAt: number; value: { candidate: ExternalBarcodeCandidate; rawProduct: OffProduct } | null }>();
@@ -56,6 +63,50 @@ function sha256(value: string): string {
 
 function normalizeIdentity(value: string): string {
   return value.normalize("NFKC").toLowerCase().replace(/[\s\-_·・|｜()（）\[\]【】]/g, "");
+}
+
+function candidateIdentityKey(candidate: ExternalBarcodeCandidate): string {
+  return normalizeIdentity(candidate.productNameZh ?? candidate.productName);
+}
+
+function candidateRank(candidate: ExternalBarcodeCandidate): number {
+  if (candidate.retailerEvidence === "official_catalog") return 0;
+  if (candidate.sourceName === "FACTA Web Identity") return 1;
+  if (candidate.sourceName === "Open Food Facts") return 2;
+  return 3;
+}
+
+/**
+ * Never silently pick one identity when exact-barcode sources disagree.
+ * Corroboration requires the same normalized full product name, so flavor and
+ * pack-size differences remain conflicts that must be checked on the package.
+ */
+export function resolveExternalBarcodeCandidates(
+  candidates: ExternalBarcodeCandidate[],
+): ExternalBarcodeResolution {
+  const deduplicated = [...new Map(candidates.map(candidate => [
+    `${candidate.sourceUrl}|${candidateIdentityKey(candidate)}`,
+    candidate,
+  ])).values()];
+  if (deduplicated.length === 0) {
+    return { status: "not_found", candidate: null, candidates: [], sourceCount: 0 };
+  }
+  const identityKeys = new Set(deduplicated.map(candidateIdentityKey).filter(Boolean));
+  if (identityKeys.size !== 1) {
+    return {
+      status: "conflict",
+      candidate: null,
+      candidates: deduplicated.slice(0, 5),
+      sourceCount: deduplicated.length,
+    };
+  }
+  const ranked = [...deduplicated].sort((a, b) => candidateRank(a) - candidateRank(b));
+  return {
+    status: ranked.length > 1 ? "corroborated" : "single_source",
+    candidate: ranked[0] ?? null,
+    candidates: ranked.slice(0, 5),
+    sourceCount: ranked.length,
+  };
 }
 
 function normalizedNutrition(product: OffProduct) {
@@ -153,9 +204,13 @@ export async function lookupOpenFoodFacts(barcode: string): Promise<{ candidate:
   }
 }
 
-export async function lookupStagedBarcodeCandidate(barcode: string): Promise<ExternalBarcodeCandidate | null> {
+export async function lookupStagedBarcodeResolution(
+  barcodeOrVariants: string | string[],
+): Promise<ExternalBarcodeResolution> {
+  const barcodes = [...new Set(Array.isArray(barcodeOrVariants) ? barcodeOrVariants : [barcodeOrVariants])];
   try {
     const result = await pool.query<{
+      gtin: string;
       product_name: string;
       brand_name: string | null;
       image_urls: unknown;
@@ -163,9 +218,9 @@ export async function lookupStagedBarcodeCandidate(barcode: string): Promise<Ext
       source_url: string;
       source_key: string;
     }>(`
-      select product_name, brand_name, image_urls, evidence_tier, source_url, source_key
+      select gtin, product_name, brand_name, image_urls, evidence_tier, source_url, source_key
       from catalog_import_candidates
-      where gtin = $1
+      where gtin = any($1::text[])
         and verification_status in ('imported_unverified', 'pending_review')
       order by case evidence_tier
         when 'review_ready' then 0
@@ -175,34 +230,47 @@ export async function lookupStagedBarcodeCandidate(barcode: string): Promise<Ext
       end,
       case when source_key = 'facta_web_identity' then 0 else 1 end,
       last_seen_at desc
-      limit 1
-    `, [barcode]);
-    const row = result.rows[0];
-    if (!row) return null;
-    const images = Array.isArray(row.image_urls) ? row.image_urls.filter((item): item is string => typeof item === "string") : [];
-    const retailerIdentity = resolveConvenienceRetailer({
-      barcode,
-      brandNames: [row.brand_name],
-      productNames: [row.product_name],
-      sourceUrls: [row.source_url],
+      limit 20
+    `, [barcodes]);
+    const candidates = result.rows.map(row => {
+      const images = Array.isArray(row.image_urls) ? row.image_urls.filter((item): item is string => typeof item === "string") : [];
+      const retailerIdentity = resolveConvenienceRetailer({
+        barcode: row.gtin,
+        brandNames: [row.brand_name],
+        productNames: [row.product_name],
+        sourceUrls: [row.source_url],
+      });
+      return {
+        barcode: row.gtin,
+        productName: row.product_name,
+        productNameZh: row.product_name,
+        brandName: row.brand_name,
+        imageUrl: images[0] ?? null,
+        evidenceTier: row.evidence_tier,
+        sourceName: row.source_key === "facta_web_identity"
+          ? "FACTA Web Identity"
+          : row.source_key === "open_food_facts"
+            ? "Open Food Facts"
+            : row.source_key,
+        sourceUrl: row.source_url,
+        identityEvidenceUrls: [row.source_url],
+        verificationStatus: "external_unverified" as const,
+        ...retailerIdentity,
+      } satisfies ExternalBarcodeCandidate;
     });
-    return {
-      barcode,
-      productName: row.product_name,
-      productNameZh: row.product_name,
-      brandName: row.brand_name,
-      imageUrl: images[0] ?? null,
-      evidenceTier: row.evidence_tier,
-      sourceName: row.source_key === "facta_web_identity" ? "FACTA Web Identity" : "Open Food Facts",
-      sourceUrl: row.source_url,
-      identityEvidenceUrls: [row.source_url],
-      verificationStatus: "external_unverified",
-      ...retailerIdentity,
-    };
+    return resolveExternalBarcodeCandidates(candidates);
   } catch (error) {
-    if ((error as { code?: string }).code === "42P01") return null;
+    if ((error as { code?: string }).code === "42P01") {
+      return { status: "not_found", candidate: null, candidates: [], sourceCount: 0 };
+    }
     throw error;
   }
+}
+
+export async function lookupStagedBarcodeCandidate(
+  barcode: string,
+): Promise<ExternalBarcodeCandidate | null> {
+  return (await lookupStagedBarcodeResolution(barcode)).candidate;
 }
 
 /** Cache an external hit in the unverified staging table; never create a scored product here. */

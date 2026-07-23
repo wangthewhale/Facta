@@ -353,17 +353,24 @@ router.get("/search", async (req, res): Promise<void> => {
           .slice(0, remainingLimit);
         for (const { row: r, matchScore } of rankedRows) {
           const imageUrls = Array.isArray(r.image_urls) ? r.image_urls : [];
+          const sourcePresentation = r.source_key === "7eleven_tw_freshfoods"
+            ? { retailer: "7-ELEVEN", catalogSourceType: "official_retailer_catalog" }
+            : r.source_key === "open_food_facts"
+              ? { retailer: "Open Food Facts", catalogSourceType: "open_food_catalog" }
+              : r.source_key === "facta_web_identity"
+                ? { retailer: "公開條碼來源", catalogSourceType: "exact_barcode_web_evidence" }
+                : { retailer: "食藥署追溯資料", catalogSourceType: "official_traceability" };
           catalogItems.push({
             factaSeedId: `${r.source_key}:${r.source_record_id}`,
             productName: r.product_name,
             brandRaw: r.brand_name ?? null,
-            retailer: "食藥署追溯資料",
+            retailer: sourcePresentation.retailer,
             categoryNormalized: r.category_name ?? null,
             specRaw: r.package_spec ?? null,
             priceTwd: null,
             imageUrl: imageUrls[0] ?? null,
             sourceUrl: r.source_url ?? null,
-            catalogSourceType: "official_traceability",
+            catalogSourceType: sourcePresentation.catalogSourceType,
             evidenceTier: r.evidence_tier ?? "catalog_only",
             aiEnrichmentStatus: r.ai_enrichment_status ?? null,
             matchScore,

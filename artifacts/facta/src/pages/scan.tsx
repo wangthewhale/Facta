@@ -29,6 +29,8 @@ type ExternalBarcodeCandidate = RetailerIdentity & {
 export default function Scan() {
   const { t } = useTranslation();
   const [, setLocation] = useLocation();
+  const search = useSearch();
+  const initialRetailer = new URLSearchParams(search).get('retailer') ?? '';
   const videoRef = useRef<HTMLVideoElement>(null);
   const [hasCamera, setHasCamera] = useState<boolean | null>(null);
   const [scanning, setScanning] = useState(true);
@@ -38,7 +40,10 @@ export default function Scan() {
   const [unknownBarcode, setUnknownBarcode] = useState<string>('');
   const [unverifiedProductName, setUnverifiedProductName] = useState<string>('');
   const [externalCandidate, setExternalCandidate] = useState<ExternalBarcodeCandidate | null>(null);
+  const [identityCandidates, setIdentityCandidates] = useState<ExternalBarcodeCandidate[]>([]);
+  const [identityConflict, setIdentityConflict] = useState(false);
   const [retailerIdentity, setRetailerIdentity] = useState<RetailerIdentity | null>(null);
+  const [selectedRetailerSlug, setSelectedRetailerSlug] = useState(initialRetailer);
   const [invalidBarcode, setInvalidBarcode] = useState<string>('');
   const [lookupFailed, setLookupFailed] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
@@ -74,8 +79,12 @@ export default function Scan() {
       const status = (error as any)?.status;
       if (status === 404) {
         const candidate = (error as any)?.data?.catalogCandidate as ExternalBarcodeCandidate | null | undefined;
+        const candidates = (error as any)?.data?.identityCandidates as ExternalBarcodeCandidate[] | undefined;
+        const conflict = (error as any)?.data?.identityStatus === 'conflict';
         const identity = (error as any)?.data?.retailerIdentity as RetailerIdentity | null | undefined;
         setExternalCandidate(candidate ?? null);
+        setIdentityCandidates(candidates ?? []);
+        setIdentityConflict(conflict);
         setRetailerIdentity(candidate ?? identity ?? null);
         if (candidate) setUnverifiedProductName(candidate.productNameZh || candidate.productName);
         // Not in the verified database — show public identity context, then
@@ -127,7 +136,7 @@ export default function Scan() {
         // Try modern BarcodeDetector first (Chrome/Android)
         if ('BarcodeDetector' in window) {
           // @ts-ignore
-          const detector = new window.BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e'] });
+          const detector = new window.BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128'] });
 
           const scanFrame = async () => {
             if (!videoRef.current || !mounted || detectedRef.current) return;
@@ -150,6 +159,7 @@ export default function Scan() {
           const hints = new Map();
           hints.set(DecodeHintType.POSSIBLE_FORMATS, [
             BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A, BarcodeFormat.UPC_E,
+            BarcodeFormat.CODE_128,
           ]);
           hints.set(DecodeHintType.TRY_HARDER, true);
           // 150ms between decode attempts keeps the UI responsive
@@ -196,6 +206,8 @@ export default function Scan() {
     setUnknownBarcode('');
     setUnverifiedProductName('');
     setExternalCandidate(null);
+    setIdentityCandidates([]);
+    setIdentityConflict(false);
     setRetailerIdentity(null);
     if (!isValidRetailBarcode(normalizedCode)) {
       setInvalidBarcode(normalizedCode || code);
@@ -297,20 +309,53 @@ export default function Scan() {
 
   // Unknown barcode — value-first prompt
   if (unknownBarcode) {
+    const retailerLabels: Record<string, string> = {
+      '7eleven': '7-ELEVEN',
+      'family-mart': '全家 FamilyMart',
+      'hi-life': '萊爾富 Hi-Life',
+      'ok-mart': 'OKmart',
+    };
+    const selectedRetailerName = retailerLabels[selectedRetailerSlug] ?? null;
+    const retailerContextConflict = Boolean(
+      selectedRetailerSlug && retailerIdentity?.retailerSlug && selectedRetailerSlug !== retailerIdentity.retailerSlug,
+    );
     const submitParams = new URLSearchParams({
       barcode: unknownBarcode,
       ...(externalCandidate ? { name: externalCandidate.productNameZh || externalCandidate.productName } : {}),
       ...(externalCandidate?.brandName ? { brand: externalCandidate.brandName } : {}),
-      ...(retailerIdentity?.retailerSlug ? { retailer: retailerIdentity.retailerSlug } : {}),
+      ...((selectedRetailerSlug || retailerIdentity?.retailerSlug)
+        ? { retailer: selectedRetailerSlug || retailerIdentity!.retailerSlug! }
+        : {}),
     }).toString();
     return (
       <Layout>
         <div className="flex flex-col min-h-full bg-background text-foreground p-6 pt-16 gap-6">
           <h1 className="text-2xl font-black leading-snug">
-            {unverifiedProductName
+            {identityConflict
+              ? '同一條碼出現不同商品資料；先看你手上的包裝，不亂選一筆。'
+              : unverifiedProductName
               ? `找到「${unverifiedProductName}」，但還不能直接叫你買。`
               : '條碼只認出商品；要判斷值不值得買，還需要背面標示。'}
           </h1>
+          {identityConflict && identityCandidates.length > 0 && (
+            <div className="border-2 border-[#C7472A] bg-[#C7472A]/10 p-4 flex flex-col gap-2">
+              <p className="text-xs font-black tracking-wide">公開資料互相衝突</p>
+              {identityCandidates.slice(0, 3).map(candidate => (
+                <p key={`${candidate.sourceUrl}-${candidate.productName}`} className="text-xs font-bold leading-relaxed">
+                  {candidate.sourceName}：{[candidate.brandName, candidate.productNameZh || candidate.productName].filter(Boolean).join(' · ')}
+                </p>
+              ))}
+              <p className="text-[11px] text-muted-foreground leading-relaxed">FACTA 不會用多數決猜商品；補拍正面與背面後再建立這次包裝的身分。</p>
+            </div>
+          )}
+          {selectedRetailerName && (
+            <div className="border-2 border-border bg-card p-4 flex flex-col gap-1">
+              <p className="text-xs font-black tracking-wide">你正在掃的門市</p>
+              <p className="text-lg font-black">{selectedRetailerName}</p>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">這是你提供的購買情境，不會被拿來猜商品條碼。</p>
+              {retailerContextConflict && <p className="text-[11px] font-black text-[#C7472A]">公開資料顯示其他通路，已標記衝突；請以實體包裝與門市為準。</p>}
+            </div>
+          )}
           {externalCandidate && (
             <div className="border-2 border-[#D9A21B] bg-[#F2B84B]/10 p-4 flex flex-col gap-2">
               <p className="text-xs font-black tracking-wide">公開條碼資料已找到商品身分</p>
@@ -391,6 +436,25 @@ export default function Scan() {
           <button onClick={toggleFlashlight} className="p-2" aria-label="開關手電筒" disabled={!hasCamera || manualMode}>
             <Flashlight className={cn("w-6 h-6", flashlightOn ? "text-primary-strong" : "text-white opacity-70")} />
           </button>
+        </div>
+
+        <div className="absolute top-16 inset-x-4 z-20">
+          <label className="sr-only" htmlFor="scan-retailer">目前所在便利商店</label>
+          <select
+            id="scan-retailer"
+            value={selectedRetailerSlug}
+            onChange={event => {
+              setSelectedRetailerSlug(event.target.value);
+              track('scan_retailer_context_selected', { retailer: event.target.value || 'none' });
+            }}
+            className="w-full bg-black/75 backdrop-blur border border-white/30 text-white px-3 py-2.5 text-xs font-black tracking-wide"
+          >
+            <option value="">在哪家店？（選填，不用條碼猜）</option>
+            <option value="7eleven">我在 7-ELEVEN</option>
+            <option value="family-mart">我在全家 FamilyMart</option>
+            <option value="hi-life">我在萊爾富 Hi-Life</option>
+            <option value="ok-mart">我在 OKmart</option>
+          </select>
         </div>
 
         {/* Camera View */}

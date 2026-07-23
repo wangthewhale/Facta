@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@workspace/db";
 import {
   productSubmissionsTable, productsTable, brandsTable, barcodesTable,
@@ -17,6 +17,7 @@ import {
   getConvenienceRetailerBySlug,
   resolveConvenienceRetailer,
 } from "../lib/convenienceRetailer.js";
+import { normalizeRetailGtin, retailGtinLookupVariants } from "../lib/barcodeIdentity.js";
 
 const router: IRouter = Router();
 
@@ -59,6 +60,12 @@ function canProcessOcr(clientId: string): { allowed: boolean; retryAfterSeconds:
 
 function splitSubmissionIngredients(raw: string) {
   return mapIngredientList(raw);
+}
+
+function parseNullableNumber(value: string | number | null | undefined): number | null {
+  if (value == null || value === "") return null;
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function submissionToApi(s: typeof productSubmissionsTable.$inferSelect) {
@@ -262,6 +269,55 @@ router.post("/submissions/:id/finalize", async (req, res): Promise<void> => {
         };
       }
 
+      const normalizedBarcode = submission.barcode
+        ? normalizeRetailGtin(submission.barcode)
+        : null;
+      if (submission.barcode && !normalizedBarcode) {
+        return { status: 409 as const, error: "Submission barcode has an invalid check digit" };
+      }
+      let existingProduct: typeof productsTable.$inferSelect | null = null;
+      if (submission.barcode) {
+        const equivalentRows = await tx.select().from(barcodesTable)
+          .where(inArray(barcodesTable.barcode, retailGtinLookupVariants(submission.barcode)));
+        const productIds = [...new Set(equivalentRows.map(row => row.productId))];
+        if (productIds.length > 1) {
+          return {
+            status: 409 as const,
+            error: "Equivalent barcode forms point to different products; package identity review is required",
+          };
+        }
+        if (productIds[0]) {
+          [existingProduct] = await tx.select().from(productsTable)
+            .where(eq(productsTable.id, productIds[0])).limit(1);
+          if (!existingProduct) {
+            return { status: 409 as const, error: "Barcode points to a missing product; data repair is required" };
+          }
+          if (existingProduct.verificationStatus === "verified") {
+            const [evalRow] = await tx.select().from(productEvaluationsTable)
+              .where(eq(productEvaluationsTable.productId, existingProduct.id)).limit(1);
+            await tx.update(productSubmissionsTable).set({
+              resolvedProductId: existingProduct.id,
+              provisionalScore: evalRow?.overallScore ?? null,
+              provisionalGrade: evalRow?.scoreGrade ?? null,
+              reviewNote: "Confirmed package submission linked to an already verified barcode product; canonical facts were not overwritten.",
+              updatedAt: new Date(),
+            }).where(eq(productSubmissionsTable.id, submission.id));
+            return {
+              status: 200 as const,
+              body: {
+                productId: existingProduct.id,
+                overallScore: evalRow?.overallScore,
+                scoreGrade: evalRow?.scoreGrade,
+                analysisScope: resolveAnalysisScope(
+                  { nutritionScore: evalRow?.nutritionScore, additiveScore: evalRow?.additiveScore },
+                  { productName: existingProduct.nameZh ?? existingProduct.name, ingredients: splitSubmissionIngredients(existingProduct.ingredientsList ?? "") },
+                ),
+              },
+            };
+          }
+        }
+      }
+
       // Precondition: only finalize submissions with confirmed OCR data
       if (submission.ocrStatus !== "confirmed" || !submission.extractedIngredients) {
         return { status: 409 as const, error: "Submission has no confirmed OCR data to finalize" };
@@ -284,14 +340,37 @@ router.post("/submissions/:id/finalize", async (req, res): Promise<void> => {
         brandId = brand.id;
       }
 
-      const nutrition = (submission.extractedNutrition ?? null) as ExtractedNutrition | null;
+      const submittedNutrition = (submission.extractedNutrition ?? null) as ExtractedNutrition | null;
+      const hasAnyNutritionNumber = (value: ExtractedNutrition | null): boolean => !!value && Object.entries(value)
+        .some(([key, item]) => !["servingSizeUnit", "netWeight", "netWeightUnit"].includes(key) && typeof item === "number" && Number.isFinite(item));
+      const [existingNutritionRow] = existingProduct
+        ? await tx.select().from(nutritionFactsTable)
+            .where(eq(nutritionFactsTable.productId, existingProduct.id)).limit(1)
+        : [null];
+      const existingConfirmedNutrition: ExtractedNutrition | null = existingNutritionRow?.sourceType === "ocr"
+        ? {
+            servingSize: parseNullableNumber(existingNutritionRow.servingSize),
+            servingSizeUnit: existingNutritionRow.servingSizeUnit,
+            calories: parseNullableNumber(existingNutritionRow.calories),
+            totalFat: parseNullableNumber(existingNutritionRow.totalFat),
+            saturatedFat: parseNullableNumber(existingNutritionRow.saturatedFat),
+            transFat: parseNullableNumber(existingNutritionRow.transFat),
+            sodium: parseNullableNumber(existingNutritionRow.sodium),
+            totalCarbs: parseNullableNumber(existingNutritionRow.totalCarbs),
+            dietaryFiber: parseNullableNumber(existingNutritionRow.dietaryFiber),
+            totalSugars: parseNullableNumber(existingNutritionRow.totalSugars),
+            protein: parseNullableNumber(existingNutritionRow.protein),
+          }
+        : null;
+      const nutrition = hasAnyNutritionNumber(submittedNutrition)
+        ? submittedNutrition
+        : existingConfirmedNutrition;
       const ingredientReferences = await tx.select().from(ingredientsTable);
       const mappedIngredients = mapIngredientList(submission.extractedIngredients, ingredientReferences);
       const reviewedIngredientCoverage = mappedIngredients.length > 0
         ? mappedIngredients.filter(item => ["safe", "caution", "avoid"].includes(item.riskLevel)).length / mappedIngredients.length
         : 0;
-      const hasNutrition = !!nutrition && Object.entries(nutrition)
-        .some(([key, value]) => !["servingSizeUnit", "netWeight", "netWeightUnit"].includes(key) && typeof value === "number" && Number.isFinite(value));
+      const hasNutrition = hasAnyNutritionNumber(nutrition);
       const hasNutritionBasis = !!nutrition && typeof nutrition.servingSize === "number" &&
         nutrition.servingSize > 0 && typeof nutrition.servingSizeUnit === "string" &&
         nutrition.servingSizeUnit.trim().length > 0;
@@ -300,16 +379,23 @@ router.post("/submissions/:id/finalize", async (req, res): Promise<void> => {
         ? `${nutrition.netWeight}${nutrition.netWeightUnit === "ml" ? "ml" : "g"}`
         : null;
 
-      // Create provisional product
-      const [product] = await tx.insert(productsTable).values({
+      // Enrich an existing non-verified barcode product instead of creating a
+      // duplicate. The confirmed submission remains the audit trail. Verified
+      // products were returned above and are never overwritten here.
+      const productValues = {
         name: submission.productName,
         nameZh: hasCJK(submission.productName) ? submission.productName : null,
-        brandId,
+        ...(brandId ? { brandId } : {}),
         verificationStatus: "provisional",
         dataCompleteness: String(dataCompleteness),
         ingredientsList: submission.extractedIngredients,
         netWeight,
-      }).returning();
+        updatedAt: new Date(),
+      };
+      const [product] = existingProduct
+        ? await tx.update(productsTable).set(productValues)
+            .where(eq(productsTable.id, existingProduct.id)).returning()
+        : await tx.insert(productsTable).values(productValues).returning();
 
       // A user-confirmed package retailer is stored as an availability link.
       // It deliberately carries no price because the package photo proves the
@@ -327,27 +413,34 @@ router.post("/submissions/:id/finalize", async (req, res): Promise<void> => {
             set: { name: retailerDefinition.name },
           })
           .returning();
-        await tx.insert(productRetailerPricesTable).values({
-          productId: product.id,
-          retailerId: retailer.id,
-          priceNtd: null,
-          isAvailable: "true",
-          sourceUrl: null,
-          retrievedAt: new Date(),
-        });
+        const [existingRetailerLink] = await tx.select({ id: productRetailerPricesTable.id })
+          .from(productRetailerPricesTable)
+          .where(and(
+            eq(productRetailerPricesTable.productId, product.id),
+            eq(productRetailerPricesTable.retailerId, retailer.id),
+          )).limit(1);
+        if (!existingRetailerLink) {
+          await tx.insert(productRetailerPricesTable).values({
+            productId: product.id,
+            retailerId: retailer.id,
+            priceNtd: null,
+            isAvailable: "true",
+            sourceUrl: null,
+            retrievedAt: new Date(),
+          });
+        }
       }
 
       // Attach barcode
-      if (submission.barcode) {
+      if (normalizedBarcode && !existingProduct) {
         await tx.insert(barcodesTable)
-          .values({ barcode: submission.barcode, productId: product.id })
-          .onConflictDoNothing();
+          .values({ barcode: normalizedBarcode, productId: product.id });
       }
 
       // Store nutrition facts
       if (hasNutrition && nutrition) {
         const num = (v: unknown) => (typeof v === "number" && isFinite(v) ? String(v) : null);
-        await tx.insert(nutritionFactsTable).values({
+        const nutritionValues = {
           productId: product.id,
           servingSize: num(nutrition.servingSize),
           servingSizeUnit: typeof nutrition.servingSizeUnit === "string" ? nutrition.servingSizeUnit.trim().slice(0, 20) : null,
@@ -361,7 +454,17 @@ router.post("/submissions/:id/finalize", async (req, res): Promise<void> => {
           totalSugars: num(nutrition.totalSugars),
           protein: num(nutrition.protein),
           sourceType: "ocr",
-        });
+          updatedAt: new Date(),
+        };
+        await tx.insert(nutritionFactsTable).values(nutritionValues)
+          .onConflictDoUpdate({
+            target: nutritionFactsTable.productId,
+            set: nutritionValues,
+          });
+      } else if (existingProduct && existingNutritionRow && existingNutritionRow.sourceType !== "ocr") {
+        // A non-verified legacy/import nutrition row that the current package
+        // did not confirm must not leak into the provisional report.
+        await tx.delete(nutritionFactsTable).where(eq(nutritionFactsTable.id, existingNutritionRow.id));
       }
 
       // Score immediately (deterministic, no I/O)
@@ -384,7 +487,7 @@ router.post("/submissions/:id/finalize", async (req, res): Promise<void> => {
         dataCompleteness,
       });
 
-      const [saved] = await tx.insert(productEvaluationsTable).values({
+      const evaluationValues = {
         productId: product.id,
         rulesetVersion: result.rulesetVersion,
         overallScore: result.overallScore,
@@ -398,7 +501,15 @@ router.post("/submissions/:id/finalize", async (req, res): Promise<void> => {
         evidenceConfidence: result.evidenceConfidence,
         topReasons: result.topReasons,
         additiveFlags: result.additiveFlags,
-      }).returning();
+        evaluatedAt: new Date(),
+      };
+      const [existingEvaluation] = await tx.select({ id: productEvaluationsTable.id })
+        .from(productEvaluationsTable)
+        .where(eq(productEvaluationsTable.productId, product.id)).limit(1);
+      const [saved] = existingEvaluation
+        ? await tx.update(productEvaluationsTable).set(evaluationValues)
+            .where(eq(productEvaluationsTable.id, existingEvaluation.id)).returning()
+        : await tx.insert(productEvaluationsTable).values(evaluationValues).returning();
 
       await tx.update(productSubmissionsTable).set({
         resolvedProductId: product.id,

@@ -7,6 +7,7 @@ export type AnalyticsEvent =
   | 'hero_free_analysis_clicked'
   | 'sample_report_viewed'
   | 'scan_started'
+  | 'scan_retailer_context_selected'
   | 'invalid_barcode_detected'
   | 'unverified_barcode_detected'
   | 'photo_selected'

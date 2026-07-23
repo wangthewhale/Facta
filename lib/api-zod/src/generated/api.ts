@@ -1996,3 +1996,96 @@ export const AdminListCorrectionsResponseItem = zod.object({
 export const AdminListCorrectionsResponse = zod.array(AdminListCorrectionsResponseItem)
 
 
+/**
+ * @summary Get scientific evidence library coverage and integrity statistics
+ */
+export const GetScientificEvidenceStatsResponse = zod.object({
+  "totalSources": zod.number(),
+  "topicCount": zod.number(),
+  "currentSources": zod.number(),
+  "integrityExcluded": zod.number(),
+  "openAccessSources": zod.number(),
+  "abstractSources": zod.number(),
+  "licensedFullTextSources": zod.number(),
+  "reviewedEligibleLinks": zod.number(),
+  "consumerClaimsAutoApproved": zod.literal(0),
+  "lastSyncedAt": zod.string().nullish()
+})
+
+
+/**
+ * @summary List indexed scientific evidence topics
+ */
+export const ListScientificEvidenceTopicsResponseItem = zod.object({
+  "canonicalName": zod.string(),
+  "displayNameZh": zod.string().nullish(),
+  "topicType": zod.string(),
+  "sourceCount": zod.number(),
+  "reviewedEligibleCount": zod.number(),
+  "lastSyncedAt": zod.string().nullish()
+})
+export const ListScientificEvidenceTopicsResponse = zod.array(ListScientificEvidenceTopicsResponseItem)
+
+
+/**
+ * @summary List non-retracted source metadata for one evidence topic
+ */
+export const ListScientificEvidenceSourcesParams = zod.object({
+  "topic": zod.coerce.string()
+})
+
+export const listScientificEvidenceSourcesQueryLimitDefault = 50;
+export const listScientificEvidenceSourcesQueryLimitMax = 100;
+
+
+
+export const ListScientificEvidenceSourcesQueryParams = zod.object({
+  "limit": zod.coerce.number().max(listScientificEvidenceSourcesQueryLimitMax).default(listScientificEvidenceSourcesQueryLimitDefault)
+})
+
+export const ListScientificEvidenceSourcesResponse = zod.object({
+  "topic": zod.string(),
+  "displayNameZh": zod.string().nullish(),
+  "important": zod.string(),
+  "sources": zod.array(zod.object({
+  "title": zod.string(),
+  "journal": zod.string().nullish(),
+  "publicationDate": zod.string().nullish(),
+  "publicationTypes": zod.array(zod.string()).optional(),
+  "studyDesign": zod.string(),
+  "studyDesignRank": zod.number(),
+  "integrityStatus": zod.string(),
+  "consumerUseStatus": zod.string(),
+  "reviewStatus": zod.string(),
+  "sourceUrl": zod.string(),
+  "doi": zod.string().nullish(),
+  "pmid": zod.string().nullish(),
+  "isOpenAccess": zod.boolean(),
+  "licenseId": zod.string().nullish()
+}))
+})
+
+
+/**
+ * @summary Match one product's confirmed ingredients and nutrition to indexed evidence topics
+ */
+export const GetProductScientificEvidenceParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetProductScientificEvidenceResponse = zod.object({
+  "productId": zod.number(),
+  "important": zod.string(),
+  "matchedTopics": zod.array(zod.object({
+  "canonicalName": zod.string(),
+  "displayNameZh": zod.string().nullish(),
+  "topicType": zod.string(),
+  "matchBasis": zod.enum(['ingredient', 'nutrition', 'ingredient_and_nutrition']),
+  "currentSourceCount": zod.number(),
+  "reviewedEligibleCount": zod.number(),
+  "integrityExcludedCount": zod.number(),
+  "lastSyncedAt": zod.string().nullish()
+}))
+})
+
+
