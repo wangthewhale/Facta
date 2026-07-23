@@ -60,6 +60,8 @@ const fields = [
   "countries_tags", "last_modified_t",
 ].join(",");
 
+const MAX_FETCH_ATTEMPTS = 6;
+
 function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -72,9 +74,10 @@ async function fetchPage(options: Options, page: number): Promise<{ payload: Sea
   url.searchParams.set("fields", fields);
 
   let lastError: unknown;
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
+  for (let attempt = 1; attempt <= MAX_FETCH_ATTEMPTS; attempt += 1) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30_000);
+    let serverRetryMs = 0;
     try {
       const response = await fetch(url, {
         signal: controller.signal,
@@ -82,14 +85,27 @@ async function fetchPage(options: Options, page: number): Promise<{ payload: Sea
           "User-Agent": process.env.OPEN_FOOD_FACTS_USER_AGENT ?? "FACTA/1.0 (https://facta.replit.app; source-backed staging importer)",
         },
       });
-      if (!response.ok) throw new Error(`Open Food Facts search failed: HTTP ${response.status}`);
+      if (!response.ok) {
+        const retryAfter = response.headers.get("retry-after");
+        if (retryAfter) {
+          const seconds = Number(retryAfter);
+          const retryAt = Date.parse(retryAfter);
+          serverRetryMs = Number.isFinite(seconds)
+            ? Math.max(0, seconds * 1_000)
+            : Number.isFinite(retryAt) ? Math.max(0, retryAt - Date.now()) : 0;
+        }
+        throw new Error(`Open Food Facts search failed: HTTP ${response.status}`);
+      }
       const raw = await response.text();
       const payload = JSON.parse(raw) as SearchResponse;
       if (!Array.isArray(payload.products)) throw new Error("Open Food Facts search response has no products array");
       return { payload, raw, url: url.toString() };
     } catch (error) {
       lastError = error;
-      if (attempt < 3) await sleep(attempt * 2_000);
+      if (attempt < MAX_FETCH_ATTEMPTS) {
+        const exponentialBackoffMs = Math.min(30_000, 2_000 * (2 ** (attempt - 1)));
+        await sleep(Math.max(serverRetryMs, exponentialBackoffMs) + Math.floor(Math.random() * 500));
+      }
     } finally {
       clearTimeout(timeout);
     }
