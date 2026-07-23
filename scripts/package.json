@@ -20,6 +20,8 @@
     "science:sync:reference:write-staging": "tsx ./src/scientific-evidence-import.ts --write-staging --topics-from-db --include-preclinical --max-pages=1000 --page-size=100",
     "science:integrity": "tsx ./src/scientific-integrity-sync.ts --dry-run",
     "science:integrity:write-staging": "tsx ./src/scientific-integrity-sync.ts --write-staging",
+    "data:promote": "tsx ./src/promote-staging-data.ts --dry-run",
+    "data:promote:write-production": "tsx ./src/promote-staging-data.ts --write-production",
     "catalog:test": "tsx --test ./src/catalog/*.test.ts",
     "science:test": "tsx --test ./src/science/*.test.ts",
     "hello": "tsx ./src/hello.ts",
