@@ -31,10 +31,13 @@ function requireProductionUrl(): string {
   return value;
 }
 
-function placeholders(rowCount: number, columnCount: number): string {
+function placeholders(rowCount: number, columns: string[], jsonColumns: Set<string>): string {
   return Array.from({ length: rowCount }, (_, rowIndex) => {
-    const start = rowIndex * columnCount;
-    return `(${Array.from({ length: columnCount }, (_item, columnIndex) => `$${start + columnIndex + 1}`).join(",")})`;
+    const start = rowIndex * columns.length;
+    return `(${columns.map((column, columnIndex) => {
+      const parameter = `$${start + columnIndex + 1}`;
+      return jsonColumns.has(column) ? `${parameter}::jsonb` : parameter;
+    }).join(",")})`;
   }).join(",");
 }
 
@@ -45,12 +48,17 @@ async function insertBatches(input: {
   rows: Row[];
   conflict: string;
   label: string;
+  jsonColumns?: string[];
 }): Promise<void> {
+  const jsonColumns = new Set(input.jsonColumns ?? []);
   for (let offset = 0; offset < input.rows.length; offset += BATCH_SIZE) {
     const batch = input.rows.slice(offset, offset + BATCH_SIZE);
-    const values = batch.flatMap(row => input.columns.map(column => row[column] ?? null));
+    const values = batch.flatMap(row => input.columns.map(column => {
+      const value = row[column] ?? null;
+      return value !== null && jsonColumns.has(column) ? JSON.stringify(value) : value;
+    }));
     await input.client.query(
-      `insert into ${input.table} (${input.columns.join(",")}) values ${placeholders(batch.length, input.columns.length)} ${input.conflict}`,
+      `insert into ${input.table} (${input.columns.join(",")}) values ${placeholders(batch.length, input.columns, jsonColumns)} ${input.conflict}`,
       values,
     );
     if (offset === 0 || offset + batch.length === input.rows.length || (offset + batch.length) % 5_000 === 0) {
@@ -130,6 +138,7 @@ async function promoteCatalog(client: SqlClient): Promise<Record<string, number>
       columns: candidateColumns,
       rows,
       label: `catalog:${source}`,
+      jsonColumns: ["image_urls", "nutrition_raw", "quality_flags", "raw_payload"],
       conflict: `on conflict (source_key, source_record_id) do update set
         import_run_id = excluded.import_run_id,
         source_url = excluded.source_url,
@@ -173,6 +182,7 @@ async function promoteScience(client: SqlClient): Promise<{ sources: number; lin
     columns: topicColumns,
     rows: topics.rows,
     label: "science:topics",
+    jsonColumns: ["aliases", "query_terms"],
     conflict: `on conflict (canonical_name) do update set
       display_name_zh = excluded.display_name_zh,
       topic_type = excluded.topic_type,
@@ -211,12 +221,12 @@ async function promoteScience(client: SqlClient): Promise<{ sources: number; lin
         status, fetched_count, accepted_count, rejected_count, duplicate_count,
         integrity_excluded_count, licensed_full_text_count, quality_summary, error_message,
         started_at, finished_at
-      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) returning id`,
+      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb,$16,$17,$18) returning id`,
       [
         row.provider, topicId, row.query_text, row.range_start, row.range_end,
         row.cursor_start, row.cursor_end, row.status, row.fetched_count, row.accepted_count,
         row.rejected_count, row.duplicate_count, row.integrity_excluded_count,
-        row.licensed_full_text_count, row.quality_summary, row.error_message,
+        row.licensed_full_text_count, JSON.stringify(row.quality_summary ?? {}), row.error_message,
         row.started_at, row.finished_at,
       ],
     )).rows[0];
@@ -242,6 +252,7 @@ async function promoteScience(client: SqlClient): Promise<{ sources: number; lin
     columns: sourceColumns,
     rows: sourceRows,
     label: "science:sources",
+    jsonColumns: ["publication_types", "mesh_terms", "authors", "quality_flags", "raw_metadata"],
     conflict: `on conflict (provider, external_id) do update set
       last_sync_run_id = excluded.last_sync_run_id,
       pmid = excluded.pmid,
@@ -306,6 +317,7 @@ async function promoteScience(client: SqlClient): Promise<{ sources: number; lin
     columns: linkColumns,
     rows: linkRows,
     label: "science:links",
+    jsonColumns: ["matched_terms", "quality_flags"],
     conflict: `on conflict (source_id, topic_id) do update set
       sync_run_id = excluded.sync_run_id,
       matched_terms = excluded.matched_terms,
@@ -352,6 +364,7 @@ async function promoteScience(client: SqlClient): Promise<{ sources: number; lin
       columns: claimColumns,
       rows: claimRows,
       label: "science:claims",
+      jsonColumns: ["effect_estimate", "limitations"],
       conflict: "",
     });
   }
