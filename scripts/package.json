@@ -8,6 +8,8 @@
     "catalog:tfda188:write-staging": "tsx ./src/catalog-import.ts --write-staging",
     "catalog:off-taiwan": "tsx ./src/open-food-facts-import.ts --dry-run --country=Taiwan --max-pages=1 --page-size=100",
     "catalog:off-taiwan:write-staging": "tsx ./src/open-food-facts-import.ts --write-staging --country=Taiwan --max-pages=500 --page-size=100",
+    "catalog:off-taiwan:export": "tsx ./src/open-food-facts-export-import.ts --dry-run",
+    "catalog:off-taiwan:export:write-staging": "tsx ./src/open-food-facts-export-import.ts --write-staging",
     "catalog:7eleven": "tsx ./src/seven-eleven-import.ts --dry-run",
     "catalog:7eleven:write-staging": "tsx ./src/seven-eleven-import.ts --write-staging",
     "catalog:prioritize": "tsx ./src/catalog-prioritize.ts --limit=100",

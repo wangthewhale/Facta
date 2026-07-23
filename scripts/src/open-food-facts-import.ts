@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { pathToFileURL } from "node:url";
 import {
   OFF_LICENSE,
   OFF_SEARCH_URL,
@@ -140,7 +141,7 @@ function dbRecord(candidate: OpenFoodFactsCandidate) {
   };
 }
 
-async function writeToStaging(input: {
+export async function writeOpenFoodFactsToStaging(input: {
   candidates: OpenFoodFactsCandidate[];
   payloadSha256: string;
   rejectedCount: number;
@@ -315,7 +316,7 @@ async function main() {
   };
 
   if (options.writeStaging) {
-    output.database = await writeToStaging({
+    output.database = await writeOpenFoodFactsToStaging({
       candidates: deduped,
       payloadSha256,
       rejectedCount: rejected.length,
@@ -327,7 +328,9 @@ async function main() {
   process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
 }
 
-await main().catch(error => {
-  process.stderr.write(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
-  process.exitCode = 1;
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  await main().catch(error => {
+    process.stderr.write(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
+    process.exitCode = 1;
+  });
+}
